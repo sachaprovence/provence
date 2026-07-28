@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { apiPatch } from "@/lib/api-client";
+import { apiPatch, ApiError } from "@/lib/api-client";
 
 type Appointment = {
   id: string;
@@ -21,12 +21,16 @@ export function AppointmentsClient({ appointments }: { appointments: Appointment
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [summaryDraft, setSummaryDraft] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
 
   async function complete(id: string) {
     setBusy(id);
+    setError(null);
     try {
       await apiPatch(`/api/appointments/${id}`, { status: "COMPLETED", summary: summaryDraft[id] });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la mise à jour du rendez-vous.");
     } finally {
       setBusy(null);
     }
@@ -34,9 +38,12 @@ export function AppointmentsClient({ appointments }: { appointments: Appointment
 
   async function cancel(id: string) {
     setBusy(id);
+    setError(null);
     try {
       await apiPatch(`/api/appointments/${id}`, { status: "CANCELLED" });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de l'annulation du rendez-vous.");
     } finally {
       setBusy(null);
     }
@@ -44,6 +51,7 @@ export function AppointmentsClient({ appointments }: { appointments: Appointment
 
   return (
     <ul className="space-y-3">
+      {error && <li className="text-sm text-p360-danger">{error}</li>}
       {appointments.map((a) => (
         <li key={a.id} className="card p-4">
           <div className="flex justify-between items-start">

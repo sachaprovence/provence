@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { canManageOrganization } from "@/lib/permissions";
+import { isUniqueConstraintError } from "@/lib/prisma-errors";
 
 const schema = z.object({ name: z.string().min(1), centerCity: z.string().min(1), radiusKm: z.coerce.number().int().min(1).default(40) });
 
@@ -26,6 +27,13 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Données invalides." }, { status: 400 });
 
-  const territory = await prisma.territory.create({ data: { organizationId: actor.organization.id, ...parsed.data } });
-  return NextResponse.json({ territory }, { status: 201 });
+  try {
+    const territory = await prisma.territory.create({ data: { organizationId: actor.organization.id, ...parsed.data } });
+    return NextResponse.json({ territory }, { status: 201 });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return NextResponse.json({ error: "Un territoire porte déjà ce nom." }, { status: 409 });
+    }
+    throw err;
+  }
 }

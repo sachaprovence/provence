@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { apiPatch } from "@/lib/api-client";
+import { apiPatch, ApiError } from "@/lib/api-client";
 
 type Task = {
   id: string;
@@ -18,12 +18,16 @@ type Task = {
 export function TasksClient({ tasks }: { tasks: Task[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function toggle(task: Task) {
     setBusy(task.id);
+    setError(null);
     try {
       await apiPatch(`/api/tasks/${task.id}`, { status: task.status === "DONE" ? "OPEN" : "DONE" });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la mise à jour de la tâche.");
     } finally {
       setBusy(null);
     }
@@ -31,6 +35,7 @@ export function TasksClient({ tasks }: { tasks: Task[] }) {
 
   return (
     <ul className="space-y-2">
+      {error && <li className="text-sm text-p360-danger">{error}</li>}
       {tasks.map((t) => (
         <li key={t.id} className="card p-4 flex items-start gap-3">
           <input type="checkbox" className="mt-1" checked={t.status === "DONE"} disabled={busy === t.id} onChange={() => toggle(t)} />

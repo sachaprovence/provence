@@ -4,6 +4,7 @@ import { createSession, hashPassword, recordLoginEvent } from "@/lib/auth";
 import { registerSchema } from "@/lib/validations/auth";
 import { bootstrapOrganization } from "@/lib/bootstrap";
 import { writeAuditLog } from "@/lib/audit";
+import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { MembershipRole } from "@/generated/prisma/enums";
 
 export async function POST(request: Request) {
@@ -22,12 +23,21 @@ export async function POST(request: Request) {
 
   const passwordHash = await hashPassword(password);
 
-  const { organization, user } = await prisma.$transaction(async (tx) => {
-    const organization = await tx.organization.create({ data: { name: organizationName } });
-    const user = await tx.user.create({ data: { email, passwordHash, firstName, lastName } });
-    await tx.membership.create({ data: { organizationId: organization.id, userId: user.id, role: MembershipRole.OWNER_ADMIN } });
-    return { organization, user };
-  });
+  let organization, user;
+  try {
+    ({ organization, user } = await prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({ data: { name: organizationName } });
+      const user = await tx.user.create({ data: { email, passwordHash, firstName, lastName } });
+      await tx.membership.create({ data: { organizationId: organization.id, userId: user.id, role: MembershipRole.OWNER_ADMIN } });
+      return { organization, user };
+    }));
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      await recordLoginEvent({ email, success: false, reason: "email_already_used" });
+      return NextResponse.json({ error: "Un compte existe déjà avec cet email." }, { status: 409 });
+    }
+    throw err;
+  }
 
   await bootstrapOrganization(organization.id);
   await createSession(user.id);

@@ -5,6 +5,7 @@ import { leadWhereForActor } from "@/lib/permissions";
 import { leadCreateSchema } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
 import { isSuppressed } from "@/lib/suppression";
+import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { LeadSourceType } from "@/generated/prisma/enums";
 
 export async function GET(request: Request) {
@@ -70,41 +71,49 @@ export async function POST(request: Request) {
     data: { organizationId: actor.organization.id, type: LeadSourceType.MANUAL, label: "Saisie manuelle", importedById: actor.user.id },
   });
 
-  const lead = await prisma.lead.create({
-    data: {
-      organizationId: actor.organization.id,
-      establishmentName: data.establishmentName,
-      category: data.category,
-      isSuppressed: suppressed,
-      suppressedAt: suppressed ? new Date() : undefined,
-      icpId: data.icpId || undefined,
-      territoryId: data.territoryId || undefined,
-      websiteUrl: data.websiteUrl || undefined,
-      publicListingUrl: data.publicListingUrl || undefined,
-      address: data.address || undefined,
-      city: data.city || undefined,
-      region: data.region || undefined,
-      country: data.country || "France",
-      reviewCount: data.reviewCount ?? undefined,
-      averageRating: data.averageRating ?? undefined,
-      hasVirtualTour: data.hasVirtualTour ?? undefined,
-      sourceId: source.id,
-      contacts:
-        data.contactName || data.contactEmail || data.contactPhone
-          ? {
-              create: [
-                {
-                  fullName: data.contactName || undefined,
-                  email: data.contactEmail || undefined,
-                  phone: data.contactPhone || undefined,
-                  jobTitle: data.contactJobTitle || undefined,
-                },
-              ],
-            }
-          : undefined,
-    },
-    include: { contacts: true },
-  });
+  let lead;
+  try {
+    lead = await prisma.lead.create({
+      data: {
+        organizationId: actor.organization.id,
+        establishmentName: data.establishmentName,
+        category: data.category,
+        isSuppressed: suppressed,
+        suppressedAt: suppressed ? new Date() : undefined,
+        icpId: data.icpId || undefined,
+        territoryId: data.territoryId || undefined,
+        websiteUrl: data.websiteUrl || undefined,
+        publicListingUrl: data.publicListingUrl || undefined,
+        address: data.address || undefined,
+        city: data.city || undefined,
+        region: data.region || undefined,
+        country: data.country || "France",
+        reviewCount: data.reviewCount ?? undefined,
+        averageRating: data.averageRating ?? undefined,
+        hasVirtualTour: data.hasVirtualTour ?? undefined,
+        sourceId: source.id,
+        contacts:
+          data.contactName || data.contactEmail || data.contactPhone
+            ? {
+                create: [
+                  {
+                    fullName: data.contactName || undefined,
+                    email: data.contactEmail || undefined,
+                    phone: data.contactPhone || undefined,
+                    jobTitle: data.contactJobTitle || undefined,
+                  },
+                ],
+              }
+            : undefined,
+      },
+      include: { contacts: true },
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return NextResponse.json({ error: "Un prospect existe déjà avec cette URL de fiche publique." }, { status: 409 });
+    }
+    throw err;
+  }
 
   await writeAuditLog({
     organizationId: actor.organization.id,

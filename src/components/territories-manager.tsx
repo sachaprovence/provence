@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/api-client";
+import { apiPost, ApiError } from "@/lib/api-client";
 
 type Territory = { id: string; name: string; centerCity: string; radiusKm: number; _count: { leads: number; providers: number; missions: number } };
 
@@ -11,16 +11,20 @@ export function TerritoriesManager({ territories }: { territories: Territory[] }
   const [name, setName] = useState("");
   const [centerCity, setCenterCity] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !centerCity) return;
     setBusy(true);
+    setError(null);
     try {
       await apiPost("/api/territories", { name, centerCity, radiusKm: 40 });
       setName("");
       setCenterCity("");
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de l'ajout du territoire.");
     } finally {
       setBusy(false);
     }
@@ -47,6 +51,7 @@ export function TerritoriesManager({ territories }: { territories: Territory[] }
         </div>
         <button className="btn-secondary" disabled={busy}>Ajouter</button>
       </form>
+      {error && <p className="text-sm text-p360-danger mt-2">{error}</p>}
     </div>
   );
 }

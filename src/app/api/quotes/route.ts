@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { quoteSchema } from "@/lib/validations/quote";
 import { writeAuditLog } from "@/lib/audit";
+import { isUniqueConstraintError } from "@/lib/prisma-errors";
 
 export async function GET(request: Request) {
   const actor = await requireActorApi();
@@ -28,22 +29,39 @@ export async function POST(request: Request) {
   const lead = await prisma.lead.findFirst({ where: { id: parsed.data.leadId, organizationId: actor.organization.id } });
   if (!lead) return NextResponse.json({ error: "Prospect introuvable." }, { status: 404 });
 
-  const count = await prisma.quote.count({ where: { organizationId: actor.organization.id } });
-  const reference = `DEV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
   const totalAmount = parsed.data.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
 
-  const quote = await prisma.quote.create({
-    data: {
-      organizationId: actor.organization.id,
-      leadId: lead.id,
-      opportunityId: parsed.data.opportunityId || undefined,
-      reference,
-      totalAmount,
-      expiresAt: parsed.data.expiresAt || undefined,
-      lines: { create: parsed.data.lines },
-    },
-    include: { lines: true },
-  });
+  // La référence est dérivée d'un compteur : en cas de collision (deux créations
+  // concurrentes), on relit le compteur et on retente plutôt que d'échouer.
+  let quote;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const count = await prisma.quote.count({ where: { organizationId: actor.organization.id } });
+    const reference = `DEV-${new Date().getFullYear()}-${String(count + 1 + attempt).padStart(4, "0")}`;
+    try {
+      quote = await prisma.quote.create({
+        data: {
+          organizationId: actor.organization.id,
+          leadId: lead.id,
+          opportunityId: parsed.data.opportunityId || undefined,
+          reference,
+          totalAmount,
+          expiresAt: parsed.data.expiresAt || undefined,
+          lines: { create: parsed.data.lines },
+        },
+        include: { lines: true },
+      });
+      break;
+    } catch (err) {
+      if (isUniqueConstraintError(err) && attempt < 4) continue;
+      if (isUniqueConstraintError(err)) {
+        return NextResponse.json({ error: "Impossible de générer une référence de devis unique, réessayez." }, { status: 409 });
+      }
+      throw err;
+    }
+  }
+  if (!quote) {
+    return NextResponse.json({ error: "Impossible de générer une référence de devis unique, réessayez." }, { status: 409 });
+  }
 
   await writeAuditLog({
     organizationId: actor.organization.id,

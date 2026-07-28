@@ -8,7 +8,12 @@ const updateSchema = z.object({
   name: z.string().min(1).max(150).optional(),
   description: z.string().optional().nullable(),
   isActive: z.coerce.boolean().optional(),
-  steps: z.array(sequenceStepSchema).optional(),
+  steps: z
+    .array(sequenceStepSchema)
+    .optional()
+    .refine((steps) => !steps || new Set(steps.map((s) => s.order)).size === steps.length, {
+      message: "Chaque étape doit avoir un numéro d'ordre unique.",
+    }),
 });
 
 type Params = { params: Promise<{ id: string }> };

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { apiPatch } from "@/lib/api-client";
+import { apiPatch, ApiError } from "@/lib/api-client";
 
 type Quote = {
   id: string;
@@ -22,19 +22,25 @@ function formatEuros(cents: number) {
 export function QuotesClient({ quotes }: { quotes: Quote[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function setStatus(id: string, status: string) {
     setBusy(id);
+    setError(null);
     try {
       await apiPatch(`/api/quotes/${id}`, { status });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la mise à jour du devis.");
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <div className="card overflow-x-auto">
+    <div>
+      {error && <p className="text-sm text-p360-danger mb-2">{error}</p>}
+      <div className="card overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-p360-lavender-light/40 text-p360-muted text-xs uppercase">
           <tr>
@@ -66,6 +72,7 @@ export function QuotesClient({ quotes }: { quotes: Quote[] }) {
           {quotes.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-p360-muted">Aucun devis.</td></tr>}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

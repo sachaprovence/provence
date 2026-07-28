@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPatch, apiPost } from "@/lib/api-client";
+import { apiPatch, apiPost, ApiError } from "@/lib/api-client";
 
 type Mission = {
   id: string;
@@ -29,12 +29,16 @@ export function MissionsClient({ missions, canEdit }: { missions: Mission[]; can
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [deliverableUrl, setDeliverableUrl] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
 
   async function setStatus(id: string, status: string) {
     setBusy(id);
+    setError(null);
     try {
       await apiPatch(`/api/missions/${id}`, { status });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la mise à jour de la mission.");
     } finally {
       setBusy(null);
     }
@@ -44,10 +48,13 @@ export function MissionsClient({ missions, canEdit }: { missions: Mission[]; can
     const url = deliverableUrl[id];
     if (!url) return;
     setBusy(id);
+    setError(null);
     try {
       await apiPost(`/api/missions/${id}/deliverables`, { label: "Livrable", url });
       setDeliverableUrl((s) => ({ ...s, [id]: "" }));
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur : vérifiez que l'URL du livrable est valide.");
     } finally {
       setBusy(null);
     }
@@ -55,6 +62,7 @@ export function MissionsClient({ missions, canEdit }: { missions: Mission[]; can
 
   return (
     <ul className="space-y-3">
+      {error && <li className="text-sm text-p360-danger">{error}</li>}
       {missions.map((m) => (
         <li key={m.id} className="card p-4">
           <div className="flex justify-between items-start">
@@ -87,6 +95,7 @@ export function MissionsClient({ missions, canEdit }: { missions: Mission[]; can
           {(m.status === "IN_PROGRESS" || m.status === "DELIVERED") && canEdit && (
             <div className="mt-3 flex gap-2">
               <input
+                type="url"
                 className="input text-sm"
                 placeholder="URL du livrable (photos, visite virtuelle…)"
                 value={deliverableUrl[m.id] ?? ""}

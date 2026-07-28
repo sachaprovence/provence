@@ -17,7 +17,12 @@ export const sequenceSchema = z.object({
   name: z.string().min(1).max(150),
   description: z.string().optional().nullable(),
   isActive: z.coerce.boolean().default(true),
-  steps: z.array(sequenceStepSchema).min(1),
+  steps: z
+    .array(sequenceStepSchema)
+    .min(1)
+    .refine((steps) => new Set(steps.map((s) => s.order)).size === steps.length, {
+      message: "Chaque étape doit avoir un numéro d'ordre unique.",
+    }),
 });
 
 export const enrollSchema = z.object({

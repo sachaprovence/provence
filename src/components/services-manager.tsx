@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/api-client";
+import { apiPost, ApiError } from "@/lib/api-client";
 
 type Service = { id: string; name: string; basePrice: number; kind: string };
 
@@ -15,16 +15,20 @@ export function ServicesManager({ services }: { services: Service[] }) {
   const [name, setName] = useState("");
   const [basePrice, setBasePrice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !basePrice) return;
     setBusy(true);
+    setError(null);
     try {
       await apiPost("/api/services", { kind: "CUSTOM", name, basePrice: Math.round(Number(basePrice) * 100) });
       setName("");
       setBasePrice("");
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de l'ajout de l'offre.");
     } finally {
       setBusy(false);
     }
@@ -51,6 +55,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
         </div>
         <button className="btn-secondary" disabled={busy}>Ajouter</button>
       </form>
+      {error && <p className="text-sm text-p360-danger mt-2">{error}</p>}
     </div>
   );
 }

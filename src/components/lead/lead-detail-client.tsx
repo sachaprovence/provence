@@ -191,15 +191,19 @@ function NotesPanel({ lead }: { lead: LeadDetail }) {
   const router = useRouter();
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim()) return;
     setBusy(true);
+    setError(null);
     try {
       await apiPost(`/api/leads/${lead.id}/notes`, { body });
       setBody("");
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de l'ajout de la note.");
     } finally {
       setBusy(false);
     }
@@ -210,6 +214,7 @@ function NotesPanel({ lead }: { lead: LeadDetail }) {
       <form onSubmit={submit} className="space-y-2 mb-4">
         <textarea className="input" rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Ajouter une note…" />
         <button type="submit" disabled={busy} className="btn-secondary text-sm">Ajouter</button>
+        {error && <p className="text-sm text-p360-danger">{error}</p>}
       </form>
       <ul className="space-y-3">
         {lead.notes.map((n) => (
@@ -231,12 +236,16 @@ function MessagesPanel({ lead, canValidate }: { lead: LeadDetail; canValidate: b
   const [language, setLanguage] = useState("FR");
   const [busy, setBusy] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
 
   async function generate() {
     setBusy("generate");
+    setError(null);
     try {
       await apiPost("/api/messages/generate", { leadId: lead.id, type, tone, language });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la génération du message.");
     } finally {
       setBusy(null);
     }
@@ -244,9 +253,12 @@ function MessagesPanel({ lead, canValidate }: { lead: LeadDetail; canValidate: b
 
   async function validate(messageId: string, approve: boolean, editedBody?: string) {
     setBusy(messageId);
+    setError(null);
     try {
       await apiPost(`/api/messages/${messageId}/validate`, { approve, editedBody });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la validation du message.");
     } finally {
       setBusy(null);
     }
@@ -275,6 +287,7 @@ function MessagesPanel({ lead, canValidate }: { lead: LeadDetail; canValidate: b
         </button>
       </div>
       {lead.isSuppressed && <p className="text-xs text-p360-danger mb-3">Ce prospect est désinscrit : aucun nouveau message ne pourra être envoyé.</p>}
+      {error && <p className="text-sm text-p360-danger mb-3">{error}</p>}
 
       <ul className="space-y-3">
         {lead.messages.map((m) => (
@@ -336,9 +349,12 @@ function SequencePanel({ lead, sequences }: { lead: LeadDetail; sequences: (Sequ
 
   async function stop(enrollmentId: string) {
     setBusy(enrollmentId);
+    setError(null);
     try {
       await apiPost(`/api/enrollments/${enrollmentId}/stop`);
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de l'arrêt de la séquence.");
     } finally {
       setBusy(null);
     }
@@ -388,13 +404,17 @@ function InboxPanel({ lead }: { lead: LeadDetail }) {
   const router = useRouter();
   const [customText, setCustomText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function simulate(preset?: string) {
     setBusy(preset ?? "custom");
+    setError(null);
     try {
       await apiPost(`/api/leads/${lead.id}/simulate-reply`, preset ? { preset } : { body: customText });
       setCustomText("");
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la simulation de la réponse.");
     } finally {
       setBusy(null);
     }
@@ -417,6 +437,7 @@ function InboxPanel({ lead }: { lead: LeadDetail }) {
             Envoyer
           </button>
         </div>
+        {error && <p className="text-sm text-p360-danger mt-2">{error}</p>}
       </div>
       <ul className="space-y-3">
         {lead.conversations.map((c) => (
@@ -498,13 +519,17 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
   const [busy, setBusy] = useState<string | null>(null);
   const [quoteServiceId, setQuoteServiceId] = useState(services[0]?.id ?? "");
   const [opportunityId, setOpportunityId] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   async function createOpportunity(e: React.FormEvent) {
     e.preventDefault();
     setBusy("opp");
+    setError(null);
     try {
       await apiPost("/api/opportunities", { leadId: lead.id, name, estimatedValue: Math.round(Number(value) * 100) });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la création de l'opportunité.");
     } finally {
       setBusy(null);
     }
@@ -512,9 +537,12 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
 
   async function setOpportunityStatus(id: string, status: "WON" | "LOST") {
     setBusy(id);
+    setError(null);
     try {
       await apiPatch(`/api/opportunities/${id}`, { status });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la mise à jour de l'opportunité.");
     } finally {
       setBusy(null);
     }
@@ -524,6 +552,7 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
     const service = services.find((s) => s.id === quoteServiceId);
     if (!service) return;
     setBusy("quote");
+    setError(null);
     try {
       await apiPost("/api/quotes", {
         leadId: lead.id,
@@ -531,6 +560,8 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
         lines: [{ serviceId: service.id, label: service.name, quantity: 1, unitPrice: service.basePrice }],
       });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la création du devis.");
     } finally {
       setBusy(null);
     }
@@ -538,9 +569,12 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
 
   async function markQuoteSent(id: string) {
     setBusy(id);
+    setError(null);
     try {
       await apiPatch(`/api/quotes/${id}`, { status: "SENT" });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de l'envoi du devis.");
     } finally {
       setBusy(null);
     }
@@ -559,6 +593,7 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
         </div>
         <button type="submit" disabled={busy === "opp"} className="btn-secondary">Créer l&apos;opportunité</button>
       </form>
+      {error && <p className="text-sm text-p360-danger mb-3">{error}</p>}
 
       <ul className="space-y-2 mb-4">
         {lead.opportunities.map((o) => (

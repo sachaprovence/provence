@@ -5,6 +5,7 @@ import { canManageUsers } from "@/lib/permissions";
 import { inviteUserSchema } from "@/lib/validations/organization";
 import { hashPassword } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { isUniqueConstraintError } from "@/lib/prisma-errors";
 
 export async function GET() {
   const actor = await requireActorApi();
@@ -35,18 +36,27 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await hashPassword(data.temporaryPassword);
-  const user =
-    existing ??
-    (await prisma.user.create({ data: { email: data.email, firstName: data.firstName, lastName: data.lastName, passwordHash } }));
 
-  const membership = await prisma.membership.create({
-    data: {
-      organizationId: actor.organization.id,
-      userId: user.id,
-      role: data.role,
-      territoryId: data.territoryId || undefined,
-    },
-  });
+  let membership;
+  try {
+    const user =
+      existing ??
+      (await prisma.user.create({ data: { email: data.email, firstName: data.firstName, lastName: data.lastName, passwordHash } }));
+
+    membership = await prisma.membership.create({
+      data: {
+        organizationId: actor.organization.id,
+        userId: user.id,
+        role: data.role,
+        territoryId: data.territoryId || undefined,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return NextResponse.json({ error: "Cet utilisateur existe déjà ou fait déjà partie de l'organisation." }, { status: 409 });
+    }
+    throw err;
+  }
 
   await writeAuditLog({
     organizationId: actor.organization.id,
