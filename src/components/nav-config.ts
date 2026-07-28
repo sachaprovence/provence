@@ -1,0 +1,20 @@
+import type { MembershipRole } from "@/generated/prisma/enums";
+
+export type NavItem = { href: string; label: string; roles?: MembershipRole[] };
+
+export const NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard", label: "Tableau de bord" },
+  { href: "/leads", label: "Prospects", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/pipeline", label: "Pipeline", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/campaigns", label: "Campagnes", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/sequences", label: "Séquences", roles: ["OWNER_ADMIN"] },
+  { href: "/inbox", label: "Boîte de réception", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/tasks", label: "Tâches", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/appointments", label: "Rendez-vous", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/quotes", label: "Devis", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/missions", label: "Missions" },
+  { href: "/map", label: "Carte", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/stats", label: "Statistiques", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/settings", label: "Paramètres", roles: ["OWNER_ADMIN"] },
+  { href: "/users", label: "Utilisateurs", roles: ["OWNER_ADMIN"] },
+];

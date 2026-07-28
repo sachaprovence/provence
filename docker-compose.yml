@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: provence
+      POSTGRES_PASSWORD: provence
+      POSTGRES_DB: provence360
+    ports:
+      - "5432:5432"
+    volumes:
+      - provence_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provence -d provence360"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://provence:provence@db:5432/provence360?schema=public
+      AUTH_SECRET: dev-secret-change-me
+      EMAIL_PROVIDER: demo
+      AI_PROVIDER: demo
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+volumes:
+  provence_db_data:
