@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { getAIProvider } from "@/lib/ai";
 import { generateMessageSchema } from "@/lib/validations/message";
 import { unsubscribeUrl } from "@/lib/unsubscribe-token";
@@ -10,6 +10,8 @@ import { LeadStage, MessageStatus } from "@/generated/prisma/enums";
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
 
   const body = await request.json().catch(() => null);
   const parsed = generateMessageSchema.safeParse(body);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { opportunitySchema } from "@/lib/validations/quote";
 import { writeAuditLog } from "@/lib/audit";
 import { LeadStage } from "@/generated/prisma/enums";
@@ -8,6 +8,8 @@ import { LeadStage } from "@/generated/prisma/enums";
 export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { searchParams } = new URL(request.url);
   const leadId = searchParams.get("leadId");
   const status = searchParams.get("status");
@@ -23,6 +25,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const body = await request.json().catch(() => null);
   const parsed = opportunitySchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Données invalides." }, { status: 400 });

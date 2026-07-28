@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(150).optional(),
@@ -15,6 +15,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
   const campaign = await prisma.campaign.findFirst({
     where: { id, organizationId: actor.organization.id },
@@ -31,6 +33,8 @@ export async function GET(_request: Request, { params }: Params) {
 export async function PUT(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
   const existing = await prisma.campaign.findFirst({ where: { id, organizationId: actor.organization.id } });
   if (!existing) return NextResponse.json({ error: "Campagne introuvable." }, { status: 404 });

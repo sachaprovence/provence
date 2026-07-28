@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 
 const STATUS_LABEL: Record<string, string> = { DRAFT: "Brouillon", ACTIVE: "Active", PAUSED: "En pause", COMPLETED: "Terminée" };
 
 export default async function CampaignsPage() {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const campaigns = await prisma.campaign.findMany({
     where: { organizationId: actor.organization.id },
     include: { sequence: true, _count: { select: { leads: true, enrollments: true } } },

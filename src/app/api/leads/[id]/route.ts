@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { leadUpdateSchema } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
 import { isAdmin } from "@/lib/permissions";
@@ -10,6 +10,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
 
   const lead = await prisma.lead.findFirst({
@@ -40,6 +42,8 @@ export async function GET(_request: Request, { params }: Params) {
 export async function PUT(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
 
   const existing = await prisma.lead.findFirst({ where: { id, organizationId: actor.organization.id } });
@@ -89,6 +93,8 @@ export async function PUT(request: Request, { params }: Params) {
 export async function DELETE(_request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   if (!isAdmin(actor)) return NextResponse.json({ error: "Réservé à l'administrateur." }, { status: 403 });
   const { id } = await params;
 

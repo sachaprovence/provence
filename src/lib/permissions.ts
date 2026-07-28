@@ -36,3 +36,12 @@ export function canManageOrganization(actor: CurrentActor) {
 export function canManageUsers(actor: CurrentActor) {
   return isAdmin(actor);
 }
+
+/**
+ * Un prestataire régional est limité aux prospects/missions de son territoire
+ * (voir leadWhereForActor) et ne doit pas accéder aux fonctions commerciales
+ * (campagnes, séquences, devis, rendez-vous...) ni à la configuration.
+ */
+export function canAccessSalesFeatures(actor: CurrentActor) {
+  return isAdmin(actor) || isSales(actor);
+}

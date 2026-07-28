@@ -1,9 +1,10 @@
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { TasksClient } from "@/components/tasks-client";
 
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ mine?: string }> }) {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const sp = await searchParams;
 
   const tasks = await prisma.task.findMany({

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { LeadDetailClient } from "@/components/lead/lead-detail-client";
 
@@ -24,7 +25,7 @@ async function getLead(id: string, organizationId: string) {
 export type LeadDetail = NonNullable<Awaited<ReturnType<typeof getLead>>>;
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const { id } = await params;
   const lead = await getLead(id, actor.organization.id);
   if (!lead) notFound();

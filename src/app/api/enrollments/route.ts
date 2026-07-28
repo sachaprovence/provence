@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { prisma } from "@/lib/prisma";
 import { enrollSchema } from "@/lib/validations/sequence";
 import { enrollLeadInSequence, DuplicateEnrollmentError, SuppressedLeadError } from "@/lib/sequence-engine";
@@ -8,6 +8,8 @@ import { writeAuditLog } from "@/lib/audit";
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
 
   const body = await request.json().catch(() => null);
   const parsed = enrollSchema.safeParse(body);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 
 const updateSchema = z.object({
   status: z.enum(["OPEN", "DONE", "CANCELLED"]).optional(),
@@ -16,6 +16,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
   const existing = await prisma.task.findFirst({ where: { id, organizationId: actor.organization.id } });
   if (!existing) return NextResponse.json({ error: "Tâche introuvable." }, { status: 404 });

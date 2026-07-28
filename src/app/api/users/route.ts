@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { canManageUsers } from "@/lib/permissions";
 import { inviteUserSchema } from "@/lib/validations/organization";
 import { hashPassword } from "@/lib/auth";
@@ -10,6 +10,8 @@ import { isUniqueConstraintError } from "@/lib/prisma-errors";
 export async function GET() {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
 
   const memberships = await prisma.membership.findMany({
     where: { organizationId: actor.organization.id },
@@ -22,6 +24,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   if (!canManageUsers(actor)) return NextResponse.json({ error: "Réservé à l'administrateur." }, { status: 403 });
 
   const body = await request.json().catch(() => null);

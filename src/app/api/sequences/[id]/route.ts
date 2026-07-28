@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { sequenceStepSchema } from "@/lib/validations/sequence";
 
 const updateSchema = z.object({
@@ -21,6 +21,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
   const sequence = await prisma.sequence.findFirst({
     where: { id, organizationId: actor.organization.id },
@@ -33,6 +35,8 @@ export async function GET(_request: Request, { params }: Params) {
 export async function PUT(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
   const existing = await prisma.sequence.findFirst({ where: { id, organizationId: actor.organization.id } });
   if (!existing) return NextResponse.json({ error: "Séquence introuvable." }, { status: 404 });

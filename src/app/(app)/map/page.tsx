@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { CATEGORY_LABEL, STAGE_BADGE_CLASS, STAGE_LABEL } from "@/lib/labels";
 import { ScoreBadge } from "@/components/score-badge";
@@ -8,7 +9,7 @@ import clsx from "clsx";
 type SearchParams = { category?: string; stage?: string };
 
 export default async function MapPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const sp = await searchParams;
 
   const [leads, territories] = await Promise.all([

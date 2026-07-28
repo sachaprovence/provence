@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { mapRow, parseCsv, suggestColumnMapping } from "@/lib/csv-import";
 import { csvColumnMap, type LeadCsvField } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
@@ -19,6 +19,8 @@ const commitSchema = z.object({
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
 
   const body = await request.json().catch(() => null);
 

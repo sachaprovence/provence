@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { CampaignDetailClient } from "@/components/campaign-detail-client";
 
 export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const { id } = await params;
 
   const campaign = await prisma.campaign.findFirst({

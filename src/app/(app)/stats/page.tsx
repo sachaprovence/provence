@@ -1,4 +1,5 @@
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { getOrgStats, defaultStatsRange } from "@/lib/stats";
 import { prisma } from "@/lib/prisma";
 import { StatTile } from "@/components/stat-tile";
@@ -15,7 +16,7 @@ function formatPercent(v: number) {
 type SearchParams = { from?: string; to?: string };
 
 export default async function StatsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const sp = await searchParams;
   const defaults = defaultStatsRange();
   const from = sp.from ? new Date(sp.from) : defaults.from;

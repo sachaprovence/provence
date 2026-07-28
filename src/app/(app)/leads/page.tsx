@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { leadWhereForActor } from "@/lib/permissions";
 import { STAGE_LABEL, CATEGORY_LABEL, STAGE_BADGE_CLASS, PIPELINE_STAGES } from "@/lib/labels";
@@ -9,7 +10,7 @@ import clsx from "clsx";
 type SearchParams = { [key: string]: string | undefined };
 
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const sp = await searchParams;
   const view = sp.view === "kanban" ? "kanban" : "table";
 

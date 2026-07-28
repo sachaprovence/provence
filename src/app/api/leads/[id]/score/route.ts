@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { computeScore, DEFAULT_SCORING_RULES, SCORE_CATEGORY_LABEL, type ScoringRule } from "@/lib/scoring";
 import { isSuppressed } from "@/lib/suppression";
 import { onLeadScoreComputed } from "@/lib/automation-engine";
@@ -12,6 +12,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(_request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
 
   const lead = await prisma.lead.findFirst({

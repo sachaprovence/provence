@@ -172,8 +172,103 @@ function AnalysisPanel({ analysis }: { analysis: LeadDetail["analyses"][number] 
 }
 
 function ContactPanel({ contact, lead }: { contact: LeadDetail["contacts"][number] | undefined; lead: LeadDetail }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    establishmentName: lead.establishmentName,
+    category: lead.category,
+    city: lead.city ?? "",
+    region: lead.region ?? "",
+    websiteUrl: lead.websiteUrl ?? "",
+    reviewCount: lead.reviewCount?.toString() ?? "",
+    averageRating: lead.averageRating?.toString() ?? "",
+    hasVirtualTour: lead.hasVirtualTour === null || lead.hasVirtualTour === undefined ? "" : String(lead.hasVirtualTour),
+  });
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await apiPut(`/api/leads/${lead.id}`, {
+        establishmentName: form.establishmentName,
+        category: form.category,
+        city: form.city || undefined,
+        region: form.region || undefined,
+        websiteUrl: form.websiteUrl || undefined,
+        reviewCount: form.reviewCount || undefined,
+        averageRating: form.averageRating || undefined,
+        hasVirtualTour: form.hasVirtualTour === "" ? undefined : form.hasVirtualTour === "true",
+      });
+      setEditing(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la modification de la fiche.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <Section title="Fiche">
+        <form onSubmit={save} className="space-y-3 text-sm">
+          <div>
+            <label className="label">Nom de l&apos;établissement</label>
+            <input className="input" value={form.establishmentName} onChange={(e) => setForm((f) => ({ ...f, establishmentName: e.target.value }))} required />
+          </div>
+          <div>
+            <label className="label">Catégorie</label>
+            <select className="input" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as typeof form.category }))}>
+              {Object.entries(CATEGORY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label">Ville</label>
+              <input className="input" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Région</label>
+              <input className="input" value={form.region} onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Site internet</label>
+            <input className="input" value={form.websiteUrl} onChange={(e) => setForm((f) => ({ ...f, websiteUrl: e.target.value }))} placeholder="https://" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label">Nombre d&apos;avis</label>
+              <input type="number" className="input" value={form.reviewCount} onChange={(e) => setForm((f) => ({ ...f, reviewCount: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Note moyenne</label>
+              <input type="number" step="0.1" min={0} max={5} className="input" value={form.averageRating} onChange={(e) => setForm((f) => ({ ...f, averageRating: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Visite virtuelle existante ?</label>
+            <select className="input" value={form.hasVirtualTour} onChange={(e) => setForm((f) => ({ ...f, hasVirtualTour: e.target.value }))}>
+              <option value="">Inconnu</option>
+              <option value="true">Oui</option>
+              <option value="false">Non</option>
+            </select>
+          </div>
+          {error && <p className="text-sm text-p360-danger">{error}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={busy} className="btn-primary text-sm">{busy ? "Enregistrement…" : "Enregistrer"}</button>
+            <button type="button" className="btn-secondary text-sm" onClick={() => setEditing(false)}>Annuler</button>
+          </div>
+        </form>
+      </Section>
+    );
+  }
+
   return (
-    <Section title="Contact">
+    <Section title="Fiche" action={<button className="text-xs text-p360-blue hover:underline" onClick={() => setEditing(true)}>Modifier</button>}>
       <dl className="text-sm space-y-1.5">
         <div className="flex justify-between"><dt className="text-p360-muted">Nom</dt><dd className="text-p360-ink">{contact?.fullName ?? "—"}</dd></div>
         <div className="flex justify-between"><dt className="text-p360-muted">Fonction</dt><dd className="text-p360-ink">{contact?.jobTitle ?? "—"}</dd></div>

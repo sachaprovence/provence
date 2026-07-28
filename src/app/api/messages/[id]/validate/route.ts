@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { canValidateMessages } from "@/lib/permissions";
 import { validateMessageSchema } from "@/lib/validations/message";
 import { sendMessageNow } from "@/lib/sequence-engine";
@@ -12,6 +12,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   if (!canValidateMessages(actor)) return NextResponse.json({ error: "Réservé aux commerciaux et administrateurs." }, { status: 403 });
   const { id } = await params;
 

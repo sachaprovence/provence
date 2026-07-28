@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { writeAuditLog } from "@/lib/audit";
 import { LeadStage } from "@/generated/prisma/enums";
 
@@ -14,6 +14,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
   const existing = await prisma.quote.findFirst({ where: { id, organizationId: actor.organization.id } });
   if (!existing) return NextResponse.json({ error: "Devis introuvable." }, { status: 404 });

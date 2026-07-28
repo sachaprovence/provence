@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { writeAuditLog } from "@/lib/audit";
 
 const campaignSchema = z.object({
@@ -13,6 +13,8 @@ const campaignSchema = z.object({
 export async function GET() {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const campaigns = await prisma.campaign.findMany({
     where: { organizationId: actor.organization.id },
     include: { sequence: true, _count: { select: { leads: true, enrollments: true } } },
@@ -24,6 +26,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const body = await request.json().catch(() => null);
   const parsed = campaignSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Données invalides." }, { status: 400 });

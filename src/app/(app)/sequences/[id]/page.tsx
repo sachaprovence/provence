@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { SequenceBuilder } from "@/components/sequence-builder";
 import { STAGE_LABEL } from "@/lib/labels";
 import Link from "next/link";
 
 export default async function SequenceDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const { id } = await params;
 
   const sequence = await prisma.sequence.findFirst({

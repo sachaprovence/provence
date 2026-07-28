@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { appointmentSchema } from "@/lib/validations/appointment";
 import { onAppointmentBooked } from "@/lib/automation-engine";
 import { stopEnrollmentsForLead } from "@/lib/sequence-engine";
@@ -10,6 +10,8 @@ import { EnrollmentStopReason } from "@/generated/prisma/enums";
 export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { searchParams } = new URL(request.url);
   const leadId = searchParams.get("leadId");
 
@@ -24,6 +26,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const body = await request.json().catch(() => null);
   const parsed = appointmentSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Données invalides.", details: parsed.error.flatten() }, { status: 400 });

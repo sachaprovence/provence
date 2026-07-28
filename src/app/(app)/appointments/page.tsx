@@ -1,9 +1,10 @@
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { AppointmentsClient } from "@/components/appointments-client";
 
 export default async function AppointmentsPage() {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const appointments = await prisma.appointment.findMany({
     where: { organizationId: actor.organization.id },
     include: { lead: true },

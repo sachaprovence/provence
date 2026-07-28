@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor, type CurrentActor } from "@/lib/auth";
 import { MembershipRole } from "@/generated/prisma/enums";
+import { canAccessSalesFeatures } from "@/lib/permissions";
 
 export async function requireActorApi(): Promise<CurrentActor | NextResponse> {
   const actor = await getCurrentActor();
@@ -21,6 +22,14 @@ export function forbidden(message = "Accès refusé.") {
 export function requireRoleApi(actor: CurrentActor, roles: MembershipRole[]): NextResponse | null {
   if (!roles.includes(actor.membership.role)) {
     return forbidden();
+  }
+  return null;
+}
+
+/** Bloque les prestataires régionaux, dont l'accès est limité aux prospects/missions de leur territoire. */
+export function requireSalesFeatureApi(actor: CurrentActor): NextResponse | null {
+  if (!canAccessSalesFeatures(actor)) {
+    return forbidden("Réservé aux commerciaux et administrateurs.");
   }
   return null;
 }

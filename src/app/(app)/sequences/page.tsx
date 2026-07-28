@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { requireActor } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { MembershipRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 
 export default async function SequencesPage() {
-  const actor = await requireActor();
+  const actor = await requireRole([MembershipRole.OWNER_ADMIN, MembershipRole.SALES]);
   const sequences = await prisma.sequence.findMany({
     where: { organizationId: actor.organization.id },
     include: { steps: { orderBy: { order: "asc" } }, _count: { select: { enrollments: true } } },

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { leadWhereForActor } from "@/lib/permissions";
 import { leadCreateSchema } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
@@ -11,6 +11,8 @@ import { LeadSourceType } from "@/generated/prisma/enums";
 export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
 
   const { searchParams } = new URL(request.url);
   const stage = searchParams.get("stage");
@@ -57,6 +59,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
 
   const body = await request.json().catch(() => null);
   const parsed = leadCreateSchema.safeParse(body);

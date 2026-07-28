@@ -8,6 +8,7 @@ import { DEFAULT_SCORING_RULES } from "@/lib/scoring";
 export async function GET() {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  if (!canManageOrganization(actor)) return NextResponse.json({ error: "Réservé à l'administrateur." }, { status: 403 });
   const organization = await prisma.organization.findUniqueOrThrow({ where: { id: actor.organization.id } });
   const rules = organization.scoringRules ?? DEFAULT_SCORING_RULES;
   return NextResponse.json({ rules });

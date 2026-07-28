@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { requireActorApi, isActorResponse, requireSalesFeatureApi } from "@/lib/api-helpers";
 import { opportunityUpdateSchema } from "@/lib/validations/quote";
 import { onDealWon } from "@/lib/automation-engine";
 import { writeAuditLog } from "@/lib/audit";
@@ -11,6 +11,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  const forbiddenResp = requireSalesFeatureApi(actor);
+  if (forbiddenResp) return forbiddenResp;
   const { id } = await params;
   const existing = await prisma.opportunity.findFirst({ where: { id, organizationId: actor.organization.id }, include: { lead: true } });
   if (!existing) return NextResponse.json({ error: "Opportunité introuvable." }, { status: 404 });
