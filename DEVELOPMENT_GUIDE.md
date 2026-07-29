@@ -1,0 +1,209 @@
+# Autorun — Guide de développement
+
+> Guide pratique de travail au quotidien sur ce dépôt. Complète
+> `docs/00-AUTORUN-VISION.md` (vision), `ROADMAP.md` (modules),
+> `BACKLOG.md` (tâches) et `MILESTONES.md` (jalons) — ce document répond à
+> "comment on travaille", pas "quoi construire".
+
+## 1. Avant de commencer une tâche du backlog
+
+1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)
+   sont bien livrés et mergés sur `main`.
+2. Vérifier dans `MILESTONES.md` que la version correspondante est bien
+   celle en cours (ne pas anticiper une version future sans raison
+   explicite).
+3. Créer une branche courte dédiée à cette tâche (voir §3, convention de
+   nommage de branche).
+4. Si la tâche implique une décision structurante (nouvelle dépendance,
+   nouveau modèle de données transverse, changement de pattern
+   architectural) : rédiger un ADR **avant** de coder, pas après (voir
+   §6).
+
+## 2. Principe de non-régression permanent
+
+Le MVP Provence 360 (`tests/e2e/golden-path.mjs`) est le filet de sécurité
+de référence pendant toute la phase de généralisation (`v0.2` à `v1.0`).
+Règle non négociable :
+
+> Si une tâche touche à un module existant (voir liste `MOD-01` à `MOD-11`
+> dans `ROADMAP.md`), le golden path doit passer **avant et après** la
+> tâche, sans modification du script de test lui-même — sauf si la tâche
+> ajoute explicitement un nouveau parcours (auquel cas un nouveau script,
+> pas une modification du script existant).
+
+## 3. Workflow Git
+
+- `main` : toujours déployable, protégée, revue obligatoire, CI verte
+  requise avant merge.
+- Branches courtes, une par tâche de backlog, nommées
+  `<type>/<AR-NNNN>-<résumé-court>` :
+  - `feat/AR-0022-modele-invoice`
+  - `fix/AR-0041-regression-sequence`
+  - `refactor/AR-0011-lecture-config-vertical`
+  - `docs/AR-0003-premier-adr`
+  - `vertical/provence360/<sujet>` pour un ajustement propre à ce vertical
+    une fois `MOD-02` en place.
+- Commits [Conventional Commits](https://www.conventionalcommits.org/),
+  référençant l'identifiant de tâche : `feat(invoice): génération de
+  facture depuis un devis accepté (AR-0023)`.
+- Une pull request par tâche (ou un petit groupe de tâches très liées),
+  jamais une PR qui mélange plusieurs modules sans rapport.
+- Description de PR structurée : contexte (quelle tâche `AR-NNNN`),
+  changement, plan de test exécuté, impact sur le golden path.
+- Tag sémantique (`vX.Y.Z`) à chaque jalon de `MILESTONES.md` livré en
+  production.
+
+## 4. Conventions de code
+
+Reprises de `docs/00-AUTORUN-VISION.md` §17 et §19, rappelées ici pour
+référence rapide pendant le développement :
+
+- TypeScript strict partout, aucun `any` non justifié (commenter
+  brièvement si un `any` est réellement inévitable).
+- Validation Zod systématique à toute frontière : API Route Handlers,
+  import CSV, configuration vertical, webhooks entrants.
+- Composants React fins ; toute logique métier vit dans `src/lib/`, jamais
+  dans un composant.
+- Toute intégration externe (IA, email, stockage, paiement, calendrier)
+  passe par une interface dédiée dans `src/lib/<domaine>/types.ts`,
+  jamais d'appel SDK tiers direct ailleurs dans le code — c'est le pattern
+  déjà établi par `AIProvider`/`EmailProvider`, à répliquer strictement
+  pour `StorageProvider`/`PaymentProvider`/`CalendarProvider`.
+- Nommage : `kebab-case` pour fichiers/dossiers, `PascalCase` pour
+  composants et modèles Prisma, `camelCase` pour variables/fonctions,
+  `SCREAMING_SNAKE_CASE` pour constantes globales, variables
+  d'environnement et valeurs d'enum techniques.
+- Jamais de préfixe `NEXT_PUBLIC_` sur une variable contenant un secret.
+- Pas de `console.log` brut dans `src/` (règle de lint, voir AR-0006) —
+  utiliser le logger structuré une fois `MOD-16` en place (`v0.9`), un
+  logger minimal transitoire avant cela si nécessaire.
+
+## 5. Stratégie de tests
+
+Quatre niveaux, à prévoir systématiquement selon la nature de la tâche :
+
+1. **Tests unitaires (Vitest)** : logique métier pure (`scoring.ts`,
+   `sequence-engine.ts`, `invoicing.ts`...). Obligatoires pour tout nouveau
+   fichier dans `src/lib/`.
+2. **Tests de contrat** : pour toute interface fournisseur (`AIProvider`,
+   `EmailProvider`, `StorageProvider`, `PaymentProvider`,
+   `CalendarProvider`) — un même jeu de tests exécuté contre chaque
+   implémentation (démo, réelle), garantissant qu'une nouvelle
+   implémentation respecte le contrat sans avoir à deviner ses effets de
+   bord.
+3. **Tests d'isolation multi-tenant** : gabarit `tests/helpers/
+   tenant-isolation.ts` (AR-0004) appliqué à toute nouvelle route API,
+   sans exception.
+4. **Tests e2e (Playwright)** : `tests/e2e/golden-path.mjs` en
+   non-régression permanente ; nouveau script e2e dédié pour tout nouveau
+   parcours majeur (ex. `golden-path-vertical-fictif.mjs`,
+   `golden-path-facturation.mjs`).
+
+Règle d'écriture : le test avant l'extraction, pas après, dès qu'une tâche
+touche à un module existant déjà couvert par le golden path.
+
+## 6. Architecture Decision Records (ADR)
+
+- Emplacement : `docs/adr/NNNN-titre-court.md`, numérotation séquentielle.
+- Gabarit (`docs/adr/0000-template.md`, créé en AR-0003) : Contexte,
+  Décision, Conséquences, Alternatives écartées.
+- Un ADR est requis avant de : introduire une nouvelle dépendance
+  d'infrastructure (queue, cache, moteur de recherche), changer un pattern
+  architectural établi, ou prendre une décision qui sera coûteuse à
+  inverser (ex. choix `pg-boss` vs Redis, déjà tranché et documenté comme
+  premier ADR réel).
+- Un ADR n'est jamais réécrit rétroactivement pour "avoir eu raison" — s'il
+  faut revenir sur une décision, un nouvel ADR référence l'ancien et
+  explique le changement.
+
+## 7. Definition of Done (gabarit à appliquer à chaque tâche)
+
+Une tâche `AR-NNNN` n'est considérée terminée que si :
+
+- [ ] le code respecte les conventions §4 ;
+- [ ] les tests listés dans `BACKLOG.md` pour cette tâche sont écrits et
+      passent ;
+- [ ] le golden path (`tests/e2e/golden-path.mjs`) passe toujours si la
+      tâche touche un module existant ;
+- [ ] la CI (lint, typecheck, tests, build) est verte ;
+- [ ] un ADR a été rédigé si la tâche correspond aux critères du §6 ;
+- [ ] la documentation impactée est mise à jour (`docs/01-SPECIFICATION.md`
+      / `docs/02-ARCHITECTURE.md` si le comportement fonctionnel ou
+      l'architecture change réellement) ;
+- [ ] la PR a été revue et approuvée avant merge sur `main`.
+
+## 8. Comment ajouter un nouveau vertical métier (une fois `v0.3` livré)
+
+Procédure cible, à affiner concrètement pendant `v0.3` (`AR-0015`) :
+
+1. Créer un jeu de `PipelineStageDefinition` / `LeadCategoryDefinition` /
+   `ServiceCatalogDefinition` pour le nouveau vertical (via l'UI
+   d'administration ou un script de seed dédié).
+2. Définir les gabarits de message et règles de scoring par défaut du
+   vertical.
+3. Ne **jamais** ajouter de branche `if (vertical === "xxx")` dans le code
+   applicatif — si un besoin semble l'exiger, c'est un signal que `MOD-02`
+   a une lacune de généralisation à corriger, pas que le vertical a besoin
+   d'un cas spécial câblé en dur.
+4. Valider avec le golden path générique (rejoué pour ce nouveau vertical,
+   sur le modèle d'`AR-0015`).
+
+## 9. Comment brancher un nouveau fournisseur externe
+
+Procédure déjà éprouvée par `AIProvider`/`EmailProvider`, à répliquer :
+
+1. Implémenter l'interface existante (`src/lib/<domaine>/types.ts`) dans un
+   nouveau fichier `src/lib/<domaine>/<fournisseur>-provider.ts`.
+2. L'enregistrer dans `src/lib/<domaine>/index.ts`, sélection par variable
+   d'environnement (`AI_PROVIDER`, `EMAIL_PROVIDER`, `STORAGE_PROVIDER`,
+   `PAYMENT_PROVIDER`, `CALENDAR_PROVIDER`).
+3. Toute clé API/secret lu strictement côté serveur, jamais de préfixe
+   `NEXT_PUBLIC_`.
+4. Écrire les tests de contrat contre la nouvelle implémentation avant de
+   la déployer.
+5. Documenter dans `docs/02-ARCHITECTURE.md` la nouvelle implémentation
+   disponible (à l'image de la section actuelle "Brancher de vrais
+   fournisseurs" du `README.md`).
+
+## 10. Environnement de développement
+
+- Prérequis identiques au MVP actuel : Node.js ≥ 20.19, PostgreSQL ≥ 14 (ou
+  `docker compose up`).
+- `npm run dev`, `npm run test`, `npm run test:e2e`, `npm run db:migrate`,
+  `npm run db:seed` : commandes existantes, inchangées par cette roadmap
+  tant que `v0.8` (infrastructure asynchrone) n'introduit pas de nouveau
+  service (`worker`), auquel cas `docker-compose.yml` sera étendu avec un
+  service dédié et ce guide mis à jour en conséquence.
+- Toujours pouvoir démarrer l'application en mode démo (aucune clé API
+  externe requise) à tout moment de la roadmap — c'est une contrainte
+  permanente, pas seulement une caractéristique du MVP initial.
+
+## 11. Revue de code — points de vigilance systématiques
+
+À vérifier sur **chaque** pull request, indépendamment de son objet :
+
+- Toute nouvelle route API filtre-t-elle explicitement par
+  `organizationId` (directement ou via `src/lib/permissions.ts`) ?
+- Toute nouvelle donnée sensible (secret, token, donnée bancaire) est-elle
+  absente des logs et du code client (`NEXT_PUBLIC_*`) ?
+- Toute migration Prisma destructive est-elle précédée d'une période
+  d'observation documentée (voir `MILESTONES.md`, note sur `AR-0014`) ?
+- Toute nouvelle intégration externe passe-t-elle par une interface dédiée
+  plutôt qu'un appel SDK direct ?
+- Le golden path (ou son équivalent pour un nouveau parcours) a-t-il été
+  rejoué, pas seulement les tests unitaires ?
+
+## 12. Ce que ce guide ne couvre pas (volontairement)
+
+- Le détail des tâches à réaliser → `BACKLOG.md`.
+- L'ordre et les critères de sortie des versions → `MILESTONES.md`.
+- La justification des choix d'architecture et la vision produit →
+  `docs/00-AUTORUN-VISION.md`, `ROADMAP.md`.
+- Le développement effectif du code → hors périmètre tant que la
+  conception et la planification n'ont pas été explicitement validées par
+  le porteur du projet.
+
+---
+
+*Ce guide évolue avec le projet : toute pratique qui se répète sans être
+documentée ici doit y être ajoutée par la personne qui l'introduit.*

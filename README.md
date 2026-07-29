@@ -10,6 +10,9 @@ carte des prospects, et garde-fous anti-spam/RGPD intégrés.
 🏗️ Architecture technique : [`docs/02-ARCHITECTURE.md`](docs/02-ARCHITECTURE.md)
 🚀 Vision plateforme **Autorun** (ce dont Provence 360 est le premier
 vertical) : [`docs/00-AUTORUN-VISION.md`](docs/00-AUTORUN-VISION.md)
+🗺️ Plan de développement Autorun : [`ROADMAP.md`](ROADMAP.md) (modules) ·
+[`BACKLOG.md`](BACKLOG.md) (tâches) · [`MILESTONES.md`](MILESTONES.md)
+(jalons) · [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) (guide de travail)
 
 Le projet fonctionne **entièrement en mode démonstration** dès l'installation
 (fournisseurs email et IA simulés) — aucune clé API ni service payant n'est
