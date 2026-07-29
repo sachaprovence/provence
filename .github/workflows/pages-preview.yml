@@ -1,0 +1,48 @@
+name: Deploy Provence 360 preview to GitHub Pages
+
+# Publishes provence360-squarespace/ (preview + its assets/CSS/JS) as a
+# static GitHub Pages site. Does not touch, build, or affect the Next.js
+# app elsewhere in this repo. The Squarespace kit under
+# provence360-squarespace/squarespace/ is uploaded read-only, unmodified —
+# this workflow only packages and serves existing files, it never edits
+# them.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "provence360-squarespace/**"
+      - ".github/workflows/pages-preview.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: provence360-squarespace
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
