@@ -6,9 +6,11 @@ const PUBLIC_PATHS = [
   "/register",
   "/reset-password",
   "/unsubscribe",
+  "/workspace-invitations",
   "/api/auth",
   "/api/unsubscribe",
   "/api/health",
+  "/api/workspace-invitations",
 ];
 
 export function proxy(request: NextRequest) {

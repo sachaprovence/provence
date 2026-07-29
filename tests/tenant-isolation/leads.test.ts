@@ -55,6 +55,7 @@ runIfDatabase("isolation multi-tenant — Lead", () => {
       user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName },
       membership: { id: membership.id, role: membership.role, territoryId: membership.territoryId },
       organization: { id: organization.id, name: organization.name },
+      sessionId: "test-session",
     };
 
     return { actor, lead };
@@ -110,6 +111,7 @@ runIfDatabase("isolation multi-tenant — Lead", () => {
       user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName },
       membership: { id: membership.id, role: membership.role, territoryId: membership.territoryId },
       organization: { id: organization.id, name: organization.name },
+      sessionId: "test-session",
     };
 
     // Deux prospects de la même organisation : un dans le territoire du

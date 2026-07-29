@@ -38,13 +38,29 @@ la suite et doivent exister en premier (`MOD-00`, version `v0.1`) :
 Sans ces trois éléments, les modules suivants ne peuvent pas être validés de
 façon fiable.
 
+## 1 bis. Changement de plan explicite : v0.2 devient le multi-tenant, pas la configuration métier
+
+La version `v0.2` initialement planifiée dans ce document (§3, `MOD-02` —
+généralisation des catégories/catalogue/pipeline en configuration) a été
+**remplacée, sur demande explicite**, par un nouveau module prioritaire :
+`MOD-21` (modèle multi-tenant Organization/Workspace, isolation des
+données, RBAC de workspace, audit). Raison : rendre Autorun capable
+d'héberger plusieurs entreprises est un prérequis plus urgent que la
+généralisation des règles métier d'un seul vertical.
+
+Conséquence sur l'ordre : `MOD-02` (configuration métier) n'est pas
+abandonné, seulement **reporté après `MOD-21`** — voir `MILESTONES.md`
+pour le détail. Les décisions d'architecture prises pour `MOD-21` sont
+documentées dans `docs/adr/0005` et `docs/adr/0006`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
 |---|---|---|---|
-| MOD-00 | Fondations techniques & DevOps | À créer | Critique |
-| MOD-01 | Identité & Accès | Existant (Phase 0) | Haute (généralisation) |
-| MOD-02 | Configuration métier / Vertical Pack | À créer | Critique |
+| MOD-00 | Fondations techniques & DevOps | ✅ Livré (v0.1) | Critique |
+| MOD-01 | Identité & Accès | Existant (Phase 0), étendu multi-tenant (v0.2) | Haute (généralisation) |
+| MOD-02 | Configuration métier / Vertical Pack | Reporté à v0.3 (voir §0 bis) | Critique |
+| MOD-21 | Multi-tenant Organization/Workspace | ✅ Livré (v0.2) | Critique |
 | MOD-03 | CRM Prospects | Existant (Phase 0) | Haute (généralisation) |
 | MOD-04 | Analyse & Scoring IA | Existant (Phase 0) | Haute (généralisation + réel) |
 | MOD-05 | Campagnes & Séquences | Existant (Phase 0) | Moyenne (généralisation) |
@@ -640,6 +656,60 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
 - **Critères de fin** : le golden path fonctionne pour les deux verticaux
   (Provence 360 et le vertical fictif) avec un seul et même code
   applicatif.
+
+---
+
+### MOD-21 — Multi-tenant Organization/Workspace (v0.2, priorisé avant MOD-02)
+
+- **Objectif** : rendre Autorun capable d'héberger plusieurs entreprises,
+  avec une isolation des données garantie côté serveur (jamais seulement
+  côté interface), tout en gardant Provence 360 entièrement fonctionnelle
+  et migrée sans perte de donnée.
+- **Fonctionnalités** : modèle `Workspace` (sous-espace au sein d'une
+  `Organization`, inchangée), `WorkspaceMembership` (8 rôles :
+  Owner/Admin/Manager/Commercial/Opérateur/Comptable/Support/Viewer),
+  `WorkspaceInvitation` (invitation + acceptation, création de compte si
+  nécessaire), workspace actif persisté côté serveur
+  (`Session.activeWorkspaceId`, jamais un identifiant client de confiance),
+  sélecteur de workspace, pages de gestion des workspaces et de leurs
+  membres, matrice de permissions (`src/lib/workspace-permissions.ts`),
+  audit systématique (création, invitation, changement de rôle,
+  archivage, changement de workspace actif, accès refusé).
+- **Dépendances** : `MOD-00` (fondations), `MOD-01` (identité).
+- **Priorité** : Critique — condition explicite de cette phase.
+- **Risques techniques** :
+  - Confusion de vocabulaire (`Organization` du schéma = "Workspace" du
+    produit) — mitigé par l'ADR 0005 qui documente explicitement ce choix
+    et pourquoi un renommage complet a été écarté pour cette phase.
+  - Chemins de création d'organisation multiples (inscription, seed de
+    démonstration) devant chacun créer le workspace par défaut — un oubli
+    a été détecté et corrigé pendant la vérification finale de cette
+    phase (`prisma/seed.ts` ne créait pas de workspace ; corrigé avant
+    livraison, voir le rapport de vérification).
+  - Confiance implicite dans un identifiant transmis par le client — mitigé
+    systématiquement : toute route qui reçoit un `workspaceId`/`id` depuis
+    l'URL ou le corps de la requête le revérifie contre l'organisation de
+    l'acteur authentifié avant tout accès (`resolveWorkspaceOrThrow`,
+    `setActiveWorkspace`).
+- **Choix d'architecture** : voir ADR 0005 (Organization inchangée +
+  Workspace additif, pas de renommage) et ADR 0006 (rôles de workspace
+  additifs, mapping de migration documenté). Deux systèmes de rôles
+  cohabitent temporairement (`MembershipRole` historique, `WorkspaceRole`
+  nouveau) — assumé, pas une incohérence accidentelle.
+- **Tests à prévoir** (tous livrés, voir `tests/tenant-isolation/`) :
+  isolation entre deux organisations, isolation entre deux workspaces
+  d'une même organisation, accès autorisé/interdit avec journalisation,
+  tentative de falsification d'un identifiant de workspace, changement de
+  rôle, archivage (workspace par défaut protégé), cycle de vie complet
+  (création, invitation, acceptation, retrait), invariants de migration
+  sur les données réelles de Provence 360, et un test e2e Playwright
+  dédié (`tests/e2e/two-organisations-isolation.mjs` — deux organisations,
+  deux utilisateurs, vérification croisée qu'aucun ne voit les données de
+  l'autre).
+- **Critères de fin** : golden path Provence 360 inchangé après migration ;
+  toute nouvelle organisation (inscription ou seed) reçoit automatiquement
+  un workspace par défaut fonctionnel ; 100 % des tests listés ci-dessus
+  passent contre une vraie base PostgreSQL.
 
 ## 4. Ordre logique de développement
 

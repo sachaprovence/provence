@@ -66,6 +66,11 @@ jobs:
       - name: Apply migrations
         run: npx prisma migrate deploy
 
+      - name: Seed demo data
+        # Nécessaire aux tests qui vérifient la conservation des données
+        # Provence 360 après migration (voir tests/workspace-migration.test.ts).
+        run: npm run db:seed
+
       - name: Lint
         run: npm run lint
 

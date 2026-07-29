@@ -20,53 +20,68 @@ enum MembershipRole {
   PROVIDER
 }
 
-model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  website     String?
-  logoUrl     String?
-  services    String[] @default([])
-  zones       String[] @default([])
-  pricingNote String?
-  pitch       String?
-  testimonials Json[]  @default([])
-  portfolioLinks String[] @default([])
-  availabilityNote String?
-  tone        String   @default("professionnel")
-  emailSignature String?
-  dailySendLimit Int   @default(50)
-  rampUpEnabled  Boolean @default(true)
-  scoringRules   Json?
-  requireMessageValidation Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// Rôle au niveau *workspace* (voir ADR 0005/0006) — distinct et additif par
+// rapport à `MembershipRole` (rôle d'organisation, inchangé). N'est consommé
+// que par `WorkspaceMembership` et `src/lib/workspace-permissions.ts`.
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MANAGER
+  COMMERCIAL
+  OPERATOR
+  ACCOUNTANT
+  SUPPORT
+  VIEWER
+}
 
-  memberships       Membership[]
-  territories       Territory[]
-  icps              IdealCustomerProfile[]
-  leads             Lead[]
-  tags              Tag[]
-  campaigns         Campaign[]
-  sequences         Sequence[]
-  emailAccounts     EmailAccount[]
-  tasks             Task[]
-  appointments      Appointment[]
-  opportunities     Opportunity[]
-  quotes            Quote[]
-  customers         Customer[]
-  missions          Mission[]
-  services_         Service[]
-  providers         Provider[]
-  automationRules   AutomationRule[]
-  notifications     Notification[]
+model Organization {
+  id                       String   @id @default(cuid())
+  name                     String
+  description              String?
+  website                  String?
+  logoUrl                  String?
+  services                 String[] @default([])
+  zones                    String[] @default([])
+  pricingNote              String?
+  pitch                    String?
+  testimonials             Json[]   @default([])
+  portfolioLinks           String[] @default([])
+  availabilityNote         String?
+  tone                     String   @default("professionnel")
+  emailSignature           String?
+  dailySendLimit           Int      @default(50)
+  rampUpEnabled            Boolean  @default(true)
+  scoringRules             Json?
+  requireMessageValidation Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  memberships        Membership[]
+  workspaces         Workspace[]
+  territories        Territory[]
+  icps               IdealCustomerProfile[]
+  leads              Lead[]
+  tags               Tag[]
+  campaigns          Campaign[]
+  sequences          Sequence[]
+  emailAccounts      EmailAccount[]
+  tasks              Task[]
+  appointments       Appointment[]
+  opportunities      Opportunity[]
+  quotes             Quote[]
+  customers          Customer[]
+  missions           Mission[]
+  services_          Service[]
+  providers          Provider[]
+  automationRules    AutomationRule[]
+  notifications      Notification[]
   suppressionEntries SuppressionEntry[]
-  consentRecords    ConsentRecord[]
-  auditLogs         AuditLog[]
-  aiRequests        AIRequest[]
-  integrations      Integration[]
-  webhookEvents     WebhookEvent[]
-  loginEvents       LoginEvent[]
+  consentRecords     ConsentRecord[]
+  auditLogs          AuditLog[]
+  aiRequests         AIRequest[]
+  integrations       Integration[]
+  webhookEvents      WebhookEvent[]
+  loginEvents        LoginEvent[]
 
   @@index([name])
 }
@@ -83,17 +98,89 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships    Membership[]
-  sessions       Session[]
-  passwordResets PasswordResetToken[]
-  loginEvents    LoginEvent[]
-  auditLogs      AuditLog[]
-  aiRequests     AIRequest[]
-  tasksAssigned  Task[]              @relation("TaskAssignee")
-  appointments   Appointment[]       @relation("AppointmentOwner")
-  notifications  Notification[]
-  messagesValidated Message[]        @relation("MessageValidatedBy")
-  notesAuthored  LeadNote[]
+  memberships              Membership[]
+  workspaceMemberships     WorkspaceMembership[]
+  workspaceInvitationsSent WorkspaceInvitation[] @relation("WorkspaceInvitationInvitedBy")
+  sessions                 Session[]
+  passwordResets           PasswordResetToken[]
+  loginEvents              LoginEvent[]
+  auditLogs                AuditLog[]
+  aiRequests               AIRequest[]
+  tasksAssigned            Task[]                @relation("TaskAssignee")
+  appointments             Appointment[]         @relation("AppointmentOwner")
+  notifications            Notification[]
+  messagesValidated        Message[]             @relation("MessageValidatedBy")
+  notesAuthored            LeadNote[]
+}
+
+// ---------------------------------------------------------------------------
+// Workspaces (sous-espaces au sein d'une organisation — voir ADR 0005)
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  isDefault      Boolean   @default(false)
+  settings       Json?
+  archivedAt     DateTime?
+  archivedById   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  WorkspaceMembership[]
+  invitations  WorkspaceInvitation[]
+  sessions     Session[]
+  leads        Lead[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+model WorkspaceMembership {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  invitedById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+enum WorkspaceInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+model WorkspaceInvitation {
+  id          String                    @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  token       String                    @unique
+  status      WorkspaceInvitationStatus @default(PENDING)
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime                  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("WorkspaceInvitationInvitedBy", fields: [invitedById], references: [id])
+
+  @@index([workspaceId])
+  @@index([email])
 }
 
 model Membership {
@@ -114,26 +201,32 @@ model Membership {
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique
-  userAgent String?
-  ipAddress String?
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String
+  token             String   @unique
+  userAgent         String?
+  ipAddress         String?
+  // Workspace actif de cette session — jamais fourni tel quel par le client :
+  // toute mise à jour passe par une route serveur qui revérifie
+  // `WorkspaceMembership` avant d'écrire ce champ (voir ADR 0005,
+  // src/lib/workspace-context.ts).
+  activeWorkspaceId String?
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeWorkspace Workspace? @relation(fields: [activeWorkspaceId], references: [id])
 
   @@index([userId])
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  token     String   @unique
+  token     String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -215,25 +308,25 @@ enum LeadCategory {
 }
 
 model IdealCustomerProfile {
-  id                String       @id @default(cuid())
-  organizationId    String
-  name              String
-  category          LeadCategory
-  zones             String[]     @default([])
-  sizeNote          String?
-  priceRange        String?
-  estimatedUnits    String?
-  hasVirtualTourExpected Boolean @default(false)
-  websiteQualityNote String?
-  socialPresenceNote String?
-  minRating         Float?
-  minReviewCount    Int?
-  priority          Int          @default(3)
-  positiveKeywords  String[]     @default([])
-  exclusionCriteria String[]     @default([])
-  isActive          Boolean      @default(true)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  id                     String       @id @default(cuid())
+  organizationId         String
+  name                   String
+  category               LeadCategory
+  zones                  String[]     @default([])
+  sizeNote               String?
+  priceRange             String?
+  estimatedUnits         String?
+  hasVirtualTourExpected Boolean      @default(false)
+  websiteQualityNote     String?
+  socialPresenceNote     String?
+  minRating              Float?
+  minReviewCount         Int?
+  priority               Int          @default(3)
+  positiveKeywords       String[]     @default([])
+  exclusionCriteria      String[]     @default([])
+  isActive               Boolean      @default(true)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leads        Lead[]
@@ -286,8 +379,14 @@ model LeadSource {
 }
 
 model Lead {
-  id             String       @id @default(cuid())
+  id             String  @id @default(cuid())
   organizationId String
+  // Sous-espace de travail au sein de l'organisation (voir ADR 0005).
+  // Nullable et non exploité pour le filtrage aujourd'hui par les routes
+  // existantes (qui continuent de scoper par organizationId uniquement) ;
+  // sert de première preuve de concept du scoping par workspace et aux
+  // tests d'isolation inter-workspace.
+  workspaceId    String?
   icpId          String?
   territoryId    String?
   sourceId       String?
@@ -298,57 +397,59 @@ model Lead {
   category          LeadCategory @default(OTHER)
   stage             LeadStage    @default(NEW)
 
-  websiteUrl     String?
+  websiteUrl       String?
   publicListingUrl String?
-  address        String?
-  city           String?
-  region         String?
-  country        String       @default("France")
-  latitude       Float?
-  longitude      Float?
+  address          String?
+  city             String?
+  region           String?
+  country          String  @default("France")
+  latitude         Float?
+  longitude        Float?
 
-  reviewCount    Int?
-  averageRating  Float?
-  socialLinks    Json?
+  reviewCount   Int?
+  averageRating Float?
+  socialLinks   Json?
 
   hasVirtualTour Boolean?
-  closedBusiness Boolean      @default(false)
+  closedBusiness Boolean  @default(false)
 
-  tagsRelation   Tag[]        @relation("LeadTags")
-  notesLegacy    String?
+  tagsRelation Tag[]   @relation("LeadTags")
+  notesLegacy  String?
 
-  isSuppressed   Boolean      @default(false)
-  suppressedAt   DateTime?
+  isSuppressed Boolean   @default(false)
+  suppressedAt DateTime?
 
-  importedAt     DateTime     @default(now())
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  importedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?            @relation(fields: [workspaceId], references: [id])
   icp          IdealCustomerProfile? @relation(fields: [icpId], references: [id])
   territory    Territory?            @relation(fields: [territoryId], references: [id])
   source       LeadSource?           @relation(fields: [sourceId], references: [id])
   campaign     Campaign?             @relation(fields: [campaignId], references: [id])
 
-  contacts     LeadContact[]
-  analyses     LeadAnalysis[]
-  scores       LeadScore[]
-  notes        LeadNote[]
-  enrollments  Enrollment[]
-  messages     Message[]
+  contacts      LeadContact[]
+  analyses      LeadAnalysis[]
+  scores        LeadScore[]
+  notes         LeadNote[]
+  enrollments   Enrollment[]
+  messages      Message[]
   conversations Conversation[]
-  tasks        Task[]
-  appointments Appointment[]
+  tasks         Task[]
+  appointments  Appointment[]
   opportunities Opportunity[]
-  quotes       Quote[]
-  customer     Customer?
-  aiRequests   AIRequest[]
-  auditLogs    AuditLog[]
+  quotes        Quote[]
+  customer      Customer?
+  aiRequests    AIRequest[]
+  auditLogs     AuditLog[]
 
+  @@unique([organizationId, publicListingUrl])
   @@index([organizationId, stage])
   @@index([organizationId, city])
   @@index([campaignId])
-  @@unique([organizationId, publicListingUrl])
+  @@index([workspaceId])
 }
 
 model LeadContact {
@@ -381,10 +482,10 @@ model LeadNote {
 }
 
 model Tag {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
   name           String
-  color          String   @default("#6b7280")
+  color          String @default("#6b7280")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leads        Lead[]       @relation("LeadTags")
@@ -397,23 +498,23 @@ model Tag {
 // ---------------------------------------------------------------------------
 
 model LeadAnalysis {
-  id             String   @id @default(cuid())
-  leadId         String
-  summary        String
-  clienteleType  String?
-  digitalPresenceQuality String?
+  id                       String   @id @default(cuid())
+  leadId                   String
+  summary                  String
+  clienteleType            String?
+  digitalPresenceQuality   String?
   hasVirtualTourAssessment String?
-  opportunities  String[] @default([])
-  recommendedAngle String?
-  recommendedService String?
-  priorityLevel  String
-  personalizedArguments String[] @default([])
-  negativeSignals String[] @default([])
-  verifiedFacts  String[] @default([])
-  estimatedFacts String[] @default([])
-  missingInfo    String[] @default([])
-  aiRequestId    String?
-  createdAt      DateTime @default(now())
+  opportunities            String[] @default([])
+  recommendedAngle         String?
+  recommendedService       String?
+  priorityLevel            String
+  personalizedArguments    String[] @default([])
+  negativeSignals          String[] @default([])
+  verifiedFacts            String[] @default([])
+  estimatedFacts           String[] @default([])
+  missingInfo              String[] @default([])
+  aiRequestId              String?
+  createdAt                DateTime @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -421,12 +522,12 @@ model LeadAnalysis {
 }
 
 model LeadScore {
-  id          String   @id @default(cuid())
-  leadId      String
-  value       Int
-  category    String
-  breakdown   Json
-  computedAt  DateTime @default(now())
+  id         String   @id @default(cuid())
+  leadId     String
+  value      Int
+  category   String
+  breakdown  Json
+  computedAt DateTime @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -487,19 +588,19 @@ model Sequence {
 }
 
 model SequenceStep {
-  id                String          @id @default(cuid())
-  sequenceId        String
-  order             Int
-  delayDays         Int
-  channel           SequenceChannel
-  templateKey       String
-  conditions        Json?
-  allowedStartHour  Int             @default(8)
-  allowedEndHour    Int             @default(18)
-  allowedWeekdays   Int[]           @default([1, 2, 3, 4, 5])
-  requiresValidation Boolean        @default(true)
+  id                 String          @id @default(cuid())
+  sequenceId         String
+  order              Int
+  delayDays          Int
+  channel            SequenceChannel
+  templateKey        String
+  conditions         Json?
+  allowedStartHour   Int             @default(8)
+  allowedEndHour     Int             @default(18)
+  allowedWeekdays    Int[]           @default([1, 2, 3, 4, 5])
+  requiresValidation Boolean         @default(true)
 
-  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  sequence Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@unique([sequenceId, order])
@@ -523,16 +624,16 @@ enum EnrollmentStopReason {
 }
 
 model Enrollment {
-  id             String                @id @default(cuid())
-  leadId         String
-  sequenceId     String
-  campaignId     String?
-  status         EnrollmentStatus      @default(ACTIVE)
-  currentStepOrder Int                 @default(0)
-  nextRunAt      DateTime?
-  stopReason     EnrollmentStopReason?
-  startedAt      DateTime              @default(now())
-  stoppedAt      DateTime?
+  id               String                @id @default(cuid())
+  leadId           String
+  sequenceId       String
+  campaignId       String?
+  status           EnrollmentStatus      @default(ACTIVE)
+  currentStepOrder Int                   @default(0)
+  nextRunAt        DateTime?
+  stopReason       EnrollmentStopReason?
+  startedAt        DateTime              @default(now())
+  stoppedAt        DateTime?
 
   lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
   sequence Sequence  @relation(fields: [sequenceId], references: [id])
@@ -605,25 +706,25 @@ enum MessageStatus {
 }
 
 model Message {
-  id             String          @id @default(cuid())
-  leadId         String
-  enrollmentId   String?
-  sequenceStepId String?
-  emailAccountId String?
-  type           MessageType
-  channel        SequenceChannel @default(EMAIL)
-  tone           MessageTone     @default(PROFESSIONAL)
-  language       MessageLanguage @default(FR)
-  subject        String?
-  body           String
-  status         MessageStatus   @default(DRAFT)
-  aiRequestId    String?
-  validatedById  String?
-  validatedAt    DateTime?
-  sentAt         DateTime?
+  id                String          @id @default(cuid())
+  leadId            String
+  enrollmentId      String?
+  sequenceStepId    String?
+  emailAccountId    String?
+  type              MessageType
+  channel           SequenceChannel @default(EMAIL)
+  tone              MessageTone     @default(PROFESSIONAL)
+  language          MessageLanguage @default(FR)
+  subject           String?
+  body              String
+  status            MessageStatus   @default(DRAFT)
+  aiRequestId       String?
+  validatedById     String?
+  validatedAt       DateTime?
+  sentAt            DateTime?
   providerMessageId String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
   enrollment   Enrollment?   @relation(fields: [enrollmentId], references: [id])
@@ -674,17 +775,17 @@ enum ReplyIntent {
 }
 
 model Conversation {
-  id             String       @id @default(cuid())
-  leadId         String
-  channel        SequenceChannel @default(EMAIL)
-  direction      String
-  fromAddress    String?
-  toAddress      String?
-  subject        String?
-  body           String
-  intent         ReplyIntent?
-  aiRequestId    String?
-  createdAt      DateTime     @default(now())
+  id          String          @id @default(cuid())
+  leadId      String
+  channel     SequenceChannel @default(EMAIL)
+  direction   String
+  fromAddress String?
+  toAddress   String?
+  subject     String?
+  body        String
+  intent      ReplyIntent?
+  aiRequestId String?
+  createdAt   DateTime        @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -763,17 +864,17 @@ enum OpportunityStatus {
 }
 
 model Opportunity {
-  id             String            @id @default(cuid())
-  organizationId String
-  leadId         String
-  name           String
-  estimatedValue Int
-  probability    Int               @default(20)
-  status         OpportunityStatus @default(OPEN)
-  lostReason     String?
+  id              String            @id @default(cuid())
+  organizationId  String
+  leadId          String
+  name            String
+  estimatedValue  Int
+  probability     Int               @default(20)
+  status          OpportunityStatus @default(OPEN)
+  lostReason      String?
   expectedCloseAt DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -826,7 +927,7 @@ model Quote {
   totalAmount    Int         @default(0)
   sentAt         DateTime?
   expiresAt      DateTime?
-  acceptedAt      DateTime?
+  acceptedAt     DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -920,7 +1021,7 @@ model AutomationRule {
 }
 
 model Notification {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   userId         String?
   type           String
@@ -928,7 +1029,7 @@ model Notification {
   body           String?
   link           String?
   readAt         DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
@@ -1017,18 +1118,18 @@ enum AIRequestStatus {
 }
 
 model AIRequest {
-  id             String          @id @default(cuid())
-  organizationId String
-  userId         String?
-  leadId         String?
-  kind           AIRequestKind
-  provider       String
-  model          String
-  prompt         String
-  response       String
-  estimatedCostUsd Float          @default(0)
-  status         AIRequestStatus @default(COMPLETED)
-  createdAt      DateTime        @default(now())
+  id               String          @id @default(cuid())
+  organizationId   String
+  userId           String?
+  leadId           String?
+  kind             AIRequestKind
+  provider         String
+  model            String
+  prompt           String
+  response         String
+  estimatedCostUsd Float           @default(0)
+  status           AIRequestStatus @default(COMPLETED)
+  createdAt        DateTime        @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
@@ -1068,14 +1169,14 @@ model Integration {
 }
 
 model WebhookEvent {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String?
   source         String
   eventType      String
   payload        Json
-  signatureValid Boolean  @default(false)
+  signatureValid Boolean   @default(false)
   processedAt    DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization? @relation(fields: [organizationId], references: [id])
 

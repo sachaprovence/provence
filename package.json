@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node tests/e2e/golden-path.mjs",
+    "test:e2e:tenants": "node tests/e2e/two-organizations-isolation.mjs",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",

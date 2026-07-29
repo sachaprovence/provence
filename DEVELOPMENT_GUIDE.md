@@ -31,6 +31,35 @@ utiliser le nouveau kit UI, à titre de démonstration réelle de son
 fonctionnement (voir ADR 0004 sur la portée volontairement limitée du
 reformatage Prettier rétroactif).
 
+## 0 bis. État du multi-tenant (v0.2)
+
+Le modèle multi-tenant Organization/Workspace (`ROADMAP.md` MOD-21) est
+livré, en remplacement du plan initial de v0.2 (voir `MILESTONES.md`).
+Points à connaître pour tout nouveau code :
+
+- `Organization` reste la frontière multi-tenant historique, inchangée.
+  `Workspace` (`src/lib/workspace-service.ts`,
+  `src/lib/workspace-context.ts`) est un sous-espace additif au sein d'une
+  organisation — voir ADR 0005/0006 avant de toucher à ce périmètre.
+- **Toute nouvelle route qui gère une ressource de workspace** doit
+  utiliser `requireWorkspaceActorApi()`/`requireWorkspaceActor()` (pas
+  seulement `requireActorApi()`) et passer l'identifiant reçu du client
+  par `resolveWorkspaceOrThrow()` avant tout accès — jamais de confiance
+  directe dans un `workspaceId`/`organizationId` de requête.
+- Toute action sensible de workspace doit passer par
+  `requireWorkspacePermission()`, qui journalise systématiquement un
+  refus (`access.denied`) — ne jamais vérifier `actor.workspace.role`
+  à la main dans une route.
+- Deux systèmes de rôles cohabitent (`MembershipRole` historique 3
+  valeurs, `WorkspaceRole` nouveau 8 valeurs) — ne pas les fusionner sans
+  un nouvel ADR ; toute route existante continue d'utiliser
+  `MembershipRole`/`src/lib/permissions.ts` sans changement.
+- Tout chemin qui crée une organisation (inscription, seed, futur
+  onboarding self-service) **doit** créer son workspace par défaut dans la
+  même transaction — un oubli sur `prisma/seed.ts` a été détecté et corrigé
+  pendant la vérification finale de v0.2 ; `tests/workspace-migration.test.ts`
+  couvre désormais cet invariant.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)

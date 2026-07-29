@@ -65,28 +65,54 @@ et de la facturation client (`v0.4`/`v0.5`).
   `Dockerfile`/`docker-compose.yml` et par les mêmes commandes (`prisma
   generate`, `next build`, `next start`) exécutées nativement avec succès.
 
-## v0.2 — Configuration métier (Vertical Pack, socle de données)
+## v0.2 — Multi-tenant Organization/Workspace (remplace le plan initial)
 
-- **Objectif du jalon** : rendre configurables les catégories de
-  prospects, le catalogue de services et les étapes de pipeline,
-  aujourd'hui figés en enums Prisma, sans changer le comportement observé
-  de Provence 360.
-- **Modules** : MOD-02 (avec contributions ponctuelles de MOD-01/03/11).
-- **Tâches** : AR-0007 à AR-0014.
+> **Statut : ✅ livré** (2026-07-29). Ce jalon a été **redéfini sur demande
+> explicite** : le contenu initialement prévu ici (configuration métier /
+> Vertical Pack, `MOD-02`) est reporté à une version ultérieure (voir note
+> en fin de section) et remplacé par un module jugé plus prioritaire :
+> rendre Autorun capable d'héberger plusieurs entreprises. Voir
+> `ROADMAP.md` §1 bis et §MOD-21, ainsi que `docs/adr/0005` et `0006`.
+
+- **Objectif du jalon** : modèle multi-tenant explicite (Organisation,
+  Workspace, appartenances, rôles, permissions), isolation des données
+  garantie côté serveur à toutes les couches, Provence 360 migrée comme
+  premier workspace réel sans aucune perte de donnée ni régression.
+- **Modules** : MOD-21 (avec extension additive de MOD-01 : `auth.ts`
+  expose désormais `sessionId`).
+- **Tâches** : voir `BACKLOG.md`, section v0.2 (migration Prisma, services
+  `workspace-context.ts`/`workspace-service.ts`/`workspace-permissions.ts`,
+  routes API `/api/workspaces/**`, UI de gestion, suite de tests).
 - **Critères de sortie** :
-  - `tests/e2e/golden-path.mjs` passe sans aucune modification de script ;
-  - un snapshot des valeurs Provence 360 avant/après migration est
-    strictement identique ;
-  - une organisation de test créée sans configuration explicite reçoit un
-    jeu de valeurs par défaut cohérent et utilisable ;
-  - l'UI d'administration permet d'éditer catégories/services/étapes sans
-    accès direct à la base.
-- **État fonctionnel de l'application** : Provence 360 fonctionne
-  **exactement comme avant** du point de vue utilisateur ; en coulisses,
-  les valeurs métier sont maintenant des données, pas du code. C'est le
-  jalon le plus risqué de la roadmap — à ne déclarer terminé qu'après une
-  période d'observation en usage réel avant de retirer les enums obsolètes
-  (AR-0014, qui peut être repoussée à `v0.3` si la prudence l'exige).
+  - [x] `tests/e2e/golden-path.mjs` passe sans aucune modification de
+    script, sur données fraîchement seedées ;
+  - [x] toute organisation (existante migrée, ou nouvelle via inscription
+    ou seed) possède exactement un workspace par défaut fonctionnel ;
+  - [x] aucun `organizationId`/`workspaceId` fourni par le client n'est
+    utilisé sans revérification serveur (`resolveWorkspaceOrThrow`,
+    `setActiveWorkspace`) ;
+  - [x] 29 tests unitaires/intégration + 2 suites e2e Playwright
+    (golden path + isolation deux organisations) passent contre une
+    vraie base PostgreSQL ;
+  - [x] audit systématique des événements sensibles (création,
+    invitation, changement de rôle, archivage, changement de workspace
+    actif, accès refusé).
+- **État fonctionnel de l'application** : Provence 360 reste **entièrement
+  fonctionnelle** (CRM, devis, séquences, IA — golden path inchangé) ; elle
+  dispose en plus d'un sélecteur de workspace, de pages de gestion des
+  workspaces/membres, et d'une isolation multi-organisation démontrée par
+  test e2e (deux organisations, deux utilisateurs, vérification croisée).
+- **Bug détecté et corrigé pendant la vérification finale** :
+  `prisma/seed.ts` ne créait pas de workspace par défaut pour
+  l'organisation de démonstration (seule la route d'inscription le
+  faisait) — corrigé avant livraison ; couvert désormais par
+  `tests/workspace-migration.test.ts`.
+- **Limite connue** : le contenu initial de `v0.2` (généralisation des
+  catégories/catalogue/pipeline en configuration — `MOD-02`) n'a pas été
+  traité dans cette phase ; il reste à planifier dans une version
+  ultérieure (candidate naturelle : la prochaine version, dont le numéro
+  exact sera fixé au moment de la reprendre, sans renuméroter par
+  anticipation les jalons `v0.3`+ déjà détaillés ci-dessous).
 
 ## v0.3 — Validation par un second vertical fictif
 

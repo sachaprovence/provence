@@ -1,6 +1,8 @@
-import { requireActor } from "@/lib/auth";
+import { requireWorkspaceActor } from "@/lib/workspace-context";
+import { hasWorkspacePermission } from "@/lib/workspace-permissions";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { LogoutButton } from "@/components/logout-button";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 
 const ROLE_LABEL: Record<string, string> = {
   OWNER_ADMIN: "Administrateur",
@@ -9,7 +11,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const actor = await requireActor();
+  const actor = await requireWorkspaceActor();
 
   return (
     <div className="min-h-screen flex">
@@ -17,6 +19,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="px-5 py-5 border-b border-p360-lavender-light">
           <div className="text-lg font-semibold text-p360-blue">Provence 360</div>
           <div className="text-xs text-p360-muted mt-0.5">{actor.organization.name}</div>
+        </div>
+        <div className="px-5 py-4 border-b border-p360-lavender-light">
+          <WorkspaceSwitcher
+            workspaces={actor.availableWorkspaces}
+            activeWorkspaceId={actor.workspace.id}
+            canManageWorkspaces={hasWorkspacePermission(actor.workspace.role, "MANAGE_WORKSPACE")}
+          />
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-4">
           <SidebarNav role={actor.membership.role} />

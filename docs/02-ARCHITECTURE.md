@@ -250,3 +250,91 @@ utilisent désormais ce kit au lieu de balises HTML brutes.
   exclusion : risque de copier `.env` dans l'image).
   `HEALTHCHECK` ajouté au `Dockerfile` et à `docker-compose.yml`,
   s'appuyant sur `GET /api/health`.
+
+## 9. Multi-tenant : Organization/Workspace (v0.2 — `ROADMAP.md` MOD-21)
+
+Voir `docs/adr/0005` et `0006` pour la justification complète des choix
+ci-dessous.
+
+### Modèle de données
+
+- `Organization` (inchangé) reste la frontière multi-tenant **primaire** :
+  toutes les tables métier existantes continuent de filtrer par
+  `organizationId`, sans aucune migration sur ces tables.
+- `Workspace` (nouveau) : sous-espace de travail au sein d'une
+  organisation (`organizationId` FK, `slug` unique par organisation,
+  `isDefault`, `archivedAt`). Chaque organisation (Provence 360 comprise)
+  possède exactement un workspace par défaut, créé automatiquement à
+  l'inscription (`src/app/api/auth/register/route.ts`) et par le seed de
+  démonstration (`prisma/seed.ts`).
+- `WorkspaceMembership` (nouveau, additif) : appartenance à un workspace,
+  avec un rôle parmi `WorkspaceRole` (`OWNER`, `ADMIN`, `MANAGER`,
+  `COMMERCIAL`, `OPERATOR`, `ACCOUNTANT`, `SUPPORT`, `VIEWER`) — distinct
+  et indépendant de `Membership`/`MembershipRole` (organisation, inchangé,
+  toujours utilisé par toutes les routes métier existantes).
+- `WorkspaceInvitation` (nouveau) : invitation par email avec jeton,
+  expiration et statut ; l'acceptation crée le compte si nécessaire, une
+  `Membership` d'organisation (rôle mappé, voir ADR 0006) si absente, et
+  la `WorkspaceMembership`.
+- `Lead.workspaceId` (nouveau, nullable) : première preuve de concept du
+  scoping par workspace sur une table métier existante. Les autres tables
+  métier restent scopées par `organizationId` seul pour l'instant.
+- `Session.activeWorkspaceId` (nouveau, nullable) : workspace actif de la
+  session, stocké côté serveur — jamais un identifiant fourni tel quel par
+  le client.
+
+### Isolation des données — principe non négociable
+
+**Aucune route ne fait confiance à un `organizationId`/`workspaceId`
+transmis par le client.** Concrètement :
+
+- `src/lib/workspace-service.ts` : `resolveWorkspaceOrThrow(actor,
+  workspaceId)` refiltre systématiquement par `actor.organization.id` ;
+  un `workspaceId` d'une autre organisation renvoie une `NotFoundError`
+  (jamais une erreur qui confirmerait l'existence de la ressource à un
+  tiers non autorisé).
+- `src/lib/workspace-context.ts` : `setActiveWorkspace(actor,
+  workspaceId)` revérifie l'existence d'une `WorkspaceMembership` réelle
+  avant d'écrire `Session.activeWorkspaceId` ; tout refus est journalisé
+  (`access.denied`).
+- `src/lib/workspace-context.ts` : `requireWorkspacePermission(actor,
+  permission)` vérifie la permission du rôle de workspace de l'acteur
+  avant toute action sensible, et journalise systématiquement un refus.
+
+### Rôles et permissions
+
+`src/lib/workspace-permissions.ts` définit une matrice
+rôle → permissions (`MANAGE_WORKSPACE`, `MANAGE_MEMBERS`,
+`MANAGE_LEADS`, `VALIDATE_MESSAGES`, `MANAGE_FINANCE`,
+`EXECUTE_MISSIONS`, `VIEW_WORKSPACE`), avec des libellés français pour
+l'affichage. Le mapping de migration `MembershipRole` → `WorkspaceRole`
+(`OWNER_ADMIN` → `OWNER`, `SALES` → `COMMERCIAL`, `PROVIDER` →
+`OPERATOR`) est implémenté dans
+`workspaceRoleToLegacyMembershipRole`/la migration SQL, et documenté en
+ADR 0006.
+
+### Audit
+
+Tous les événements suivants sont journalisés via `writeAuditLog`
+(`src/lib/audit.ts`, inchangé) avec des noms d'action constants
+(`src/lib/workspace-permissions.ts`, `WORKSPACE_AUDIT_ACTIONS`) :
+création d'organisation/workspace, mise à jour, archivage, restauration,
+invitation, changement de rôle, retrait de membre, changement de
+workspace actif, tentative d'accès interdite.
+
+### UI
+
+`src/components/workspace-switcher.tsx` (barre latérale),
+`/settings/workspaces` (liste, création, archivage),
+`/settings/workspaces/[id]/members` (membres, invitation, rôle, retrait),
+`/workspace-invitations/[token]` (acceptation, page publique).
+
+### Tests
+
+`tests/tenant-isolation/workspaces.test.ts` (isolation inter-workspace,
+falsification, permissions, changement de rôle, archivage),
+`tests/tenant-isolation/workspace-lifecycle.test.ts` (création,
+invitation/acceptation, retrait), `tests/workspace-migration.test.ts`
+(invariants de migration sur données réelles), et
+`tests/e2e/two-organizations-isolation.mjs` (Playwright, deux
+organisations/deux utilisateurs).

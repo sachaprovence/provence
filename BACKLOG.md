@@ -105,11 +105,180 @@ code existant, tests inclus.
 
 ---
 
-## Version 0.2 — Configuration métier / Vertical Pack (MOD-02)
+## Version 0.2 — Multi-tenant Organization/Workspace (MOD-21, remplace le plan initial)
 
-> Version la plus sensible de toute la roadmap : migration de données sur
-> `Lead` et modules associés. Chaque tâche doit préserver le comportement
-> exact de Provence 360.
+> **Statut : ✅ livrée** (2026-07-29), avec un contenu différent du plan
+> initial ci-dessous — voir `ROADMAP.md` §1 bis et `MILESTONES.md` v0.2.
+> Les tâches `AR-0007` à `AR-0014` (configuration métier / Vertical Pack)
+> n'ont **pas** été traitées dans cette version ; elles restent valables
+> et seront reprises dans une version ultérieure. Le travail réellement
+> livré pour v0.2 est listé ci-dessous (AR-0067 à AR-0077), suivi du plan
+> initial conservé tel quel pour référence future.
+
+### AR-0067 — Modèle `Workspace` + migration additive
+- **Description** : nouveau modèle Prisma `Workspace` (`organizationId`,
+  `name`, `slug` unique par organisation, `isDefault`, `archivedAt`),
+  migration purement additive (aucune table/colonne existante modifiée),
+  backfill SQL créant un workspace par défaut pour chaque organisation
+  existante.
+- **Fichiers concernés** : `prisma/schema.prisma`,
+  `prisma/migrations/20260729221028_add_workspace_multi_tenant/`.
+- **Complexité** : Élevée.
+- **Estimation réelle** : 1 jour.
+- **Prérequis** : aucun.
+- **Tests** : `tests/workspace-migration.test.ts` (invariants post-migration
+  sur données réelles).
+
+### AR-0068 — Modèles `WorkspaceMembership` / `WorkspaceRole` / `WorkspaceInvitation`
+- **Description** : appartenance à un workspace (8 rôles : Owner, Admin,
+  Manager, Commercial, Opérateur, Comptable, Support, Viewer), additive par
+  rapport à `Membership`/`MembershipRole` (inchangés) ; invitations avec
+  jeton, expiration et statut. Backfill : une `WorkspaceMembership` par
+  `Membership` existant, mapping de rôle documenté en ADR 0006.
+- **Fichiers concernés** : `prisma/schema.prisma`, même migration que
+  AR-0067, `docs/adr/0006-roles-workspace-et-migration-des-roles-existants.md`.
+- **Complexité** : Élevée.
+- **Estimation réelle** : 1 jour.
+- **Prérequis** : AR-0067.
+- **Tests** : `tests/workspace-migration.test.ts`,
+  `tests/tenant-isolation/workspace-lifecycle.test.ts`.
+
+### AR-0069 — `workspaceId` sur `Lead` + `activeWorkspaceId` sur `Session`
+- **Description** : première preuve de concept du scoping par workspace
+  sur une table métier existante (`Lead`), et stockage serveur du
+  workspace actif de la session (jamais un identifiant de confiance
+  fourni par le client).
+- **Fichiers concernés** : `prisma/schema.prisma` (même migration).
+- **Complexité** : Moyenne.
+- **Estimation réelle** : 0,5 jour.
+- **Prérequis** : AR-0067.
+- **Tests** : `tests/tenant-isolation/workspaces.test.ts`.
+
+### AR-0070 — `src/lib/workspace-permissions.ts` (matrice de permissions)
+- **Description** : permissions nommées par rôle de workspace
+  (`MANAGE_WORKSPACE`, `MANAGE_MEMBERS`, `MANAGE_LEADS`,
+  `VALIDATE_MESSAGES`, `MANAGE_FINANCE`, `EXECUTE_MISSIONS`,
+  `VIEW_WORKSPACE`), noms d'action d'audit, libellés d'affichage.
+- **Fichiers concernés** : `src/lib/workspace-permissions.ts`.
+- **Complexité** : Moyenne.
+- **Estimation réelle** : 0,5 jour.
+- **Prérequis** : AR-0068.
+- **Tests** : `tests/tenant-isolation/workspaces.test.ts`.
+
+### AR-0071 — `src/lib/workspace-context.ts` (résolution serveur du workspace actif)
+- **Description** : résolution de l'acteur + son workspace actif,
+  toujours revérifiée côté serveur ; changement de workspace actif
+  (`setActiveWorkspace`) qui revalide systématiquement la
+  `WorkspaceMembership` avant d'écrire, jamais de confiance dans un
+  `workspaceId` client ; `requireWorkspacePermission` journalise
+  systématiquement un refus avant de lever.
+- **Fichiers concernés** : `src/lib/workspace-context.ts`,
+  extension additive de `src/lib/auth.ts` (`CurrentActor.sessionId`).
+- **Complexité** : Élevée.
+- **Estimation réelle** : 1,5 jour.
+- **Prérequis** : AR-0069, AR-0070.
+- **Tests** : `tests/tenant-isolation/workspaces.test.ts` (falsification,
+  accès refusé).
+
+### AR-0072 — `src/lib/workspace-service.ts` (CRUD + cycle de vie)
+- **Description** : création/mise à jour/archivage/restauration de
+  workspace, invitation/changement de rôle/retrait de membre, acceptation
+  d'invitation (création de compte si nécessaire + `Membership`
+  d'organisation mappée + `WorkspaceMembership`) ; `resolveWorkspaceOrThrow`
+  filtre systématiquement par l'organisation de l'acteur.
+- **Fichiers concernés** : `src/lib/workspace-service.ts`,
+  `src/lib/validations/workspace.ts`.
+- **Complexité** : Très élevée.
+- **Estimation réelle** : 2 jours.
+- **Prérequis** : AR-0071.
+- **Tests** : `tests/tenant-isolation/workspace-lifecycle.test.ts`,
+  `tests/tenant-isolation/workspaces.test.ts`.
+
+### AR-0073 — Routes API `/api/workspaces/**` et `/api/workspace-invitations/**`
+- **Description** : CRUD workspace, membres, changement de workspace
+  actif, consultation/acceptation d'invitation (route publique).
+- **Fichiers concernés** : `src/app/api/workspaces/route.ts`,
+  `src/app/api/workspaces/[id]/route.ts`,
+  `src/app/api/workspaces/[id]/archive/route.ts`,
+  `src/app/api/workspaces/[id]/restore/route.ts`,
+  `src/app/api/workspaces/[id]/members/route.ts`,
+  `src/app/api/workspaces/[id]/members/[membershipId]/route.ts`,
+  `src/app/api/workspaces/active/route.ts`,
+  `src/app/api/workspace-invitations/[token]/route.ts`, `src/proxy.ts`.
+- **Complexité** : Élevée.
+- **Estimation réelle** : 1,5 jour.
+- **Prérequis** : AR-0072.
+- **Tests** : test e2e `tests/e2e/two-organizations-isolation.mjs`
+  (falsification d'id via API réelle).
+
+### AR-0074 — UI : sélecteur de workspace, pages de gestion, membres
+- **Description** : `WorkspaceSwitcher` dans la barre latérale, page
+  `/settings/workspaces` (liste, création, archivage), page
+  `/settings/workspaces/[id]/members` (liste, invitation, changement de
+  rôle, retrait), page publique `/workspace-invitations/[token]`
+  (acceptation).
+- **Fichiers concernés** : `src/components/workspace-switcher.tsx`,
+  `src/components/workspaces-client.tsx`,
+  `src/components/workspace-members-client.tsx`,
+  `src/app/(app)/settings/workspaces/page.tsx`,
+  `src/app/(app)/settings/workspaces/[id]/members/page.tsx`,
+  `src/app/workspace-invitations/[token]/page.tsx`,
+  `src/app/(app)/layout.tsx`, `src/components/nav-config.ts`.
+- **Complexité** : Élevée.
+- **Estimation réelle** : 2 jours.
+- **Prérequis** : AR-0073.
+- **Tests** : vérification manuelle + golden path e2e en non-régression
+  (le layout applicatif est utilisé par toutes les pages existantes).
+
+### AR-0075 — Migration de Provence 360 comme premier workspace + correction du seed
+- **Description** : migration des données existantes (16 prospects, 3
+  memberships) vers un workspace par défaut, avec mapping de rôle. Bug
+  détecté en vérification finale : `prisma/seed.ts` ne créait pas de
+  workspace par défaut (seule la route d'inscription le faisait) —
+  corrigé.
+- **Fichiers concernés** : migration (AR-0067), `prisma/seed.ts`,
+  `src/app/api/auth/register/route.ts`.
+- **Complexité** : Moyenne.
+- **Estimation réelle** : 0,5 jour (dont détection/correction du bug).
+- **Prérequis** : AR-0067, AR-0068.
+- **Tests** : `tests/workspace-migration.test.ts`,
+  `tests/e2e/golden-path.mjs` (non-régression complète).
+
+### AR-0076 — Suite de tests d'isolation multi-tenant (organisation + workspace)
+- **Description** : isolation entre deux organisations (existant,
+  étendu), isolation entre deux workspaces d'une même organisation, accès
+  autorisé/interdit journalisé, falsification d'identifiant, changement de
+  rôle, archivage (workspace par défaut protégé), cycle de vie complet.
+- **Fichiers concernés** : `tests/tenant-isolation/workspaces.test.ts`,
+  `tests/tenant-isolation/workspace-lifecycle.test.ts`,
+  `tests/tenant-isolation/leads.test.ts` (mise à jour de type).
+- **Complexité** : Élevée.
+- **Estimation réelle** : 1,5 jour.
+- **Prérequis** : AR-0072.
+- **Tests** : ce sont les tests eux-mêmes (29 tests, tous verts contre une
+  vraie base PostgreSQL).
+
+### AR-0077 — Test e2e « deux organisations, deux utilisateurs »
+- **Description** : script Playwright créant deux organisations, deux
+  utilisateurs, un prospect par organisation, et vérifiant qu'aucun ne
+  voit les données (nom d'organisation, prospects) de l'autre, y compris
+  via tentative directe d'accès API à un id d'une autre organisation.
+- **Fichiers concernés** : `tests/e2e/two-organizations-isolation.mjs`,
+  `package.json` (script `test:e2e:tenants`).
+- **Complexité** : Moyenne.
+- **Estimation réelle** : 1 jour.
+- **Prérequis** : AR-0073.
+- **Tests** : le script lui-même.
+
+**Total estimé du travail réellement livré pour v0.2 : ~13 jours.**
+
+---
+
+### Plan initial de v0.2 (non traité dans cette version, conservé pour référence)
+
+> Les tâches ci-dessous décrivaient la généralisation de la configuration
+> métier (`MOD-02`). Elles restent valables et seront reprises dans une
+> version ultérieure — non renumérotées par anticipation.
 
 ### AR-0007 — Modèle `PipelineStageDefinition`
 - **Description** : nouvelle table Prisma représentant une étape de
