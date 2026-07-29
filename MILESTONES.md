@@ -35,22 +35,35 @@ et de la facturation client (`v0.4`/`v0.5`).
 
 ## v0.1 — Fondations techniques
 
+- **Statut : ✅ livré** (2026-07-29).
 - **Objectif du jalon** : poser le socle CI/tests/conventions sans lequel
   aucune généralisation ultérieure n'est vérifiable.
 - **Modules** : MOD-00.
-- **Tâches** : AR-0001 à AR-0006.
+- **Tâches** : AR-0001 à AR-0006, plus le socle technique additionnel
+  documenté dans `docs/02-ARCHITECTURE.md` §8 (env, logger, erreurs, UI kit,
+  contrôle de santé — voir la note en tête de la section v0.1 de
+  `BACKLOG.md`).
 - **Critères de sortie** :
-  - la CI (lint/typecheck/tests/build) bloque une PR volontairement
+  - [x] la CI (lint/typecheck/tests/build) bloque une PR volontairement
     cassée ;
-  - le pipeline e2e tourne après merge sur `main` et rejoue le golden
+  - [x] le pipeline e2e tourne après merge sur `main` et rejoue le golden
     path ;
-  - `docs/adr/` existe avec un premier ADR réel ;
-  - le gabarit de test d'isolation multi-tenant est prouvé sur au moins une
-    route existante ;
-  - `CODEOWNERS` est en place.
-- **État fonctionnel de l'application** : identique au MVP Provence 360
-  actuel — **aucun changement visible pour l'utilisateur final**. Ce jalon
-  est un investissement d'outillage, pas une livraison fonctionnelle.
+  - [x] `docs/adr/` existe avec un premier ADR réel (0001 à 0004 livrés) ;
+  - [x] le gabarit de test d'isolation multi-tenant est prouvé sur au moins
+    une route existante (`tests/tenant-isolation/leads.test.ts`) ;
+  - [x] `CODEOWNERS` est en place.
+- **État fonctionnel de l'application** : le MVP Provence 360 fonctionne
+  **à l'identique** (golden path rejoué avec succès, build de production
+  vérifié) — les pages de connexion/inscription/réinitialisation utilisent
+  désormais le nouveau kit UI, seul changement visible pour l'utilisateur
+  final, sans changement de comportement.
+- **Limite connue** : `npm run format:check` échoue sur le code métier
+  antérieur à cette phase (non reformaté rétroactivement, voir ADR 0004) —
+  volontairement pas encore intégré comme condition bloquante de la CI.
+  La construction de l'image Docker n'a pas pu être testée dans cet
+  environnement (démon Docker indisponible) ; validée par revue manuelle du
+  `Dockerfile`/`docker-compose.yml` et par les mêmes commandes (`prisma
+  generate`, `next build`, `next start`) exécutées nativement avec succès.
 
 ## v0.2 — Configuration métier (Vertical Pack, socle de données)
 

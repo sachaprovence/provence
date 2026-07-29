@@ -147,3 +147,106 @@ relances maintenant" en mode démo), soit par un vrai cron système appelant
 Voir `docs/01-SPECIFICATION.md` §5 pour la liste détaillée (connecteurs email
 réels, vraie carte interactive, file de traitement distribuée, i18n complète
 de l'interface, facturation SaaS, 2FA/SSO, application mobile…).
+
+## 8. Socle technique transverse (fondations Autorun — `ROADMAP.md` MOD-00)
+
+Cette section documente les fondations techniques ajoutées au-dessus du MVP
+Provence 360 (sans modifier son comportement fonctionnel), qui serviront de
+socle à toute la généralisation ultérieure vers Autorun. Décisions
+détaillées dans `docs/adr/`.
+
+### Configuration & démarrage
+
+- `src/lib/env.ts` : schéma Zod validant `process.env` (`DATABASE_URL`,
+  `AUTH_SECRET` ≥ 16 caractères, `AI_PROVIDER`, `EMAIL_PROVIDER`,
+  `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`, `LOG_LEVEL`). Accès paresseux
+  (`export const env`, `Proxy`) : la validation ne se déclenche qu'à la
+  première lecture réelle, jamais à l'import du module — voir ADR 0002.
+- `src/instrumentation.ts` : hook `register()` de Next.js, exécuté une fois
+  au démarrage d'une instance serveur (jamais pendant `next build`).
+  Valide la configuration et journalise le résultat ; une configuration
+  invalide empêche le serveur de démarrer plutôt que d'échouer plus tard,
+  au hasard d'une requête.
+
+### Journalisation
+
+- `src/lib/logger.ts` : logger structuré (`pino`, JSON), avec redaction
+  automatique des champs sensibles (mots de passe, tokens, secrets,
+  en-têtes d'autorisation). Pas de transport `pino-pretty` (voir ADR 0003).
+  `console.log`/`console.debug`/`console.info` sont interdits dans `src/`
+  par ESLint (`no-console`) ; `console.warn`/`console.error` restent
+  autorisés pour les error boundaries client (voir plus bas), où le logger
+  serveur n'est pas accessible.
+
+### Gestion des erreurs
+
+- `src/lib/errors.ts` : `AppError` et sous-classes (`ValidationError`,
+  `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`) +
+  `toApiErrorResponse()`, qui journalise systématiquement côté serveur et ne
+  renvoie jamais le message brut d'une exception inattendue au client
+  (seulement un `incidentId` permettant de retrouver la trace complète dans
+  les logs). Additif : les routes API existantes (`src/lib/api-helpers.ts`)
+  ne sont pas modifiées ; ce module est le point d'entrée recommandé pour
+  tout nouveau code (voir `DEVELOPMENT_GUIDE.md`).
+- `src/app/error.tsx` / `src/app/global-error.tsx` / `src/app/(app)/error.tsx`
+  : frontières d'erreur Next.js (App Router), qui remontent l'erreur au
+  serveur via `POST /api/client-errors` (`src/lib/report-client-error.ts`)
+  pour une journalisation centralisée des erreurs côté navigateur.
+- `src/app/not-found.tsx`, `src/app/(app)/loading.tsx` : pages spéciales
+  Next.js pour le 404 et l'état de chargement de l'espace applicatif (la
+  barre latérale reste affichée pendant que le contenu se charge ou en cas
+  d'erreur, `(app)/layout.tsx` n'étant pas concerné par ces frontières).
+
+### Composants UI de base
+
+`src/components/ui/` : `Button`, `Input`, `Textarea`, `Select`, `Card`,
+`Badge`, `Spinner`, `Skeleton`/`SkeletonText`, `EmptyState`,
+`ToastProvider`/`useToast`. S'appuient sur les classes déjà définies dans
+`globals.css` (`.btn-primary`, `.input`, `.card`, `.badge`…) plutôt que de
+dupliquer le style — objectif : cohérence visuelle, pas un nouveau système
+de design parallèle. `ToastProvider` est monté une fois à la racine
+(`src/app/layout.tsx`) ; démontré en usage réel sur les pages
+d'authentification (`(auth)/login`, `register`, `reset-password`), qui
+utilisent désormais ce kit au lieu de balises HTML brutes.
+
+### Contrôle de santé
+
+- `GET /api/health` (public, exclu de l'authentification dans
+  `src/proxy.ts`) : vérifie la connectivité base de données
+  (`SELECT 1`) et journalise un échec. Utilisé par le `HEALTHCHECK` du
+  `Dockerfile` et de `docker-compose.yml`.
+
+### CI/CD
+
+- `.github/workflows/ci.yml` : lint, typecheck (`tsc --noEmit`), tests
+  unitaires (avec service PostgreSQL éphémère), build — sur chaque pull
+  request et sur `main`.
+- `.github/workflows/e2e.yml` : build + démarrage réel + seed + golden
+  path (`tests/e2e/golden-path.mjs`) après merge sur `main`.
+- `.github/CODEOWNERS` : routage indicatif des revues par domaine.
+
+### Tests d'isolation multi-tenant
+
+- `tests/helpers/tenant-isolation.ts` : gabarit réutilisable
+  (`expectNoCrossTenantLeak`) pour vérifier qu'un acteur d'une organisation
+  ne voit jamais les ressources d'une autre — à dupliquer pour chaque
+  nouveau domaine sensible.
+- `tests/tenant-isolation/leads.test.ts` : première application concrète,
+  sur le domaine `Lead` déjà existant (isolation par organisation, et par
+  territoire pour le rôle `PROVIDER`). Test d'intégration nécessitant une
+  vraie base PostgreSQL (`DATABASE_URL`) ; ignoré automatiquement sinon.
+
+### Formatage et lint
+
+- Prettier configuré (`.prettierrc.json`, scripts `format`/`format:check`),
+  scopé à `src/**`/`tests/**` — le code métier existant n'a volontairement
+  pas été reformaté rétroactivement dans cette phase (voir ADR 0004).
+  `eslint-config-prettier` désactive les règles de style ESLint qui
+  entreraient en conflit avec Prettier.
+
+### Docker
+
+- `.dockerignore` ajouté (le `Dockerfile` faisait un `COPY . .` sans
+  exclusion : risque de copier `.env` dans l'image).
+  `HEALTHCHECK` ajouté au `Dockerfile` et à `docker-compose.yml`,
+  s'appuyant sur `GET /api/health`.

@@ -103,6 +103,9 @@ npm run dev          # serveur de développement
 npm run build         # build de production
 npm run start          # démarrer le build de production
 npm run lint            # ESLint
+npm run typecheck         # tsc --noEmit
+npm run format              # Prettier — reformate src/ et tests/
+npm run format:check         # Prettier — vérifie sans modifier (utilisé en CI à terme, voir ADR 0004)
 npm run test              # tests unitaires (Vitest)
 npm run test:watch         # tests unitaires en mode watch
 npm run test:e2e            # test de bout en bout (voir ci-dessous)
@@ -111,6 +114,11 @@ npm run db:migrate            # créer/appliquer une migration en dev
 npm run db:seed                 # charger les données de démonstration
 npm run db:reset                  # réinitialiser la base (⚠️ destructif, usage local uniquement)
 ```
+
+`GET /api/health` (public) vérifie la connectivité base de données ; utilisé
+par le `HEALTHCHECK` Docker. La CI (`.github/workflows/ci.yml`) exécute lint,
+typecheck, tests et build sur chaque pull request ; `.github/workflows/e2e.yml`
+rejoue le golden path après merge sur `main`.
 
 ### Test de bout en bout (parcours principal)
 

@@ -1,0 +1,91 @@
+name: E2E
+
+# Rejoue le golden path (tests/e2e/golden-path.mjs) contre une instance
+# réellement démarrée et seedée, après merge sur `main` — voir ROADMAP.md
+# MOD-00 / BACKLOG.md AR-0002. C'est le filet de sécurité de non-régression
+# du parcours principal pendant toute la phase de généralisation d'Autorun.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "provence360-squarespace/**"
+      - "**/*.md"
+  workflow_dispatch: {}
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golden-path:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: provence
+          POSTGRES_PASSWORD: provence
+          POSTGRES_DB: provence360
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U provence -d provence360"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://provence:provence@localhost:5432/provence360?schema=public
+      AUTH_SECRET: ci-secret-not-for-production-0000000000
+      AI_PROVIDER: demo
+      EMAIL_PROVIDER: demo
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      APP_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Seed demo data
+        run: npm run db:seed
+
+      - name: Build
+        run: npm run build
+
+      - name: Start application
+        run: npx next start -p 3000 &
+
+      - name: Wait for the application to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://localhost:3000/login > /dev/null; then
+              echo "Application is up."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Application did not become ready in time." >&2
+          exit 1
+
+      - name: Run golden path
+        run: npm run test:e2e

@@ -1,0 +1,12 @@
+# Routage indicatif des revues par domaine (voir DEVELOPMENT_GUIDE.md §3).
+# Un seul propriétaire générique pour l'instant (équipe encore réduite) —
+# ce fichier est prévu pour être affiné (équipes dédiées par domaine) au
+# fur et à mesure de la roadmap (docs/00-AUTORUN-VISION.md), sans attendre
+# que ce soit nécessaire pour être en place.
+
+* @sachaprovence
+
+/prisma/                 @sachaprovence
+/src/lib/ai/             @sachaprovence
+/src/lib/email/          @sachaprovence
+/docs/adr/               @sachaprovence

@@ -15,6 +15,21 @@ code existant, tests inclus.
 
 ## Version 0.1 — Fondations techniques & DevOps (MOD-00)
 
+> **Statut : ✅ livrée.** AR-0001 à AR-0006 ci-dessous sont implémentées.
+> Le développement a révélé un périmètre plus large que prévu pour un socle
+> technique "irréprochable" (demande explicite) : validation d'environnement
+> (`src/lib/env.ts` + `src/instrumentation.ts`), logger structuré
+> (`src/lib/logger.ts`), gestion d'erreurs centralisée (`src/lib/errors.ts`
+> + pages `error.tsx`/`global-error.tsx`/`not-found.tsx`), kit de
+> composants UI (`src/components/ui/*`) avec système de notifications
+> (`ToastProvider`), contrôle de santé (`GET /api/health`) et
+> `HEALTHCHECK` Docker. Voir `docs/02-ARCHITECTURE.md` §8 pour le détail
+> complet et `docs/adr/0001` à `0004` pour les décisions prises. Ces
+> ajouts n'étaient pas détaillés en tâches `AR-NNNN` individuelles dans la
+> version initiale de ce backlog ; ils sont documentés ici plutôt que
+> numérotés rétroactivement, pour ne pas décaler les identifiants déjà
+> référencés par les versions suivantes.
+
 ### AR-0001 — Pipeline CI de base
 - **Description** : workflow GitHub Actions exécutant lint (ESLint),
   typecheck (`tsc --noEmit`), tests unitaires (Vitest) et build (`next

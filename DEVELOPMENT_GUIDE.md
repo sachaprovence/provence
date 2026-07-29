@@ -5,6 +5,32 @@
 > `BACKLOG.md` (tâches) et `MILESTONES.md` (jalons) — ce document répond à
 > "comment on travaille", pas "quoi construire".
 
+## 0. État du socle technique (v0.1)
+
+Les tâches `AR-0001` à `AR-0006` (`BACKLOG.md`, v0.1) sont livrées, avec un
+périmètre volontairement élargi par rapport au plan initial (validation
+d'environnement, logger, gestion d'erreurs, kit UI de base, contrôle de
+santé — voir `docs/02-ARCHITECTURE.md` §8 pour le détail complet et
+`docs/adr/` pour les décisions structurantes prises). Concrètement,
+disponibles dès aujourd'hui pour tout nouveau code :
+
+- `src/lib/env.ts` (config validée) et `src/instrumentation.ts` (fail fast
+  au boot).
+- `src/lib/logger.ts` (logger structuré) et `src/lib/errors.ts`
+  (`AppError` + `toApiErrorResponse`).
+- `src/components/ui/*` (`Button`, `Input`, `Textarea`, `Select`, `Card`,
+  `Badge`, `Spinner`, `Skeleton`, `EmptyState`, `ToastProvider`/`useToast`).
+- Pages spéciales Next.js : `error.tsx`, `global-error.tsx`,
+  `not-found.tsx`, `(app)/error.tsx`, `(app)/loading.tsx`.
+- `GET /api/health`, CI (`.github/workflows/ci.yml`,
+  `.github/workflows/e2e.yml`), `tests/helpers/tenant-isolation.ts`.
+
+Le code métier existant (CRM, devis, IA, séquences) n'a pas été modifié en
+profondeur : seules les pages d'authentification ont été mises à jour pour
+utiliser le nouveau kit UI, à titre de démonstration réelle de son
+fonctionnement (voir ADR 0004 sur la portée volontairement limitée du
+reformatage Prettier rétroactif).
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)
