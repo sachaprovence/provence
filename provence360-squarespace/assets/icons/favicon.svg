@@ -1,0 +1,7 @@
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="p360FaviconTitle">
+  <title id="p360FaviconTitle">Provence 360 — favicon temporaire</title>
+  <circle cx="24" cy="24" r="24" fill="#2A2823"/>
+  <circle cx="24" cy="24" r="16.5" stroke="#FAF7F1" stroke-width="2"/>
+  <path d="M9 27.5c5-5 10-5 15 0s10 5 15 0" stroke="#FAF7F1" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <line x1="10.5" y1="19" x2="37.5" y2="19" stroke="#FAF7F1" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+</svg>

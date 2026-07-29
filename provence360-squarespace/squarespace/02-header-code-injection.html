@@ -1,0 +1,33 @@
+<!--
+  PROVENCE 360 — Injection de code d'en-tête (site-wide)
+  À coller dans : Squarespace > Réglages > Avancé > Injection de code > En-tête
+  (s'applique à tout le site, dans la balise <head>)
+
+  Contenu :
+  1. Chargement des polices Google Fonts utilisées par le design
+     (Fraunces pour les titres, Inter pour le texte courant).
+  2. Rien d'autre ici volontairement : le CSS va dans l'éditeur "CSS
+     personnalisé" (voir 01-global-custom-css.css) et le JavaScript dans
+     l'injection de pied de page (voir 03-footer-code-injection.html).
+
+  Facultatif : si vous préférez éviter un double chargement de police,
+  vous pouvez à la place sélectionner "Fraunces" et "Inter" directement
+  dans Squarespace > Design > Polices (si elles sont proposées par votre
+  modèle) et supprimer le bloc ci-dessous. Dans ce cas, gardez les mêmes
+  noms de police pour que les variables CSS (--p360-font-display et
+  --p360-font-body) restent correctes.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link
+  href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap"
+  rel="stylesheet">
+
+<!--
+  Balisage JSON-LD (référencement local) : voir 10-seo-jsonld.html.
+  Vous pouvez soit le coller à la suite de ce fichier ici (il s'appliquera
+  à tout le site), soit uniquement dans l'injection d'en-tête de la page
+  d'accueil si votre forfait Squarespace permet l'injection par page
+  (Réglages avancés de la page > Injection de code). Ne collez le JSON-LD
+  qu'à un seul endroit pour éviter les doublons.
+-->

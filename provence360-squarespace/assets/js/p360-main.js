@@ -1,0 +1,472 @@
+/*!
+ * Provence 360 — script global du site
+ * À coller dans : Squarespace > Réglages > Avancé > Injection de code > Pied de page
+ * (entre balises <script>...</script>, voir squarespace/03-footer-code-injection.html)
+ *
+ * Contraintes respectées :
+ * - Vanilla JS uniquement, aucune dépendance externe.
+ * - Un seul objet global (window.P360), pas de variables globales éparses.
+ * - Idempotent : peut être exécuté plusieurs fois sans dupliquer les écouteurs
+ *   (utile si Squarespace recharge une section de la page).
+ * - Résistant aux éléments absents : chaque module vérifie l'existence des
+ *   noeuds avant de s'exécuter, une page qui n'a pas tel composant n'entraîne
+ *   aucune erreur console.
+ * - Le contenu reste utilisable si ce script ne s'exécute pas (voir le
+ *   bloc <noscript> présent en haut de chaque page).
+ */
+(function (window, document) {
+  "use strict";
+
+  if (window.P360 && window.P360.__loaded) {
+    // Script déjà chargé : on relance uniquement l'initialisation (idempotent).
+    window.P360.init();
+    return;
+  }
+
+  var BOUND_ATTR = "data-p360-bound";
+
+  function alreadyBound(el) {
+    if (!el) return true;
+    if (el.hasAttribute(BOUND_ATTR)) return true;
+    el.setAttribute(BOUND_ATTR, "true");
+    return false;
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  /* ---------------------------------------------------------------------
+   * En-tête : compactage au défilement
+   * ------------------------------------------------------------------- */
+  function initHeader() {
+    var headers = document.querySelectorAll(".p360-header");
+    headers.forEach(function (header) {
+      if (alreadyBound(header)) return;
+
+      var THRESHOLD = 24;
+      var ticking = false;
+
+      function update() {
+        var scrolled = window.scrollY > THRESHOLD;
+        header.setAttribute("data-scrolled", scrolled ? "true" : "false");
+        ticking = false;
+      }
+
+      window.addEventListener(
+        "scroll",
+        function () {
+          if (!ticking) {
+            window.requestAnimationFrame(update);
+            ticking = true;
+          }
+        },
+        { passive: true }
+      );
+
+      update();
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+   * Navigation mobile (menu burger)
+   * ------------------------------------------------------------------- */
+  function initMobileNav() {
+    var navs = document.querySelectorAll(".p360-nav");
+    navs.forEach(function (nav) {
+      if (alreadyBound(nav)) return;
+
+      var burger = nav.querySelector(".p360-burger");
+      var list = nav.querySelector(".p360-nav__list");
+      if (!burger || !list) return;
+
+      function closeMenu() {
+        nav.setAttribute("data-open", "false");
+        burger.setAttribute("aria-expanded", "false");
+      }
+
+      function openMenu() {
+        nav.setAttribute("data-open", "true");
+        burger.setAttribute("aria-expanded", "true");
+      }
+
+      burger.addEventListener("click", function () {
+        var isOpen = nav.getAttribute("data-open") === "true";
+        if (isOpen) {
+          closeMenu();
+        } else {
+          openMenu();
+        }
+      });
+
+      list.addEventListener("click", function (evt) {
+        var target = evt.target;
+        if (target && target.closest && target.closest("a")) {
+          closeMenu();
+        }
+      });
+
+      document.addEventListener("keydown", function (evt) {
+        if (evt.key === "Escape" && nav.getAttribute("data-open") === "true") {
+          closeMenu();
+          burger.focus();
+        }
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+   * Apparitions progressives au défilement (Intersection Observer)
+   * ------------------------------------------------------------------- */
+  function initReveal() {
+    var items = document.querySelectorAll(".p360-reveal:not(.p360-is-visible)");
+    if (!items.length) return;
+
+    if (prefersReducedMotion() || !("IntersectionObserver" in window)) {
+      items.forEach(function (el) {
+        el.classList.add("p360-is-visible");
+      });
+      return;
+    }
+
+    var observer = new IntersectionObserver(
+      function (entries, obs) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("p360-is-visible");
+            obs.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
+    );
+
+    items.forEach(function (el, index) {
+      var group = el.closest(".p360-reveal-group");
+      if (group) {
+        var siblingIndex = Array.prototype.indexOf.call(group.children, el);
+        el.style.setProperty("--p360-stagger", String(siblingIndex >= 0 ? siblingIndex : index));
+      }
+      observer.observe(el);
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+   * FAQ / Accordéon accessible
+   * ------------------------------------------------------------------- */
+  function initAccordions() {
+    var accordions = document.querySelectorAll(".p360-accordion");
+    accordions.forEach(function (accordion) {
+      if (alreadyBound(accordion)) return;
+
+      var triggers = accordion.querySelectorAll(".p360-accordion-trigger");
+      triggers.forEach(function (trigger) {
+        var panelId = trigger.getAttribute("aria-controls");
+        var panel = panelId ? document.getElementById(panelId) : null;
+        if (!panel) return;
+
+        var inner = panel.querySelector(".p360-accordion-panel__inner");
+
+        function setExpanded(expanded) {
+          trigger.setAttribute("aria-expanded", expanded ? "true" : "false");
+          if (expanded) {
+            panel.style.height = inner ? inner.offsetHeight + "px" : "auto";
+          } else {
+            panel.style.height = "0px";
+          }
+        }
+
+        trigger.addEventListener("click", function () {
+          var isExpanded = trigger.getAttribute("aria-expanded") === "true";
+          setExpanded(!isExpanded);
+        });
+
+        // Recalcule la hauteur ouverte si la fenêtre est redimensionnée.
+        window.addEventListener("resize", function () {
+          if (trigger.getAttribute("aria-expanded") === "true" && inner) {
+            panel.style.height = inner.offsetHeight + "px";
+          }
+        });
+
+        setExpanded(trigger.getAttribute("aria-expanded") === "true");
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+   * Showroom 3D : filtres, sélection de visite, chargement différé de l'iframe
+   * ------------------------------------------------------------------- */
+  var IFRAME_TIMEOUT_MS = 15000;
+
+  function buildIframe(embedUrl, title) {
+    var iframe = document.createElement("iframe");
+    iframe.src = embedUrl;
+    iframe.title = title || "Visite virtuelle 3D";
+    iframe.loading = "lazy";
+    iframe.setAttribute("allow", "fullscreen; xr-spatial-tracking; gyroscope; accelerometer");
+    iframe.setAttribute("allowfullscreen", "");
+    iframe.setAttribute("referrerpolicy", "no-referrer-when-downgrade");
+    return iframe;
+  }
+
+  function initShowroom() {
+    var rooms = document.querySelectorAll("[data-p360-showroom]");
+    rooms.forEach(function (room) {
+      if (alreadyBound(room)) return;
+
+      var player = room.querySelector("[data-p360-player]");
+      var titleEl = room.querySelector("[data-p360-active-title]");
+      var locEl = room.querySelector("[data-p360-active-loc]");
+      var catEl = room.querySelector("[data-p360-active-cat]");
+      var descEl = room.querySelector("[data-p360-active-desc]");
+      var externalLink = room.querySelector("[data-p360-external-link]");
+      var cards = room.querySelectorAll("[data-p360-tour-card]");
+      var filters = room.querySelectorAll("[data-p360-filter]");
+      var fullscreenBtn = room.querySelector("[data-p360-fullscreen-btn]");
+
+      if (!player) return;
+
+      var activeTimeout = null;
+
+      function clearPlayer() {
+        player.innerHTML = "";
+        if (activeTimeout) {
+          window.clearTimeout(activeTimeout);
+          activeTimeout = null;
+        }
+      }
+
+      function showState(message, showRetry, retryUrl) {
+        clearPlayer();
+        var wrap = document.createElement("div");
+        wrap.className = "p360-showroom__state";
+        wrap.setAttribute("data-p360-state", "");
+
+        var text = document.createElement("p");
+        text.textContent = message;
+        wrap.appendChild(text);
+
+        if (showRetry && retryUrl) {
+          var link = document.createElement("a");
+          link.className = "p360-btn p360-btn--secondary";
+          link.href = retryUrl;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Ouvrir la visite dans un nouvel onglet";
+          wrap.appendChild(link);
+        }
+        player.appendChild(wrap);
+      }
+
+      function showLoading() {
+        clearPlayer();
+        var wrap = document.createElement("div");
+        wrap.className = "p360-showroom__state";
+        var spinner = document.createElement("div");
+        spinner.className = "p360-showroom__spinner";
+        spinner.setAttribute("aria-hidden", "true");
+        var text = document.createElement("p");
+        text.textContent = "Chargement de la visite…";
+        wrap.appendChild(spinner);
+        wrap.appendChild(text);
+        player.appendChild(wrap);
+      }
+
+      function loadTour(tour) {
+        if (!tour || !tour.embedUrl) {
+          showState("Aucune visite disponible pour le moment.", false);
+          return;
+        }
+
+        showLoading();
+
+        var iframe = buildIframe(tour.embedUrl, tour.title);
+        var settled = false;
+
+        iframe.addEventListener("load", function () {
+          settled = true;
+          if (activeTimeout) window.clearTimeout(activeTimeout);
+        });
+
+        activeTimeout = window.setTimeout(function () {
+          if (!settled) {
+            showState("Cette visite ne peut pas s'afficher pour le moment.", true, tour.externalUrl || tour.embedUrl);
+          }
+        }, IFRAME_TIMEOUT_MS);
+
+        clearPlayer();
+        player.appendChild(iframe);
+
+        if (titleEl) titleEl.textContent = tour.title || "";
+        if (locEl) locEl.textContent = tour.location || "";
+        if (catEl) catEl.textContent = tour.category || "";
+        if (descEl) descEl.textContent = tour.description || "";
+        if (externalLink) {
+          if (tour.externalUrl) {
+            externalLink.href = tour.externalUrl;
+            externalLink.hidden = false;
+          } else {
+            externalLink.hidden = true;
+          }
+        }
+
+        cards.forEach(function (card) {
+          if (card.getAttribute("data-p360-id") === tour.id) {
+            card.setAttribute("aria-current", "true");
+          } else {
+            card.removeAttribute("aria-current");
+          }
+        });
+      }
+
+      function showCover(tour) {
+        clearPlayer();
+        var wrap = document.createElement("div");
+        wrap.className = "p360-showroom__cover";
+        wrap.setAttribute("data-p360-cover", "");
+        if (tour.coverImage) {
+          wrap.style.backgroundImage = "url('" + tour.coverImage + "')";
+        }
+
+        var title = document.createElement("p");
+        title.className = "p360-showroom__cover-title";
+        title.textContent = tour.title || "Visite virtuelle 3D";
+        wrap.appendChild(title);
+
+        var note = document.createElement("p");
+        note.className = "p360-badge-note";
+        note.style.color = "rgba(255,255,255,0.85)";
+        note.textContent = "Cette visite est hébergée par un prestataire externe.";
+        wrap.appendChild(note);
+
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "p360-btn p360-btn--primary";
+        btn.setAttribute("data-p360-load-btn", "");
+        btn.textContent = "Charger la visite 3D";
+        btn.addEventListener("click", function () {
+          loadTour(tour);
+        });
+        wrap.appendChild(btn);
+
+        player.appendChild(wrap);
+
+        if (titleEl) titleEl.textContent = tour.title || "";
+        if (locEl) locEl.textContent = tour.location || "";
+        if (catEl) catEl.textContent = tour.category || "";
+        if (descEl) descEl.textContent = tour.description || "";
+        if (externalLink) {
+          if (tour.externalUrl) {
+            externalLink.href = tour.externalUrl;
+            externalLink.hidden = false;
+          } else {
+            externalLink.hidden = true;
+          }
+        }
+
+        cards.forEach(function (card) {
+          if (card.getAttribute("data-p360-id") === tour.id) {
+            card.setAttribute("aria-current", "true");
+          } else {
+            card.removeAttribute("aria-current");
+          }
+        });
+      }
+
+      function selectTour(id) {
+        var data = window.P360_TOURS || [];
+        var tour = data.filter(function (t) { return t.id === id; })[0];
+        if (!tour) return;
+        showCover(tour);
+      }
+
+      // Les cartes sont de vrais liens <a href="..."> pointant vers la
+      // visite (solution de secours si JavaScript ne s'exécute pas). Quand
+      // le script fonctionne, on intercepte le clic pour afficher la visite
+      // directement dans le lecteur de la page plutôt que de naviguer.
+      cards.forEach(function (card) {
+        card.addEventListener("click", function (evt) {
+          evt.preventDefault();
+          var id = card.getAttribute("data-p360-id");
+          selectTour(id);
+          var playerRegion = room.querySelector("[data-p360-player-region]");
+          if (playerRegion) {
+            var rect = playerRegion.getBoundingClientRect();
+            if (rect.top < 0 || rect.bottom > window.innerHeight) {
+              playerRegion.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+            }
+          }
+        });
+      });
+
+      filters.forEach(function (filter) {
+        filter.addEventListener("click", function () {
+          filters.forEach(function (f) { f.setAttribute("aria-pressed", "false"); });
+          filter.setAttribute("aria-pressed", "true");
+          var category = filter.getAttribute("data-p360-filter");
+          cards.forEach(function (card) {
+            var matches = category === "tous" || card.getAttribute("data-p360-category") === category;
+            card.hidden = !matches;
+          });
+        });
+      });
+
+      if (fullscreenBtn) {
+        fullscreenBtn.addEventListener("click", function () {
+          var iframe = player.querySelector("iframe");
+          var target = iframe || player;
+          if (target.requestFullscreen) {
+            target.requestFullscreen().catch(function () {
+              /* Plein écran non disponible : aucune action, le bouton reste sans effet visible. */
+            });
+          }
+        });
+      }
+
+      // Initialisation : première visite du tableau, en mode "couverture" (respect de la confidentialité).
+      var initial = (window.P360_TOURS || [])[0];
+      if (initial) {
+        showCover(initial);
+      } else {
+        showState("Aucune visite disponible pour le moment.", false);
+      }
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+   * Année courante dans le pied de page
+   * ------------------------------------------------------------------- */
+  function initFooterYear() {
+    var nodes = document.querySelectorAll("[data-p360-year]");
+    nodes.forEach(function (node) {
+      node.textContent = String(new Date().getFullYear());
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+   * Initialisation globale (idempotente)
+   * ------------------------------------------------------------------- */
+  function init() {
+    initHeader();
+    initMobileNav();
+    initReveal();
+    initAccordions();
+    initShowroom();
+    initFooterYear();
+  }
+
+  window.P360 = window.P360 || {};
+  window.P360.__loaded = true;
+  window.P360.init = init;
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+
+  // Squarespace 7.1 déclenche cet évènement après certaines navigations
+  // AJAX internes (aperçu du site, transitions de section) : on relance une
+  // initialisation idempotente pour garder les composants fonctionnels.
+  window.addEventListener("mercury:load", init);
+})(window, document);

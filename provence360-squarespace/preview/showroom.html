@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showroom — Visites virtuelles 3D | Provence 360</title>
+<meta name="description" content="Explorez le showroom Provence 360 : plusieurs visites virtuelles 3D testables directement en ligne, filtrables par secteur d'activité.">
+<link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../squarespace/01-global-custom-css.css">
+<style>
+  body { margin: 0; }
+  .p360-preview-banner { background: #1B1916; color: #FAF7F1; font-size: 0.8rem; text-align: center; padding: 0.4rem 1rem; font-family: 'Inter', sans-serif; }
+  .p360-preview-banner a { color: #DCC9A3; }
+</style>
+</head>
+<body>
+<p class="p360-preview-banner">Prévisualisation locale — Showroom 3D — visites de démonstration (placeholders)</p>
+
+<div class="p360-root">
+
+  <noscript><style>
+    .p360-reveal{opacity:1!important;transform:none!important;}
+    .p360-nav__list{position:static!important;transform:none!important;opacity:1!important;visibility:visible!important;pointer-events:auto!important;padding-block:var(--p360-space-4)!important;}
+    .p360-burger{display:none!important;}
+    .p360-accordion-panel{height:auto!important;}
+    .p360-showroom__player{display:none!important;}
+    [data-p360-player-region]{display:none!important;}
+  </style></noscript>
+
+  <a class="p360-skip-link" href="#p360-main">Aller au contenu principal</a>
+
+  <header class="p360-header" data-scrolled="false">
+    <div class="p360-header__bar">
+      <a class="p360-logo" href="index.html">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.6"/><path d="M6 28c6-6.5 12-6.5 18 0s12 6.5 18 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="7.5" y1="18.5" x2="40.5" y2="18.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/></svg>
+        Provence 360
+      </a>
+      <nav class="p360-nav" data-open="false" aria-label="Navigation principale">
+        <ul class="p360-nav__list" id="p360-nav-list">
+          <li><a class="p360-nav__link" href="index.html">Accueil</a></li>
+          <li><a class="p360-nav__link" href="services.html">Services</a></li>
+          <li><a class="p360-nav__link" href="showroom.html" aria-current="page">Showroom 3D</a></li>
+          <li><a class="p360-nav__link" href="methode.html">Notre méthode</a></li>
+          <li><a class="p360-nav__link" href="a-propos.html">À propos</a></li>
+          <li><a class="p360-nav__link" href="contact.html">Contact</a></li>
+          <li class="p360-nav__cta-mobile"><a class="p360-btn p360-btn--primary" href="contact.html">Demander un devis</a></li>
+        </ul>
+        <button class="p360-burger" type="button" aria-expanded="false" aria-controls="p360-nav-list" aria-label="Ouvrir le menu">
+          <span class="p360-burger__box"><span></span><span></span><span></span></span>
+        </button>
+      </nav>
+      <div class="p360-header__cta">
+        <a class="p360-btn p360-btn--primary" href="contact.html">Demander un devis</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="p360-main">
+
+    <section class="p360-section p360-section--tight">
+      <div class="p360-container" style="max-width: 68ch;">
+        <span class="p360-eyebrow p360-reveal">Showroom</span>
+        <h1 class="p360-h1 p360-reveal">Le showroom Provence 360</h1>
+        <p class="p360-lead p360-reveal" style="max-width: none;">Explorez directement depuis cette page plusieurs visites virtuelles 3D. Choisissez un lieu ci-dessous pour lancer la visite.</p>
+        <noscript><p class="p360-badge-note">JavaScript est désactivé dans votre navigateur : cliquez directement sur une visite ci-dessous pour l'ouvrir dans un nouvel onglet.</p></noscript>
+      </div>
+    </section>
+
+    <section class="p360-section p360-section--tight" style="padding-top: 0;">
+      <div class="p360-container" data-p360-showroom>
+
+        <div class="p360-filters" role="group" aria-label="Filtrer les visites par catégorie">
+          <button type="button" class="p360-filter" data-p360-filter="tous" aria-pressed="true">Tous</button>
+          <button type="button" class="p360-filter" data-p360-filter="immobilier" aria-pressed="false">Immobilier</button>
+          <button type="button" class="p360-filter" data-p360-filter="hebergement" aria-pressed="false">Hébergement</button>
+          <button type="button" class="p360-filter" data-p360-filter="restauration" aria-pressed="false">Restauration</button>
+          <button type="button" class="p360-filter" data-p360-filter="tourisme" aria-pressed="false">Tourisme</button>
+          <button type="button" class="p360-filter" data-p360-filter="evenementiel" aria-pressed="false">Événementiel</button>
+          <button type="button" class="p360-filter" data-p360-filter="commerces" aria-pressed="false">Commerces</button>
+        </div>
+
+        <div data-p360-player-region>
+          <div class="p360-showroom__player" data-p360-player></div>
+          <div class="p360-flex-between p360-showroom__meta">
+            <div>
+              <h2 class="p360-h3" data-p360-active-title>—</h2>
+              <span class="p360-showroom__meta-item" data-p360-active-cat></span>
+              <span class="p360-showroom__meta-item" data-p360-active-loc></span>
+            </div>
+            <div class="p360-btn-row">
+              <button type="button" class="p360-btn p360-btn--secondary" data-p360-fullscreen-btn>Plein écran</button>
+              <a class="p360-btn p360-btn--secondary" href="#" target="_blank" rel="noopener noreferrer" data-p360-external-link hidden>Ouvrir dans un nouvel onglet</a>
+            </div>
+          </div>
+          <p class="p360-showroom__desc" data-p360-active-desc></p>
+        </div>
+
+        <h2 class="p360-h3 p360-reveal" style="margin-top: var(--p360-space-8);">Toutes les visites</h2>
+        <div class="p360-showroom-grid p360-reveal-group" style="margin-top: var(--p360-space-5);">
+
+          <a class="p360-tour-card p360-reveal" data-p360-tour-card data-p360-id="tour-1" data-p360-category="immobilier" href="REMPLACER_PAR_URL_VISITE_1" target="_blank" rel="noopener noreferrer">
+            <span class="p360-tour-card__media"><img src="REMPLACER_PAR_IMAGE_VISITE_1" alt="" loading="lazy" onerror="this.style.display='none'"></span>
+            <span class="p360-tour-card__body">
+              <span class="p360-tour-card__cat">Immobilier</span>
+              <span class="p360-tour-card__title">REMPLACER_PAR_NOM_DU_LIEU (bien immobilier)</span>
+              <span class="p360-tour-card__loc">Avignon (exemple)</span>
+            </span>
+          </a>
+
+          <a class="p360-tour-card p360-reveal" data-p360-tour-card data-p360-id="tour-2" data-p360-category="hebergement" href="REMPLACER_PAR_URL_VISITE_2" target="_blank" rel="noopener noreferrer">
+            <span class="p360-tour-card__media"><img src="REMPLACER_PAR_IMAGE_VISITE_2" alt="" loading="lazy" onerror="this.style.display='none'"></span>
+            <span class="p360-tour-card__body">
+              <span class="p360-tour-card__cat">Hébergement</span>
+              <span class="p360-tour-card__title">REMPLACER_PAR_NOM_DU_LIEU (maison d'hôtes)</span>
+              <span class="p360-tour-card__loc">Monteux (exemple)</span>
+            </span>
+          </a>
+
+          <a class="p360-tour-card p360-reveal" data-p360-tour-card data-p360-id="tour-3" data-p360-category="restauration" href="REMPLACER_PAR_URL_VISITE_3" target="_blank" rel="noopener noreferrer">
+            <span class="p360-tour-card__media"><img src="REMPLACER_PAR_IMAGE_VISITE_3" alt="" loading="lazy" onerror="this.style.display='none'"></span>
+            <span class="p360-tour-card__body">
+              <span class="p360-tour-card__cat">Restauration</span>
+              <span class="p360-tour-card__title">REMPLACER_PAR_NOM_DU_LIEU (restaurant)</span>
+              <span class="p360-tour-card__loc">Vaucluse (exemple)</span>
+            </span>
+          </a>
+
+          <a class="p360-tour-card p360-reveal" data-p360-tour-card data-p360-id="tour-4" data-p360-category="tourisme" href="REMPLACER_PAR_URL_VISITE_4" target="_blank" rel="noopener noreferrer">
+            <span class="p360-tour-card__media"><img src="REMPLACER_PAR_IMAGE_VISITE_4" alt="" loading="lazy" onerror="this.style.display='none'"></span>
+            <span class="p360-tour-card__body">
+              <span class="p360-tour-card__cat">Tourisme</span>
+              <span class="p360-tour-card__title">REMPLACER_PAR_NOM_DU_LIEU (domaine viticole)</span>
+              <span class="p360-tour-card__loc">Provence (exemple)</span>
+            </span>
+          </a>
+
+          <a class="p360-tour-card p360-reveal" data-p360-tour-card data-p360-id="tour-5" data-p360-category="evenementiel" href="REMPLACER_PAR_URL_VISITE_5" target="_blank" rel="noopener noreferrer">
+            <span class="p360-tour-card__media"><img src="REMPLACER_PAR_IMAGE_VISITE_5" alt="" loading="lazy" onerror="this.style.display='none'"></span>
+            <span class="p360-tour-card__body">
+              <span class="p360-tour-card__cat">Événementiel</span>
+              <span class="p360-tour-card__title">REMPLACER_PAR_NOM_DU_LIEU (salle de réception)</span>
+              <span class="p360-tour-card__loc">Avignon (exemple)</span>
+            </span>
+          </a>
+
+          <a class="p360-tour-card p360-reveal" data-p360-tour-card data-p360-id="tour-6" data-p360-category="commerces" href="REMPLACER_PAR_URL_VISITE_6" target="_blank" rel="noopener noreferrer">
+            <span class="p360-tour-card__media"><img src="REMPLACER_PAR_IMAGE_VISITE_6" alt="" loading="lazy" onerror="this.style.display='none'"></span>
+            <span class="p360-tour-card__body">
+              <span class="p360-tour-card__cat">Commerces</span>
+              <span class="p360-tour-card__title">REMPLACER_PAR_NOM_DU_LIEU (showroom)</span>
+              <span class="p360-tour-card__loc">Vaucluse (exemple)</span>
+            </span>
+          </a>
+
+        </div>
+      </div>
+    </section>
+
+    <section class="p360-section p360-section--dark p360-text-center">
+      <div class="p360-container" style="max-width: 52ch;">
+        <h2 class="p360-h2 p360-reveal">Vous souhaitez une visite virtuelle pour votre établissement ?</h2>
+        <div class="p360-btn-row p360-reveal" style="justify-content: center; margin-top: var(--p360-space-5);">
+          <a class="p360-btn p360-btn--primary" href="contact.html">Demander un devis</a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="p360-footer">
+    <div class="p360-container">
+      <div class="p360-footer__grid">
+        <div>
+          <a class="p360-footer__brand" href="index.html">
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.6"/><path d="M6 28c6-6.5 12-6.5 18 0s12 6.5 18 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="7.5" y1="18.5" x2="40.5" y2="18.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/></svg>
+            Provence 360
+          </a>
+          <p class="p360-max-prose">Visites virtuelles 3D immersives pour les établissements professionnels de Provence, à Avignon, Monteux, dans le Vaucluse et les zones voisines.</p>
+        </div>
+        <div>
+          <h4>Navigation</h4>
+          <ul>
+            <li><a href="services.html">Services</a></li>
+            <li><a href="showroom.html">Showroom 3D</a></li>
+            <li><a href="methode.html">Notre méthode</a></li>
+            <li><a href="a-propos.html">À propos</a></li>
+            <li><a href="contact.html">Contact</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Coordonnées</h4>
+          <ul>
+            <li>[REMPLACER_PAR_TELEPHONE]</li>
+            <li>[REMPLACER_PAR_EMAIL]</li>
+            <li>Provence, Avignon, Monteux, Vaucluse et environs</li>
+          </ul>
+        </div>
+      </div>
+      <div class="p360-footer__bottom">
+        <span>© <span data-p360-year>2026</span> Provence 360. Tous droits réservés.</span>
+        <span><a href="mentions-legales.html">Mentions légales</a> · <a href="confidentialite.html">Politique de confidentialité</a></span>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  window.P360_TOURS = [
+    { id: "tour-1", title: "REMPLACER_PAR_NOM_DU_LIEU (bien immobilier)", category: "Immobilier", location: "Avignon (exemple)", description: "Exemple de présentation — visite virtuelle d'un bien immobilier, à remplacer par une réalisation réelle.", coverImage: "REMPLACER_PAR_IMAGE_VISITE_1", embedUrl: "REMPLACER_PAR_URL_VISITE_1", externalUrl: "REMPLACER_PAR_URL_VISITE_1", alt: "REMPLACER_PAR_TEXTE_ALTERNATIF_1" },
+    { id: "tour-2", title: "REMPLACER_PAR_NOM_DU_LIEU (maison d'hôtes)", category: "Hébergement", location: "Monteux (exemple)", description: "Exemple de présentation — visite virtuelle d'une maison d'hôtes, à remplacer par une réalisation réelle.", coverImage: "REMPLACER_PAR_IMAGE_VISITE_2", embedUrl: "REMPLACER_PAR_URL_VISITE_2", externalUrl: "REMPLACER_PAR_URL_VISITE_2", alt: "REMPLACER_PAR_TEXTE_ALTERNATIF_2" },
+    { id: "tour-3", title: "REMPLACER_PAR_NOM_DU_LIEU (restaurant)", category: "Restauration", location: "Vaucluse (exemple)", description: "Exemple de présentation — visite virtuelle d'un restaurant, à remplacer par une réalisation réelle.", coverImage: "REMPLACER_PAR_IMAGE_VISITE_3", embedUrl: "REMPLACER_PAR_URL_VISITE_3", externalUrl: "REMPLACER_PAR_URL_VISITE_3", alt: "REMPLACER_PAR_TEXTE_ALTERNATIF_3" },
+    { id: "tour-4", title: "REMPLACER_PAR_NOM_DU_LIEU (domaine viticole)", category: "Tourisme", location: "Provence (exemple)", description: "Exemple de présentation — visite virtuelle d'un domaine viticole, à remplacer par une réalisation réelle.", coverImage: "REMPLACER_PAR_IMAGE_VISITE_4", embedUrl: "REMPLACER_PAR_URL_VISITE_4", externalUrl: "REMPLACER_PAR_URL_VISITE_4", alt: "REMPLACER_PAR_TEXTE_ALTERNATIF_4" },
+    { id: "tour-5", title: "REMPLACER_PAR_NOM_DU_LIEU (salle de réception)", category: "Événementiel", location: "Avignon (exemple)", description: "Exemple de présentation — visite virtuelle d'une salle de réception, à remplacer par une réalisation réelle.", coverImage: "REMPLACER_PAR_IMAGE_VISITE_5", embedUrl: "REMPLACER_PAR_URL_VISITE_5", externalUrl: "REMPLACER_PAR_URL_VISITE_5", alt: "REMPLACER_PAR_TEXTE_ALTERNATIF_5" },
+    { id: "tour-6", title: "REMPLACER_PAR_NOM_DU_LIEU (showroom)", category: "Commerces", location: "Vaucluse (exemple)", description: "Exemple de présentation — visite virtuelle d'un showroom, à remplacer par une réalisation réelle.", coverImage: "REMPLACER_PAR_IMAGE_VISITE_6", embedUrl: "REMPLACER_PAR_URL_VISITE_6", externalUrl: "REMPLACER_PAR_URL_VISITE_6", alt: "REMPLACER_PAR_TEXTE_ALTERNATIF_6" }
+  ];
+</script>
+<script src="../assets/js/p360-main.js"></script>
+</body>
+</html>

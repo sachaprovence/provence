@@ -1,0 +1,955 @@
+/* =========================================================================
+   PROVENCE 360 — CSS GLOBAL
+   À coller dans : Squarespace > Style > CSS personnalisé (Custom CSS)
+   Toutes les classes sont préfixées par "p360-" pour éviter tout conflit
+   avec le reste du site ou les blocs natifs Squarespace.
+   Ce fichier est la source unique de vérité pour les couleurs, tailles,
+   espacements et durées d'animation : tout est centralisé dans les
+   variables ci-dessous (bloc :root).
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   1. VARIABLES GLOBALES
+   ------------------------------------------------------------------------- */
+:root {
+  /* Couleurs — palette "Provence contemporaine" */
+  --p360-color-bg:          #FAF7F1; /* blanc cassé — fond principal */
+  --p360-color-bg-alt:      #F1EBDE; /* pierre calcaire claire — sections alternées */
+  --p360-color-sand:        #DCC9A3; /* sable — accents discrets, bordures */
+  --p360-color-terracotta:  #B15C31; /* terre cuite maîtrisée — accent principal / CTA */
+  --p360-color-terracotta-dark: #954A26;
+  --p360-color-olive:       #6C7455; /* vert olive discret — accent secondaire */
+  --p360-color-anthracite:  #2A2823; /* anthracite profond — titres, texte fort */
+  --p360-color-noir-chaud:  #1B1916; /* noir légèrement chaud — fonds sombres (footer, CTA final) */
+  --p360-color-ink:         #3E3A33; /* texte courant */
+  --p360-color-ink-soft:    #6B6558; /* texte secondaire / légendes */
+  --p360-color-white:       #FFFFFF;
+  --p360-color-line:        rgba(42, 40, 35, 0.12); /* séparateurs discrets */
+  --p360-color-line-dark:   rgba(250, 247, 241, 0.16);
+  --p360-color-focus:       #2F6FED; /* couleur de focus clavier, contraste garanti sur fond clair et sombre */
+
+  /* Typographie */
+  --p360-font-display: 'Fraunces', 'Iowan Old Style', 'Georgia', 'Times New Roman', serif;
+  --p360-font-body: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  --p360-fs-h1: clamp(2.25rem, 1.6rem + 2.6vw, 4rem);
+  --p360-fs-h2: clamp(1.75rem, 1.4rem + 1.5vw, 2.75rem);
+  --p360-fs-h3: clamp(1.25rem, 1.1rem + 0.6vw, 1.625rem);
+  --p360-fs-lead: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+  --p360-fs-body: 1rem;
+  --p360-fs-small: 0.875rem;
+  --p360-fs-label: 0.8125rem;
+
+  --p360-lh-tight: 1.15;
+  --p360-lh-heading: 1.25;
+  --p360-lh-body: 1.65;
+
+  /* Espacements (échelle 4px) */
+  --p360-space-1: 0.25rem;
+  --p360-space-2: 0.5rem;
+  --p360-space-3: 0.75rem;
+  --p360-space-4: 1rem;
+  --p360-space-5: 1.5rem;
+  --p360-space-6: 2rem;
+  --p360-space-7: 3rem;
+  --p360-space-8: 4rem;
+  --p360-space-9: 6rem;
+  --p360-space-10: 8rem;
+
+  /* Mise en page */
+  --p360-container-max: 1180px;
+  --p360-container-pad: clamp(1.25rem, 4vw, 3rem);
+  --p360-radius-sm: 3px;
+  --p360-radius-md: 6px;
+  --p360-header-h: 84px;
+  --p360-header-h-compact: 64px;
+
+  /* Ombres — volontairement très légères */
+  --p360-shadow-sm: 0 1px 2px rgba(27, 25, 22, 0.06);
+  --p360-shadow-md: 0 8px 24px rgba(27, 25, 22, 0.08);
+  --p360-shadow-lg: 0 16px 48px rgba(27, 25, 22, 0.12);
+
+  /* Animation */
+  --p360-dur-fast: 150ms;
+  --p360-dur-base: 320ms;
+  --p360-dur-slow: 560ms;
+  --p360-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --p360-reveal-distance: 16px;
+}
+
+/* -------------------------------------------------------------------------
+   2. RÉINITIALISATION LÉGÈRE ET BASE (scoping prudent via classes p360-)
+   ------------------------------------------------------------------------- */
+.p360-root {
+  color: var(--p360-color-ink);
+  font-family: var(--p360-font-body);
+  font-size: var(--p360-fs-body);
+  line-height: var(--p360-lh-body);
+  background: var(--p360-color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Empêche un token long et sans espace (ex. un placeholder [ENTRE_CROCHETS],
+     une URL ou une adresse e-mail longue) de forcer un débordement
+     horizontal — en particulier dans les conteneurs display:grid/flex, où
+     min-width:auto laisse par défaut le contenu imposer sa taille. Hérité
+     par tous les descendants. */
+  overflow-wrap: break-word;
+}
+
+.p360-root *,
+.p360-root *::before,
+.p360-root *::after {
+  box-sizing: border-box;
+  /* Un enfant de grille/flexbox a par défaut min-width:auto, ce qui lui
+     permet d'imposer sa taille intrinsèque (ex. un long texte non
+     coupable) au conteneur et de provoquer un débordement horizontal.
+     min-width:0 retire ce plancher pour TOUS les éléments : sans effet
+     sur les boîtes normales (leur min-width initial équivaut déjà à 0),
+     mais corrige ce piège classique partout où display:flex/grid est
+     utilisé (bandeau de bénéfices, pied de page, showroom, etc.). */
+  min-width: 0;
+}
+
+/* Le header et le pied de page sont injectés en dehors de .p360-root
+   (voir 03-footer-code-injection.html) : on leur applique donc les mêmes
+   réglages de base indépendamment de leur position dans le DOM. */
+[class*="p360-header"],
+[class*="p360-header"] *,
+[class*="p360-header"] *::before,
+[class*="p360-header"] *::after,
+[class*="p360-footer"],
+[class*="p360-footer"] *,
+[class*="p360-footer"] *::before,
+[class*="p360-footer"] *::after {
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.p360-root img { max-width: 100%; display: block; }
+
+.p360-root a { color: inherit; text-decoration: none; }
+
+.p360-root button { font-family: inherit; }
+
+.p360-container {
+  width: 100%;
+  max-width: var(--p360-container-max);
+  margin-inline: auto;
+  padding-inline: var(--p360-container-pad);
+}
+
+.p360-section {
+  padding-block: var(--p360-space-9);
+}
+
+.p360-section--alt { background: var(--p360-color-bg-alt); }
+.p360-section--dark {
+  background: var(--p360-color-noir-chaud);
+  color: var(--p360-color-bg);
+}
+.p360-section--tight { padding-block: var(--p360-space-7); }
+
+.p360-eyebrow {
+  display: inline-block;
+  font-size: var(--p360-fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--p360-color-olive);
+  font-weight: 600;
+  margin-bottom: var(--p360-space-3);
+}
+
+.p360-section--dark .p360-eyebrow { color: var(--p360-color-sand); }
+
+.p360-h1, .p360-h2, .p360-h3, .p360-h4 {
+  font-family: var(--p360-font-display);
+  color: var(--p360-color-anthracite);
+  line-height: var(--p360-lh-heading);
+  font-weight: 600;
+  margin: 0 0 var(--p360-space-4);
+  letter-spacing: -0.01em;
+}
+
+.p360-section--dark .p360-h1,
+.p360-section--dark .p360-h2,
+.p360-section--dark .p360-h3 { color: var(--p360-color-white); }
+
+.p360-h1 { font-size: var(--p360-fs-h1); line-height: var(--p360-lh-tight); }
+.p360-h2 { font-size: var(--p360-fs-h2); }
+.p360-h3 { font-size: var(--p360-fs-h3); }
+
+.p360-lead {
+  font-size: var(--p360-fs-lead);
+  color: var(--p360-color-ink-soft);
+  max-width: 46ch;
+  margin: 0 0 var(--p360-space-6);
+}
+
+.p360-section--dark .p360-lead { color: rgba(250, 247, 241, 0.72); }
+
+.p360-eyebrow + .p360-h1,
+.p360-eyebrow + .p360-h2 { margin-top: 0; }
+
+.p360-text-center { text-align: center; margin-inline: auto; }
+
+.p360-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.p360-skip-link {
+  position: absolute;
+  left: var(--p360-space-4);
+  top: -60px;
+  background: var(--p360-color-anthracite);
+  color: var(--p360-color-white);
+  padding: var(--p360-space-3) var(--p360-space-5);
+  border-radius: var(--p360-radius-sm);
+  z-index: 1000;
+  transition: top var(--p360-dur-fast) var(--p360-ease);
+}
+.p360-skip-link:focus { top: var(--p360-space-4); }
+
+/* Focus visible cohérent partout */
+.p360-root a:focus-visible,
+.p360-root button:focus-visible,
+.p360-root input:focus-visible,
+.p360-root select:focus-visible,
+.p360-root textarea:focus-visible,
+.p360-root [tabindex]:focus-visible {
+  outline: 2px solid var(--p360-color-focus);
+  outline-offset: 3px;
+  border-radius: var(--p360-radius-sm);
+}
+
+/* -------------------------------------------------------------------------
+   3. BOUTONS
+   ------------------------------------------------------------------------- */
+.p360-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--p360-space-2);
+  padding: 0.85em 1.6em;
+  font-size: var(--p360-fs-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--p360-radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform var(--p360-dur-fast) var(--p360-ease),
+              background-color var(--p360-dur-fast) var(--p360-ease),
+              border-color var(--p360-dur-fast) var(--p360-ease),
+              color var(--p360-dur-fast) var(--p360-ease);
+  min-height: 44px;
+  line-height: 1.2;
+}
+
+.p360-btn--primary {
+  background: var(--p360-color-terracotta);
+  color: var(--p360-color-white);
+  border-color: var(--p360-color-terracotta);
+}
+.p360-btn--primary:hover { background: var(--p360-color-terracotta-dark); border-color: var(--p360-color-terracotta-dark); }
+.p360-btn--primary:active { transform: translateY(1px); }
+
+.p360-btn--secondary {
+  background: transparent;
+  color: var(--p360-color-anthracite);
+  border-color: var(--p360-color-line);
+}
+.p360-btn--secondary:hover { border-color: var(--p360-color-anthracite); }
+
+.p360-section--dark .p360-btn--secondary {
+  color: var(--p360-color-white);
+  border-color: var(--p360-color-line-dark);
+}
+.p360-section--dark .p360-btn--secondary:hover { border-color: var(--p360-color-white); }
+
+.p360-btn--ghost {
+  background: transparent;
+  color: var(--p360-color-terracotta);
+  padding-inline: 0;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+}
+.p360-btn--ghost:hover { border-bottom-color: currentColor; }
+
+.p360-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--p360-space-4);
+  align-items: center;
+}
+
+/* -------------------------------------------------------------------------
+   4. EN-TÊTE / NAVIGATION
+   ------------------------------------------------------------------------- */
+.p360-header {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+  border-bottom: 1px solid transparent;
+  font-family: var(--p360-font-body);
+  color: var(--p360-color-ink);
+  transition: border-color var(--p360-dur-base) var(--p360-ease),
+              box-shadow var(--p360-dur-base) var(--p360-ease);
+}
+/*
+  Le fond flouté (backdrop-filter) est posé sur un pseudo-élément plutôt
+  que directement sur .p360-header : un élément avec backdrop-filter (ou
+  filter/transform) devient le "containing block" de ses descendants en
+  position:fixed. Comme le panneau du menu mobile (.p360-nav__list, plus
+  bas) est fixe et doit couvrir tout l'écran, il ne doit surtout pas être
+  piégé dans la petite boîte de l'en-tête.
+*/
+.p360-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(250, 247, 241, 0.92);
+  backdrop-filter: saturate(140%) blur(10px);
+}
+
+.p360-header[data-scrolled="true"] {
+  border-bottom-color: var(--p360-color-line);
+  box-shadow: var(--p360-shadow-sm);
+}
+
+.p360-header__bar {
+  max-width: var(--p360-container-max);
+  margin-inline: auto;
+  padding-inline: var(--p360-container-pad);
+  height: var(--p360-header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--p360-space-5);
+  transition: height var(--p360-dur-base) var(--p360-ease);
+}
+
+.p360-header[data-scrolled="true"] .p360-header__bar {
+  height: var(--p360-header-h-compact);
+}
+
+.p360-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--p360-space-2);
+  font-family: var(--p360-font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--p360-color-anthracite);
+  flex-shrink: 0;
+}
+.p360-logo svg { width: 32px; height: 32px; flex-shrink: 0; }
+
+.p360-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--p360-space-6);
+}
+
+.p360-nav__list {
+  display: flex;
+  align-items: center;
+  gap: var(--p360-space-6);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.p360-nav__link {
+  position: relative;
+  font-size: var(--p360-fs-small);
+  font-weight: 500;
+  color: var(--p360-color-ink);
+  padding-block: var(--p360-space-2);
+}
+.p360-nav__link::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 100%;
+  bottom: 0;
+  height: 1px;
+  background: var(--p360-color-terracotta);
+  transition: right var(--p360-dur-base) var(--p360-ease);
+}
+.p360-nav__link:hover::after,
+.p360-nav__link[aria-current="page"]::after { right: 0; }
+.p360-nav__link[aria-current="page"] { color: var(--p360-color-terracotta); }
+
+.p360-header__cta { display: flex; align-items: center; gap: var(--p360-space-4); flex-shrink: 0; }
+.p360-header__cta .p360-btn { display: none; }
+@media (min-width: 900px) {
+  .p360-header__cta .p360-btn { display: inline-flex; }
+}
+
+.p360-burger {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--p360-radius-sm);
+}
+.p360-burger__box { position: relative; width: 22px; height: 16px; }
+.p360-burger__box span {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: var(--p360-color-anthracite);
+  border-radius: 2px;
+  transition: transform var(--p360-dur-base) var(--p360-ease), opacity var(--p360-dur-fast) var(--p360-ease), top var(--p360-dur-base) var(--p360-ease);
+}
+.p360-burger__box span:nth-child(1) { top: 0; }
+.p360-burger__box span:nth-child(2) { top: 7px; }
+.p360-burger__box span:nth-child(3) { top: 14px; }
+.p360-nav[data-open="true"] .p360-burger__box span:nth-child(1) { top: 7px; transform: rotate(45deg); }
+.p360-nav[data-open="true"] .p360-burger__box span:nth-child(2) { opacity: 0; }
+.p360-nav[data-open="true"] .p360-burger__box span:nth-child(3) { top: 7px; transform: rotate(-45deg); }
+
+@media (max-width: 899px) {
+  .p360-nav__list {
+    position: fixed;
+    inset: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: var(--p360-color-bg);
+    padding: calc(var(--p360-header-h) + var(--p360-space-4)) var(--p360-container-pad) var(--p360-space-6);
+    transform: translateY(-8px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity var(--p360-dur-base) var(--p360-ease),
+                transform var(--p360-dur-base) var(--p360-ease),
+                visibility 0s linear var(--p360-dur-base);
+    overflow-y: auto;
+    z-index: 1;
+  }
+  .p360-nav[data-open="true"] .p360-nav__list {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity var(--p360-dur-base) var(--p360-ease),
+                transform var(--p360-dur-base) var(--p360-ease),
+                visibility 0s linear 0s;
+  }
+  .p360-nav__link {
+    display: block;
+    font-size: 1.25rem;
+    padding-block: var(--p360-space-4);
+    border-bottom: 1px solid var(--p360-color-line);
+  }
+  .p360-nav__cta-mobile { margin-top: var(--p360-space-5); }
+  .p360-nav__cta-mobile .p360-btn { width: 100%; }
+}
+
+@media (min-width: 900px) {
+  .p360-burger { display: none; }
+  .p360-nav__cta-mobile { display: none; }
+}
+
+/* -------------------------------------------------------------------------
+   5. HERO
+   ------------------------------------------------------------------------- */
+.p360-hero {
+  padding-block: var(--p360-space-9) var(--p360-space-8);
+  overflow: hidden;
+}
+.p360-hero__grid {
+  display: grid;
+  gap: var(--p360-space-8);
+  align-items: center;
+}
+@media (min-width: 960px) {
+  .p360-hero__grid { grid-template-columns: 1.05fr 1fr; gap: var(--p360-space-9); }
+}
+
+.p360-hero__title { margin-bottom: var(--p360-space-5); }
+.p360-hero__lead { font-size: var(--p360-fs-lead); color: var(--p360-color-ink-soft); max-width: 42ch; margin-bottom: var(--p360-space-6); }
+
+.p360-hero__media {
+  position: relative;
+  border-radius: var(--p360-radius-md);
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(155deg, var(--p360-color-bg-alt), var(--p360-color-sand) 120%);
+  box-shadow: var(--p360-shadow-lg);
+  will-change: transform;
+}
+.p360-hero__media img { width: 100%; height: 100%; object-fit: cover; }
+.p360-hero__media-tag {
+  position: absolute;
+  left: var(--p360-space-4);
+  bottom: var(--p360-space-4);
+  background: rgba(27, 25, 22, 0.72);
+  color: var(--p360-color-white);
+  font-size: var(--p360-fs-label);
+  padding: var(--p360-space-2) var(--p360-space-3);
+  border-radius: var(--p360-radius-sm);
+  backdrop-filter: blur(4px);
+}
+
+/* -------------------------------------------------------------------------
+   6. BANDEAU BÉNÉFICES
+   ------------------------------------------------------------------------- */
+.p360-benefits {
+  display: grid;
+  gap: var(--p360-space-6);
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 720px) { .p360-benefits { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1080px) { .p360-benefits { grid-template-columns: repeat(6, 1fr); } }
+
+.p360-benefit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--p360-space-3);
+}
+.p360-benefit__icon {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--p360-color-terracotta);
+}
+.p360-benefit__icon svg { width: 100%; height: 100%; }
+.p360-benefit__title { font-weight: 600; font-size: var(--p360-fs-small); color: var(--p360-color-anthracite); }
+.p360-benefit__text { font-size: var(--p360-fs-small); color: var(--p360-color-ink-soft); }
+
+/* -------------------------------------------------------------------------
+   7. GRILLES DE CARTES (secteurs, réalisations, services)
+   ------------------------------------------------------------------------- */
+.p360-grid {
+  display: grid;
+  gap: var(--p360-space-5);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) { .p360-grid--2 { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 900px) {
+  .p360-grid--3 { grid-template-columns: repeat(3, 1fr); }
+  .p360-grid--2 { grid-template-columns: repeat(2, 1fr); }
+}
+
+.p360-card {
+  background: var(--p360-color-white);
+  border: 1px solid var(--p360-color-line);
+  border-radius: var(--p360-radius-md);
+  padding: var(--p360-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--p360-space-3);
+  transition: border-color var(--p360-dur-base) var(--p360-ease), transform var(--p360-dur-base) var(--p360-ease), box-shadow var(--p360-dur-base) var(--p360-ease);
+}
+.p360-card:hover { border-color: var(--p360-color-terracotta); transform: translateY(-3px); box-shadow: var(--p360-shadow-md); }
+.p360-card__title { font-family: var(--p360-font-display); font-size: 1.15rem; color: var(--p360-color-anthracite); margin: 0; }
+.p360-card__text { font-size: var(--p360-fs-small); color: var(--p360-color-ink-soft); margin: 0; }
+.p360-card__tag {
+  align-self: flex-start;
+  font-size: var(--p360-fs-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--p360-color-olive);
+  font-weight: 600;
+}
+
+.p360-card--status {
+  background: var(--p360-color-bg-alt);
+  border-style: dashed;
+}
+.p360-card__status-badge {
+  align-self: flex-start;
+  font-size: var(--p360-fs-label);
+  font-weight: 600;
+  padding: var(--p360-space-1) var(--p360-space-3);
+  border-radius: 999px;
+  background: var(--p360-color-sand);
+  color: var(--p360-color-anthracite);
+}
+
+/* -------------------------------------------------------------------------
+   8. MÉTHODE — ÉTAPES
+   ------------------------------------------------------------------------- */
+.p360-steps {
+  display: grid;
+  gap: 0;
+  counter-reset: p360-step;
+}
+.p360-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--p360-space-5);
+  padding-block: var(--p360-space-6);
+  border-top: 1px solid var(--p360-color-line);
+}
+.p360-step:last-child { border-bottom: 1px solid var(--p360-color-line); }
+.p360-step__index {
+  counter-increment: p360-step;
+  font-family: var(--p360-font-display);
+  font-size: 1.75rem;
+  color: var(--p360-color-sand);
+  min-width: 2.5ch;
+}
+.p360-step__index::before { content: counter(p360-step, decimal-leading-zero); }
+.p360-step__title { margin-bottom: var(--p360-space-2); }
+.p360-step__text { color: var(--p360-color-ink-soft); max-width: 60ch; margin: 0; }
+
+@media (min-width: 780px) {
+  .p360-steps--grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--p360-space-6) var(--p360-space-8);
+  }
+  .p360-steps--grid .p360-step { border: none; padding-block: 0; }
+}
+
+/* -------------------------------------------------------------------------
+   9. SHOWROOM
+   ------------------------------------------------------------------------- */
+.p360-showroom__layout {
+  display: grid;
+  gap: var(--p360-space-7);
+}
+
+.p360-showroom__player {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--p360-color-anthracite);
+  border-radius: var(--p360-radius-md);
+  overflow: hidden;
+  box-shadow: var(--p360-shadow-lg);
+}
+.p360-showroom__player iframe {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  border: 0;
+}
+.p360-showroom__cover {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--p360-space-4);
+  text-align: center;
+  color: var(--p360-color-white);
+  background-size: cover;
+  background-position: center;
+  padding: var(--p360-space-6);
+}
+.p360-showroom__cover::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(27,25,22,0.25), rgba(27,25,22,0.75));
+  z-index: 0;
+}
+.p360-showroom__cover > * { position: relative; z-index: 1; max-width: 100%; }
+.p360-showroom__cover-title { font-family: var(--p360-font-display); font-size: 1.4rem; }
+.p360-showroom__state {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+  gap: var(--p360-space-3);
+  color: var(--p360-color-white);
+  background: var(--p360-color-anthracite);
+  text-align: center;
+  padding: var(--p360-space-6);
+}
+.p360-showroom__spinner {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.25);
+  border-top-color: var(--p360-color-white);
+  animation: p360-spin 900ms linear infinite;
+}
+@keyframes p360-spin { to { transform: rotate(360deg); } }
+
+.p360-showroom__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--p360-space-3) var(--p360-space-5);
+  align-items: baseline;
+  margin-top: var(--p360-space-5);
+}
+.p360-showroom__meta h3 { margin: 0; }
+.p360-showroom__meta-item { font-size: var(--p360-fs-small); color: var(--p360-color-ink-soft); }
+.p360-showroom__desc { color: var(--p360-color-ink-soft); max-width: 70ch; margin-top: var(--p360-space-3); }
+
+.p360-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--p360-space-2);
+  margin-bottom: var(--p360-space-6);
+}
+.p360-filter {
+  padding: var(--p360-space-2) var(--p360-space-4);
+  border-radius: 999px;
+  border: 1px solid var(--p360-color-line);
+  background: var(--p360-color-white);
+  font-size: var(--p360-fs-small);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--p360-dur-fast) var(--p360-ease), color var(--p360-dur-fast) var(--p360-ease), border-color var(--p360-dur-fast) var(--p360-ease);
+}
+.p360-filter[aria-pressed="true"] {
+  background: var(--p360-color-anthracite);
+  border-color: var(--p360-color-anthracite);
+  color: var(--p360-color-white);
+}
+
+.p360-showroom-grid {
+  display: grid;
+  gap: var(--p360-space-5);
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 640px) { .p360-showroom-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1000px) { .p360-showroom-grid { grid-template-columns: repeat(4, 1fr); } }
+
+.p360-tour-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--p360-color-line);
+  border-radius: var(--p360-radius-md);
+  overflow: hidden;
+  background: var(--p360-color-white);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color var(--p360-dur-base) var(--p360-ease), transform var(--p360-dur-base) var(--p360-ease), box-shadow var(--p360-dur-base) var(--p360-ease);
+}
+.p360-tour-card:hover { border-color: var(--p360-color-terracotta); transform: translateY(-3px); box-shadow: var(--p360-shadow-md); }
+.p360-tour-card[aria-current="true"] { border-color: var(--p360-color-terracotta); box-shadow: 0 0 0 2px var(--p360-color-terracotta) inset; }
+.p360-tour-card { text-decoration: none; }
+.p360-tour-card__media { aspect-ratio: 4/3; background: var(--p360-color-bg-alt); overflow: hidden; }
+.p360-tour-card__media img { width: 100%; height: 100%; object-fit: cover; }
+.p360-tour-card__body { padding: var(--p360-space-4); }
+.p360-tour-card__cat { font-size: var(--p360-fs-label); text-transform: uppercase; letter-spacing: 0.05em; color: var(--p360-color-olive); font-weight: 600; }
+.p360-tour-card__title { font-family: var(--p360-font-display); font-size: 1.05rem; margin: var(--p360-space-1) 0; color: var(--p360-color-anthracite); }
+.p360-tour-card__loc { font-size: var(--p360-fs-label); color: var(--p360-color-ink-soft); }
+.p360-tour-card[hidden] { display: none; }
+
+/* -------------------------------------------------------------------------
+   10. FAQ / ACCORDÉON
+   ------------------------------------------------------------------------- */
+.p360-accordion { border-top: 1px solid var(--p360-color-line); }
+.p360-accordion-item { border-bottom: 1px solid var(--p360-color-line); }
+.p360-accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--p360-space-4);
+  padding-block: var(--p360-space-5);
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: var(--p360-font-display);
+  font-size: 1.05rem;
+  color: var(--p360-color-anthracite);
+  cursor: pointer;
+}
+.p360-accordion-trigger__icon {
+  flex-shrink: 0;
+  width: 20px; height: 20px;
+  position: relative;
+}
+.p360-accordion-trigger__icon::before,
+.p360-accordion-trigger__icon::after {
+  content: "";
+  position: absolute;
+  background: var(--p360-color-terracotta);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform var(--p360-dur-base) var(--p360-ease);
+}
+.p360-accordion-trigger__icon::before { width: 14px; height: 2px; }
+.p360-accordion-trigger__icon::after { width: 2px; height: 14px; }
+.p360-accordion-trigger[aria-expanded="true"] .p360-accordion-trigger__icon::after { transform: translate(-50%, -50%) rotate(90deg); opacity: 0; }
+
+.p360-accordion-panel {
+  overflow: hidden;
+  height: 0;
+  transition: height var(--p360-dur-base) var(--p360-ease);
+}
+.p360-accordion-panel__inner { padding-bottom: var(--p360-space-5); color: var(--p360-color-ink-soft); max-width: 68ch; }
+
+/* -------------------------------------------------------------------------
+   11. FORMULAIRE (structure de secours si le bloc natif n'est pas utilisé)
+   ------------------------------------------------------------------------- */
+.p360-field { display: flex; flex-direction: column; gap: var(--p360-space-2); margin-bottom: var(--p360-space-5); }
+.p360-field label { font-size: var(--p360-fs-small); font-weight: 600; color: var(--p360-color-anthracite); }
+.p360-field input,
+.p360-field select,
+.p360-field textarea {
+  font: inherit;
+  padding: var(--p360-space-3) var(--p360-space-4);
+  border: 1px solid var(--p360-color-line);
+  border-radius: var(--p360-radius-sm);
+  background: var(--p360-color-white);
+  color: var(--p360-color-ink);
+  min-height: 44px;
+}
+.p360-field textarea { min-height: 120px; resize: vertical; }
+.p360-form-grid { display: grid; gap: 0 var(--p360-space-5); }
+@media (min-width: 640px) { .p360-form-grid--2 { grid-template-columns: 1fr 1fr; } }
+
+.p360-form-note {
+  border: 1px dashed var(--p360-color-line);
+  border-radius: var(--p360-radius-md);
+  padding: var(--p360-space-5);
+  font-size: var(--p360-fs-small);
+  color: var(--p360-color-ink-soft);
+  background: var(--p360-color-bg-alt);
+}
+
+/* -------------------------------------------------------------------------
+   12. PIED DE PAGE
+   ------------------------------------------------------------------------- */
+.p360-footer {
+  background: var(--p360-color-noir-chaud);
+  color: rgba(250, 247, 241, 0.72);
+  font-family: var(--p360-font-body);
+  padding-block: var(--p360-space-8) var(--p360-space-6);
+}
+.p360-footer__grid {
+  display: grid;
+  gap: var(--p360-space-7);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 780px) { .p360-footer__grid { grid-template-columns: 1.4fr 1fr 1fr; } }
+.p360-footer__brand { display: flex; align-items: center; gap: var(--p360-space-2); color: var(--p360-color-white); font-family: var(--p360-font-display); font-size: 1.15rem; margin-bottom: var(--p360-space-3); }
+.p360-footer__brand svg { width: 28px; height: 28px; }
+.p360-footer h4 { color: var(--p360-color-white); font-size: var(--p360-fs-small); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--p360-space-4); }
+.p360-footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--p360-space-3); }
+.p360-footer a:hover { color: var(--p360-color-white); }
+.p360-footer__bottom {
+  margin-top: var(--p360-space-7);
+  padding-top: var(--p360-space-5);
+  border-top: 1px solid var(--p360-color-line-dark);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--p360-space-4);
+  justify-content: space-between;
+  font-size: var(--p360-fs-label);
+}
+
+/* -------------------------------------------------------------------------
+   13. ANIMATIONS D'APPARITION (Intersection Observer)
+   ------------------------------------------------------------------------- */
+.p360-reveal {
+  opacity: 0;
+  transform: translateY(var(--p360-reveal-distance));
+  transition: opacity var(--p360-dur-slow) var(--p360-ease),
+              transform var(--p360-dur-slow) var(--p360-ease);
+}
+.p360-reveal.p360-is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.p360-reveal-group.p360-is-visible > * {
+  transition-delay: calc(var(--p360-stagger, 0) * 70ms);
+}
+
+/* Respect du mode "réduction des animations" du système */
+@media (prefers-reduced-motion: reduce) {
+  .p360-root *,
+  .p360-root *::before,
+  .p360-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .p360-reveal { opacity: 1; transform: none; }
+}
+
+/*
+  Si JavaScript est désactivé, tout le contenu doit rester visible et
+  utilisable. Comme un bloc de code Squarespace ne peut pas ajouter de
+  classe sur <html> ou <body>, ce repli ne peut pas être ciblé par un
+  sélecteur CSS descendant classique : chaque page inclut donc un bloc
+  <noscript><style>…</style></noscript> autonome (voir le haut de chaque
+  fichier squarespace/0X-*-code-block.html) qui neutralise l'opacité de
+  révélation, force le menu mobile à rester visible en liste statique et
+  déplie les accordéons — uniquement lorsque JavaScript est indisponible.
+*/
+
+/* -------------------------------------------------------------------------
+   14. UTILITAIRES
+   ------------------------------------------------------------------------- */
+.p360-mt-0 { margin-top: 0; }
+.p360-mb-0 { margin-bottom: 0; }
+.p360-max-prose { max-width: 68ch; }
+.p360-flex-between { display: flex; align-items: center; justify-content: space-between; gap: var(--p360-space-4); flex-wrap: wrap; }
+.p360-divider { border: none; border-top: 1px solid var(--p360-color-line); margin-block: var(--p360-space-8); }
+.p360-badge-note {
+  /* display:block (plutôt que inline-flex) : ce bloc n'est utilisé qu'avec
+     du texte seul, jamais avec une icône. Un conteneur flex transforme son
+     texte en enfant flex anonyme dont la taille minimale ignore max-width
+     et peut déborder ; un bloc normal n'a pas ce problème. */
+  display: block;
+  font-size: var(--p360-fs-label);
+  color: var(--p360-color-ink-soft);
+  font-style: italic;
+}
+
+/*
+  Empilement vertical simple (ex. blocs de la page À propos ou des pages
+  légales). Volontairement en flux normal plutôt qu'en display:grid/flex :
+  un conteneur grid/flex a par défaut un min-width:auto sur ses enfants,
+  ce qui peut forcer un débordement horizontal si un enfant contient un
+  mot long et non sécable (URL, placeholder [ENTRE_CROCHETS]…) — un bloc
+  normal n'a pas ce problème et respecte toujours la largeur disponible.
+*/
+.p360-stack > * + * {
+  margin-top: var(--p360-stack-gap, var(--p360-space-6));
+}
+
+/* -------------------------------------------------------------------------
+   15bis. MASQUER L'EN-TÊTE ET LE PIED DE PAGE NATIFS SQUARESPACE (optionnel)
+   ------------------------------------------------------------------------- */
+/*
+  Ce site fournit son propre en-tête (.p360-header) et son propre pied de
+  page (.p360-footer), collés en haut et en bas du contenu de chaque page
+  (voir squarespace/04-*.html à 09-*.html). Pour éviter d'avoir DEUX
+  en-têtes et DEUX pieds de page à l'écran, les règles ci-dessous masquent
+  l'en-tête et le pied de page natifs de Squarespace (identifiants stables
+  de la plateforme 7.1 : #header et #footer).
+
+  Si vous préférez au contraire GARDER l'en-tête natif de Squarespace
+  (recommandé si vous voulez gérer votre navigation depuis Squarespace sans
+  toucher au code), supprimez simplement le bloc ci-dessous, puis retirez
+  les balises <header class="p360-header">…</header> et
+  <footer class="p360-footer">…</footer> de chaque bloc de code de page.
+  Voir README-SQUARESPACE.md, section "Choisir votre stratégie de
+  navigation" pour le détail des deux options.
+*/
+#header, #footer {
+  display: none !important;
+}
+
+/* -------------------------------------------------------------------------
+   16. IMPRESSION (dégradation propre)
+   ------------------------------------------------------------------------- */
+@media print {
+  .p360-header, .p360-footer, .p360-burger, .p360-showroom__player { display: none; }
+  /* Le contenu révélé au défilement doit être visible même si l'utilisateur
+     imprime la page sans avoir fait défiler chaque section. */
+  .p360-reveal { opacity: 1 !important; transform: none !important; }
+  .p360-accordion-panel { height: auto !important; }
+}
