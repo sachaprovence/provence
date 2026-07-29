@@ -1,0 +1,321 @@
+<!--
+  PROVENCE 360 — Page ACCUEIL
+  À coller dans : la page "Accueil" > ajouter un bloc "Code" couvrant toute
+  la page > coller l'intégralité de ce fichier.
+
+  Réglages recommandés pour cette page dans Squarespace :
+  - Titre de la page (SEO) : voir content/seo-pages.md
+  - Désactiver le titre de page natif si votre modèle l'affiche en double
+    au-dessus du contenu (Réglages de la page > Options SEO / Affichage).
+
+  Rappel : ce bloc inclut son propre en-tête et son propre pied de page
+  (voir squarespace/01-global-custom-css.css section 15bis pour masquer
+  l'en-tête/pied de page natifs et éviter les doublons).
+-->
+<div class="p360-root">
+
+  <!-- Repli si JavaScript est indisponible : le contenu reste utilisable. -->
+  <noscript><style>
+    .p360-reveal{opacity:1!important;transform:none!important;}
+    .p360-nav__list{position:static!important;transform:none!important;opacity:1!important;visibility:visible!important;pointer-events:auto!important;padding-block:var(--p360-space-4)!important;}
+    .p360-burger{display:none!important;}
+    .p360-accordion-panel{height:auto!important;}
+  </style></noscript>
+
+  <a class="p360-skip-link" href="#p360-main">Aller au contenu principal</a>
+
+  <!-- NAVIGATION -->
+  <header class="p360-header" data-scrolled="false">
+    <div class="p360-header__bar">
+      <a class="p360-logo" href="/">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.6"/><path d="M6 28c6-6.5 12-6.5 18 0s12 6.5 18 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="7.5" y1="18.5" x2="40.5" y2="18.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/></svg>
+        Provence 360
+      </a>
+      <nav class="p360-nav" data-open="false" aria-label="Navigation principale">
+        <ul class="p360-nav__list" id="p360-nav-list">
+          <li><a class="p360-nav__link" href="/" aria-current="page">Accueil</a></li>
+          <li><a class="p360-nav__link" href="/services">Services</a></li>
+          <li><a class="p360-nav__link" href="/showroom-3d">Showroom 3D</a></li>
+          <li><a class="p360-nav__link" href="/notre-methode">Notre méthode</a></li>
+          <li><a class="p360-nav__link" href="/a-propos">À propos</a></li>
+          <li><a class="p360-nav__link" href="/contact">Contact</a></li>
+          <li class="p360-nav__cta-mobile"><a class="p360-btn p360-btn--primary" href="/contact">Demander un devis</a></li>
+        </ul>
+        <button class="p360-burger" type="button" aria-expanded="false" aria-controls="p360-nav-list" aria-label="Ouvrir le menu">
+          <span class="p360-burger__box"><span></span><span></span><span></span></span>
+        </button>
+      </nav>
+      <div class="p360-header__cta">
+        <a class="p360-btn p360-btn--primary" href="/contact">Demander un devis</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="p360-main">
+
+    <!-- HERO -->
+    <section class="p360-hero">
+      <div class="p360-container p360-hero__grid">
+        <div>
+          <h1 class="p360-h1 p360-reveal">Faites visiter votre établissement avant même l'arrivée de vos clients.</h1>
+          <p class="p360-hero__lead p360-reveal">Provence 360 transforme vos espaces en visites virtuelles 3D immersives, consultables à tout moment, pour donner à vos visiteurs une idée juste et convaincante des lieux avant même de s'y déplacer.</p>
+          <div class="p360-btn-row p360-reveal">
+            <a class="p360-btn p360-btn--primary" href="/showroom-3d">Explorer le showroom</a>
+            <a class="p360-btn p360-btn--secondary" href="/contact">Demander un devis</a>
+          </div>
+        </div>
+        <div class="p360-hero__media p360-reveal" role="img" aria-label="Aperçu d'une visite virtuelle 3D — visuel à remplacer par une image ou un extrait de captation réelle (REMPLACER_PAR_VISUEL_HERO)">
+          <div class="p360-showroom__cover-title p360-sr-only">REMPLACER_PAR_VISUEL_HERO</div>
+          <span class="p360-hero__media-tag">Aperçu — visuel à remplacer</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- BANDEAU DE BÉNÉFICES -->
+    <section class="p360-section p360-section--tight p360-section--alt">
+      <div class="p360-container">
+        <h2 class="p360-sr-only">Pourquoi une visite virtuelle 3D</h2>
+        <div class="p360-benefits p360-reveal-group">
+          <div class="p360-benefit p360-reveal">
+            <span class="p360-benefit__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/><path d="M12 7v5.2l3.4 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="p360-benefit__title">Disponible 24 h/24</span>
+            <span class="p360-benefit__text">Votre lieu reste accessible et visitable à tout moment, sans contrainte d'horaire.</span>
+          </div>
+          <div class="p360-benefit p360-reveal">
+            <span class="p360-benefit__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="9" ry="5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2.4" stroke="currentColor" stroke-width="1.5"/></svg></span>
+            <span class="p360-benefit__title">Présentation immersive</span>
+            <span class="p360-benefit__text">Vos visiteurs se déplacent dans l'espace et en comprennent réellement les volumes.</span>
+          </div>
+          <div class="p360-benefit p360-reveal">
+            <span class="p360-benefit__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 18.5c0-3 3.6-4.5 8-4.5s8 1.5 8 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.5"/></svg></span>
+            <span class="p360-benefit__title">Clients mieux informés</span>
+            <span class="p360-benefit__text">Ils arrivent avec une idée précise du lieu, ce qui limite les incompréhensions.</span>
+          </div>
+          <div class="p360-benefit p360-reveal">
+            <span class="p360-benefit__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h4M4 4v4M20 4h-4M20 4v4M4 20h4M4 20v-4M20 20h-4M20 20v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="p360-benefit__title">Espaces mis en valeur</span>
+            <span class="p360-benefit__text">Chaque pièce, chaque volume, chaque détail est montré tel qu'il est.</span>
+          </div>
+          <div class="p360-benefit p360-reveal">
+            <span class="p360-benefit__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="12" r="2.2" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="6" r="2.2" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="18" r="2.2" stroke="currentColor" stroke-width="1.5"/><path d="M8 11l8-3.5M8 13l8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+            <span class="p360-benefit__title">Lien partageable</span>
+            <span class="p360-benefit__text">Une simple URL, envoyée par e-mail, SMS ou réseaux sociaux.</span>
+          </div>
+          <div class="p360-benefit p360-reveal">
+            <span class="p360-benefit__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="13" y="13" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M11 7.5h4a1.5 1.5 0 0 1 1.5 1.5v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+            <span class="p360-benefit__title">Intégration facile</span>
+            <span class="p360-benefit__text">Sur votre site et vos annonces compatibles.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRÉSENTATION DU SERVICE -->
+    <section class="p360-section">
+      <div class="p360-container" style="max-width: 68ch;">
+        <span class="p360-eyebrow p360-reveal">Le principe</span>
+        <h2 class="p360-h2 p360-reveal">Une visite virtuelle, c'est quoi exactement ?</h2>
+        <p class="p360-lead p360-reveal" style="max-width: none;">Une visite virtuelle 3D permet à toute personne, où qu'elle se trouve, de se déplacer librement dans votre établissement depuis un ordinateur, une tablette ou un smartphone. Elle avance pièce par pièce, regarde autour d'elle, observe l'agencement, la lumière, les volumes — comme si elle y était.</p>
+        <p class="p360-reveal">Ce n'est pas une simple galerie de photos : c'est une reconstitution fidèle et navigable de votre espace, disponible en permanence sur votre site ou vos annonces.</p>
+      </div>
+    </section>
+
+    <!-- SHOWROOM MIS EN AVANT -->
+    <section class="p360-section p360-section--dark">
+      <div class="p360-container">
+        <div class="p360-flex-between p360-reveal">
+          <div>
+            <span class="p360-eyebrow">Showroom</span>
+            <h2 class="p360-h2 p360-mb-0">Voyez-le par vous-même</h2>
+          </div>
+          <a class="p360-btn p360-btn--secondary" href="/showroom-3d">Voir tout le showroom</a>
+        </div>
+        <p class="p360-lead p360-reveal" style="margin-top: var(--p360-space-5);">Le meilleur moyen de comprendre une visite virtuelle 3D, c'est d'en explorer une. Découvrez nos réalisations et démonstrations directement sur la page showroom.</p>
+        <div class="p360-showroom__player p360-reveal" style="margin-top: var(--p360-space-6);">
+          <div class="p360-showroom__cover" style="position: static; height: 100%;">
+            <p class="p360-showroom__cover-title">Aperçu du showroom — visuel à remplacer</p>
+            <p class="p360-badge-note" style="color: rgba(255,255,255,0.75);">REMPLACER_PAR_IMAGE_SHOWROOM ou intégrer directement une visite depuis la page Showroom 3D</p>
+            <a class="p360-btn p360-btn--primary" href="/showroom-3d">Explorer le showroom</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTEURS ACCOMPAGNÉS -->
+    <section class="p360-section p360-section--alt">
+      <div class="p360-container">
+        <span class="p360-eyebrow p360-reveal">Secteurs</span>
+        <h2 class="p360-h2 p360-reveal">Un service pensé pour de nombreux lieux professionnels</h2>
+        <div class="p360-grid p360-grid--3 p360-reveal-group" style="margin-top: var(--p360-space-6);">
+          <article class="p360-card p360-reveal">
+            <span class="p360-card__tag">Immobilier</span>
+            <h3 class="p360-card__title">Vendre et louer plus vite</h3>
+            <p class="p360-card__text">Faites visiter un bien avant la première visite physique et présélectionnez des acquéreurs réellement intéressés.</p>
+          </article>
+          <article class="p360-card p360-reveal">
+            <span class="p360-card__tag">Hébergement</span>
+            <h3 class="p360-card__title">Rassurer avant la réservation</h3>
+            <p class="p360-card__text">Montrez vos chambres, suites et espaces communs tels qu'ils sont, pour rassurer avant la réservation.</p>
+          </article>
+          <article class="p360-card p360-reveal">
+            <span class="p360-card__tag">Restauration</span>
+            <h3 class="p360-card__title">Donner à voir l'ambiance</h3>
+            <p class="p360-card__text">Donnez à voir l'ambiance de votre salle, votre terrasse ou votre cadre avant même la première visite.</p>
+          </article>
+          <article class="p360-card p360-reveal">
+            <span class="p360-card__tag">Tourisme</span>
+            <h3 class="p360-card__title">Présenter un site vivant</h3>
+            <p class="p360-card__text">Présentez un domaine, un site ou un espace d'accueil de façon vivante et engageante.</p>
+          </article>
+          <article class="p360-card p360-reveal">
+            <span class="p360-card__tag">Événementiel</span>
+            <h3 class="p360-card__title">Aider à se projeter</h3>
+            <p class="p360-card__text">Aidez vos clients à se projeter dans une salle de réception ou un lieu d'événement.</p>
+          </article>
+          <article class="p360-card p360-reveal">
+            <span class="p360-card__tag">Commerces et entreprises</span>
+            <h3 class="p360-card__title">Valoriser vos locaux</h3>
+            <p class="p360-card__text">Valorisez un local, un showroom ou des bureaux ouverts au public.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- MÉTHODE EN 4 ÉTAPES (APERÇU) -->
+    <section class="p360-section">
+      <div class="p360-container">
+        <span class="p360-eyebrow p360-reveal">Méthode</span>
+        <h2 class="p360-h2 p360-reveal">Un accompagnement simple, du premier échange à la mise en ligne</h2>
+        <div class="p360-steps p360-steps--grid p360-reveal-group" style="margin-top: var(--p360-space-7);">
+          <div class="p360-step p360-reveal">
+            <span class="p360-step__index" aria-hidden="true"></span>
+            <div>
+              <h3 class="p360-h3 p360-step__title">Échange et préparation</h3>
+              <p class="p360-step__text">Nous comprenons votre lieu, vos objectifs et vos contraintes.</p>
+            </div>
+          </div>
+          <div class="p360-step p360-reveal">
+            <span class="p360-step__index" aria-hidden="true"></span>
+            <div>
+              <h3 class="p360-h3 p360-step__title">Captation sur place</h3>
+              <p class="p360-step__text">Nous nous déplaçons et réalisons la prise de vue 3D de votre établissement.</p>
+            </div>
+          </div>
+          <div class="p360-step p360-reveal">
+            <span class="p360-step__index" aria-hidden="true"></span>
+            <div>
+              <h3 class="p360-h3 p360-step__title">Création et optimisation</h3>
+              <p class="p360-step__text">Nous assemblons, optimisons et finalisons votre visite virtuelle.</p>
+            </div>
+          </div>
+          <div class="p360-step p360-reveal">
+            <span class="p360-step__index" aria-hidden="true"></span>
+            <div>
+              <h3 class="p360-h3 p360-step__title">Livraison et mise en ligne</h3>
+              <p class="p360-step__text">Vous recevez votre visite, prête à être partagée et intégrée.</p>
+            </div>
+          </div>
+        </div>
+        <div class="p360-btn-row p360-reveal" style="margin-top: var(--p360-space-7);">
+          <a class="p360-btn p360-btn--secondary" href="/notre-methode">Découvrir notre méthode en détail</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIVRABLES -->
+    <section class="p360-section p360-section--alt">
+      <div class="p360-container" style="max-width: 68ch;">
+        <span class="p360-eyebrow p360-reveal">Livrables</span>
+        <h2 class="p360-h2 p360-reveal">Ce que vous recevez</h2>
+        <ul class="p360-reveal" style="padding-left: 1.1em; color: var(--p360-color-ink-soft); display: grid; gap: var(--p360-space-3);">
+          <li>Lien vers votre visite virtuelle</li>
+          <li>Code d'intégration pour votre site</li>
+          <li>Une sélection de visuels issus de la captation</li>
+          <li>Un accompagnement pour la publication</li>
+          <li>Des options complémentaires, selon vos besoins</li>
+        </ul>
+        <p class="p360-badge-note p360-reveal" style="margin-top: var(--p360-space-5);">Les livrables exacts sont confirmés ensemble avant chaque mission.</p>
+      </div>
+    </section>
+
+    <!-- RÉALISATIONS / CAS CLIENTS -->
+    <section class="p360-section">
+      <div class="p360-container">
+        <span class="p360-eyebrow p360-reveal">Réalisations</span>
+        <h2 class="p360-h2 p360-reveal">Réalisations et démonstrations</h2>
+        <p class="p360-lead p360-reveal">Cette section présentera nos réalisations au fur et à mesure des missions menées avec nos clients. En attendant, découvrez des projets de démonstration.</p>
+        <div class="p360-grid p360-grid--3 p360-reveal-group" style="margin-top: var(--p360-space-6);">
+          <article class="p360-card p360-card--status p360-reveal">
+            <span class="p360-card__status-badge">Projet de démonstration</span>
+            <h3 class="p360-card__title">Villa de démonstration</h3>
+            <p class="p360-card__text">Exemple de mise en page pour une visite virtuelle de location saisonnière.</p>
+          </article>
+          <article class="p360-card p360-card--status p360-reveal">
+            <span class="p360-card__status-badge">Réalisation à venir</span>
+            <h3 class="p360-card__title">Emplacement réservé</h3>
+            <p class="p360-card__text">Une future réalisation client viendra remplacer cette carte.</p>
+          </article>
+          <article class="p360-card p360-card--status p360-reveal">
+            <span class="p360-card__status-badge">Témoignage à ajouter</span>
+            <h3 class="p360-card__title">Retour d'expérience client</h3>
+            <p class="p360-card__text">Un témoignage réel sera ajouté ici après une première mission.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- APPEL À L'ACTION FINAL -->
+    <section class="p360-section p360-section--dark p360-text-center" style="max-width: none;">
+      <div class="p360-container" style="max-width: 56ch;">
+        <h2 class="p360-h2 p360-reveal">Votre espace mérite mieux que quelques photos.</h2>
+        <p class="p360-lead p360-reveal" style="max-width: none; margin-inline: auto;">Donnez à vos visiteurs une raison concrète de vous choisir, avant même leur arrivée.</p>
+        <div class="p360-btn-row p360-reveal" style="justify-content: center;">
+          <a class="p360-btn p360-btn--primary" href="/contact">Demander un devis</a>
+          <a class="p360-btn p360-btn--secondary" href="/contact">Planifier une démonstration</a>
+        </div>
+        <p class="p360-reveal" style="margin-top: var(--p360-space-6); color: rgba(250,247,241,0.7); font-size: var(--p360-fs-small);">
+          [REMPLACER_PAR_TELEPHONE] · [REMPLACER_PAR_EMAIL] · Provence, Avignon, Monteux, Vaucluse et environs
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- PIED DE PAGE -->
+  <footer class="p360-footer">
+    <div class="p360-container">
+      <div class="p360-footer__grid">
+        <div>
+          <a class="p360-footer__brand" href="/">
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.6"/><path d="M6 28c6-6.5 12-6.5 18 0s12 6.5 18 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="7.5" y1="18.5" x2="40.5" y2="18.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/></svg>
+            Provence 360
+          </a>
+          <p class="p360-max-prose">Visites virtuelles 3D immersives pour les établissements professionnels de Provence, à Avignon, Monteux, dans le Vaucluse et les zones voisines.</p>
+        </div>
+        <div>
+          <h4>Navigation</h4>
+          <ul>
+            <li><a href="/services">Services</a></li>
+            <li><a href="/showroom-3d">Showroom 3D</a></li>
+            <li><a href="/notre-methode">Notre méthode</a></li>
+            <li><a href="/a-propos">À propos</a></li>
+            <li><a href="/contact">Contact</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Coordonnées</h4>
+          <ul>
+            <li>[REMPLACER_PAR_TELEPHONE]</li>
+            <li>[REMPLACER_PAR_EMAIL]</li>
+            <li>Provence, Avignon, Monteux, Vaucluse et environs</li>
+          </ul>
+        </div>
+      </div>
+      <div class="p360-footer__bottom">
+        <span>© <span data-p360-year>2026</span> Provence 360. Tous droits réservés.</span>
+        <span><a href="/mentions-legales">Mentions légales</a> · <a href="/politique-de-confidentialite">Politique de confidentialité</a></span>
+      </div>
+    </div>
+  </footer>
+
+</div>

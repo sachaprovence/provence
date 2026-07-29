@@ -1,0 +1,6 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="p360SymbolTitle">
+  <title id="p360SymbolTitle">Symbole Provence 360</title>
+  <circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.6"/>
+  <path d="M6 28c6-6.5 12-6.5 18 0s12 6.5 18 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="7.5" y1="18.5" x2="40.5" y2="18.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
+</svg>

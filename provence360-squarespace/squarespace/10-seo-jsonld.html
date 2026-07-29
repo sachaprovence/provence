@@ -1,0 +1,72 @@
+<!--
+  PROVENCE 360 — Données structurées (JSON-LD) pour le référencement local
+  À coller : soit dans l'injection de code d'en-tête (site entier, voir
+  squarespace/02-header-code-injection.html), soit uniquement dans
+  l'injection de code de la page d'accueil si votre forfait le permet.
+  Ne le collez qu'à UN SEUL endroit pour éviter les doublons.
+
+  RÈGLE IMPORTANTE : aucune donnée non vérifiée n'a été inventée. Chaque
+  valeur entre [REMPLACER_PAR_...] doit être complétée avec une information
+  réelle avant publication. Les champs qui nécessiteraient d'inventer une
+  donnée (note moyenne, avis, nombre de clients, tarifs, horaires précis)
+  ont été volontairement omis — ajoutez-les uniquement si l'information est
+  exacte et vérifiable.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "Provence 360",
+  "description": "Création de visites virtuelles 3D immersives et jumeaux numériques pour les établissements professionnels en Provence.",
+  "url": "[REMPLACER_PAR_URL_DU_SITE]",
+  "logo": "[REMPLACER_PAR_URL_DU_LOGO]",
+  "image": "[REMPLACER_PAR_URL_IMAGE_REPRESENTATIVE]",
+  "telephone": "[REMPLACER_PAR_TELEPHONE]",
+  "email": "[REMPLACER_PAR_EMAIL]",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "[REMPLACER_PAR_ADRESSE]",
+    "addressLocality": "[REMPLACER_PAR_VILLE]",
+    "postalCode": "[REMPLACER_PAR_CODE_POSTAL]",
+    "addressRegion": "Provence-Alpes-Côte d'Azur",
+    "addressCountry": "FR"
+  },
+  "areaServed": [
+    { "@type": "City", "name": "Avignon" },
+    { "@type": "City", "name": "Monteux" },
+    { "@type": "AdministrativeArea", "name": "Vaucluse" },
+    { "@type": "AdministrativeArea", "name": "Provence" }
+  ],
+  "sameAs": [
+    "[REMPLACER_PAR_URL_INSTAGRAM_SI_EXISTANT]",
+    "[REMPLACER_PAR_URL_FACEBOOK_SI_EXISTANT]",
+    "[REMPLACER_PAR_URL_LINKEDIN_SI_EXISTANT]"
+  ],
+  "makesOffer": [
+    {
+      "@type": "Offer",
+      "itemOffered": { "@type": "Service", "name": "Visite virtuelle 3D immersive" }
+    },
+    {
+      "@type": "Offer",
+      "itemOffered": { "@type": "Service", "name": "Visuels issus de la captation" }
+    },
+    {
+      "@type": "Offer",
+      "itemOffered": { "@type": "Service", "name": "Intégration et diffusion de visite virtuelle" }
+    },
+    {
+      "@type": "Offer",
+      "itemOffered": { "@type": "Service", "name": "Jumeau numérique d'établissement" }
+    }
+  ]
+}
+</script>
+
+<!--
+  Ne pas ajouter, sans donnée réelle et vérifiable :
+  - "aggregateRating" / "review" (aucun faux avis ne doit être créé)
+  - "priceRange" (les tarifs sont "sur devis")
+  - "openingHoursSpecification" (horaires non communiqués)
+  - "foundingDate" (aucune ancienneté n'a été fournie)
+-->
