@@ -287,7 +287,67 @@ et de la facturation client (`v0.4`/`v0.5`).
   (prospect → client → mission → **facture**) est démontrable de bout en
   bout pour la première fois, sans encore de paiement en ligne réel.
 
-## v0.5 — Facturation, paiement en ligne réel
+## v0.5 — Agent Commercial (remplace le plan initial)
+
+> **Statut : ✅ livré** (2026-07-30). Comme pour `v0.2`/`v0.3`/`v0.4`, ce
+> jalon a été **redéfini sur demande explicite** : le contenu initialement
+> prévu ici (facturation, paiement Stripe réel — `MOD-12` partie 2) est
+> reporté à une version ultérieure (voir note en fin de section) et
+> remplacé par un module jugé plus prioritaire : le premier agent
+> **métier** d'Autorun. Voir `ROADMAP.md` §1 quinquies et §MOD-24, ainsi
+> que `docs/adr/0014` à `0017`.
+
+- **Objectif du jalon** : Agent Commercial — gère le cycle commercial
+  complet d'un prospect (recherche, qualification, enrichissement, score,
+  potentiel estimé, premier email, relance, proposition, devis,
+  recommandation des prochaines actions), construit intégralement sur le
+  Framework des Agents (v0.3) et délégable par l'Agent Director (v0.4),
+  sans aucun contournement. Aucune action (email, devis, relance) n'est
+  envoyée automatiquement sans validation humaine par défaut.
+- **Modules** : MOD-24 (avec extension additive du Framework : moteur de
+  génération multi-fournisseur LLM, moteur de prompts versionnés, moteur
+  de scoring extensible — tous génériques, réutilisables par un futur
+  agent métier).
+- **Tâches** : voir `BACKLOG.md`, section v0.5 (AR-0094 à AR-0101 :
+  schéma Prisma, moteur LLM, moteur de prompts, moteur de scoring, service
+  + 11 outils commerciaux, runtime + promotion du stub v0.4, API/UI,
+  tests).
+- **Critères de sortie** :
+  - [x] `tests/e2e/golden-path.mjs` et
+    `tests/e2e/two-organisations-isolation.mjs` passent sans modification ;
+  - [x] les 72 tests du Framework/Director (v0.3/v0.4) passent toujours
+    sans modification de leur code ;
+  - [x] 25 nouveaux tests (97 au total) passent contre une vraie base
+    PostgreSQL : qualification, scoring (9 facteurs + extensibilité),
+    génération (moteur LLM + prompts versionnés), délégation réelle
+    depuis le Director, mémoire (objections), permissions
+    (`MANAGE_FINANCE` requis pour un devis), reprise après échec du
+    fournisseur LLM, journalisation, mode autonome (jamais d'envoi
+    automatique même activé), isolation multi-tenant ;
+  - [x] `npm run lint`, `npx tsc --noEmit` et `npm run build` passent sans
+    erreur ;
+  - [x] aucune action envoyée automatiquement par défaut, vérifié par
+    test (`autoApproved: false`) ;
+  - [x] validé par une vraie requête HTTP contre le serveur (cycle complet
+    d'un prospect, du premier email jusqu'à l'affichage dans le tableau
+    de bord `/commercial`), pas seulement des tests automatisés.
+- **État fonctionnel de l'application** : Provence 360, le multi-tenant et
+  le Framework des Agents/Director restent **entièrement fonctionnels** ;
+  l'application dispose en plus d'un Agent Commercial installable, avec
+  tableau de bord (`/commercial`) permettant de lancer un cycle complet
+  sur un nouveau prospect, suivre le pipeline, approuver/refuser les
+  emails et recommandations générés, et déclencher une nouvelle analyse.
+- **Limite connue** : le contenu initial de `v0.5` (paiement Stripe réel —
+  `MOD-12` partie 2) n'a pas été traité dans cette phase ; il dépend de
+  toute façon de `MOD-12` partie 1 (facturation, socle), elle-même
+  toujours reportée depuis `v0.4 bis`. La décomposition/génération reste
+  heuristique/déterministe côté scoring et pilotée par un fournisseur de
+  démonstration par défaut côté LLM (les 7 adaptateurs réels fonctionnent
+  dès qu'un identifiant est fourni, mais aucun n'est configuré dans cet
+  environnement). Aucune interface d'administration pour éditer les
+  prompts n'a été construite (le moteur le permet, pas encore l'UI).
+
+## v0.5 bis — Facturation, paiement en ligne réel (plan initial, reporté)
 
 - **Objectif du jalon** : rendre le paiement client réellement encaissable,
   pas seulement suivi manuellement.
@@ -433,7 +493,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.3 bis | Validation (reportée) | Non (jalon de preuve) | Oui (v0.4+, en pratique) |
 | v0.4 | Infrastructure (premier agent orchestrateur) | Oui (tableau de bord Director) | Non (agents métier restent optionnels) |
 | v0.4 bis | Fonctionnalité (reportée) | Oui | Non |
-| v0.5 | Fonctionnalité | Oui | Non |
+| v0.5 | Fonctionnalité (premier agent métier) | Oui (tableau de bord Commercial) | Non |
+| v0.5 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.6 | Fonctionnalité | Oui | Non |
 | v0.7 | Fonctionnalité | Oui | Non |
 | v0.8 | Infrastructure | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |

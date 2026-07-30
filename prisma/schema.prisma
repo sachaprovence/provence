@@ -56,11 +56,13 @@ model Organization {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
-  memberships        Membership[]
-  workspaces         Workspace[]
-  agentDefinitions   AgentDefinition[]
-  agentInstallations AgentInstallation[]
-  territories        Territory[]
+  memberships          Membership[]
+  workspaces           Workspace[]
+  agentDefinitions     AgentDefinition[]
+  agentInstallations   AgentInstallation[]
+  commercialProspects  CommercialProspect[]
+  commercialActions    CommercialAction[]
+  territories          Territory[]
   icps               IdealCustomerProfile[]
   leads              Lead[]
   tags               Tag[]
@@ -107,6 +109,8 @@ model User {
   agentRunsCreated            AgentRun[]                 @relation("AgentRunCreatedBy")
   agentInterventionsAssigned  AgentInterventionRequest[] @relation("AgentInterventionAssignedTo")
   agentInterventionsResolved  AgentInterventionRequest[] @relation("AgentInterventionResolvedBy")
+  commercialActionsDecided    CommercialAction[]         @relation("CommercialActionDecidedBy")
+  promptTemplatesCreated      PromptTemplate[]           @relation("PromptTemplateCreatedBy")
   sessions                    Session[]
   passwordResets              PasswordResetToken[]
   loginEvents                 LoginEvent[]
@@ -147,6 +151,8 @@ model Workspace {
   agentMessages             AgentMessage[]
   agentInterventionRequests AgentInterventionRequest[]
   agentPlans                AgentPlan[]
+  commercialProspects       CommercialProspect[]
+  commercialActions         CommercialAction[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1292,6 +1298,8 @@ model AgentInstallation {
   interventionRequests AgentInterventionRequest[]
   plans                AgentPlan[]
   planStepsAsTarget    AgentPlanStep[]            @relation("AgentPlanStepTarget")
+  commercialProspects  CommercialProspect[]
+  commercialActions    CommercialAction[]
 
   @@unique([workspaceId, definitionId])
   @@index([organizationId])
@@ -1623,4 +1631,139 @@ model AgentPlanStep {
 
   @@index([planId, stepIndex])
   @@index([targetInstallationId])
+}
+
+// ---------------------------------------------------------------------------
+// Agent Commercial (v0.5) — premier agent MÉTIER d'Autorun, construit
+// intégralement sur le Framework des Agents (v0.3) et l'Agent Director
+// (v0.4) : aucune table ici ne remplace `AgentInstallation`/`AgentRun`, elle
+// les complète. `CommercialProspect`/`CommercialAction` sont volontairement
+// distincts du `Lead`/`Opportunity`/`Quote` de Provence 360 (spécifiques au
+// vertical photographie 360°, jamais généralisés — voir MOD-02, toujours
+// reporté) : le Commercial doit rester un agent générique, réutilisable par
+// n'importe quel futur vertical, pas câblé sur les catégories Provence 360.
+// Voir docs/adr/0014 et docs/02-ARCHITECTURE.md §12.
+// ---------------------------------------------------------------------------
+
+enum CommercialStage {
+  NEW
+  TO_QUALIFY
+  QUALIFIED
+  FIRST_CONTACT
+  FOLLOW_UP
+  MEETING
+  QUOTE_SENT
+  NEGOTIATION
+  WON
+  LOST
+}
+
+/// Fiche prospect gérée par une installation de l'Agent Commercial.
+/// `installationId` est toujours requis : un prospect appartient à
+/// l'installation qui le gère (même principe que `AgentMemoryEntry`
+/// scopée à une installation) — jamais une table globale non rattachée au
+/// Framework.
+model CommercialProspect {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  workspaceId        String
+  installationId     String
+  companyName        String
+  sector             String?
+  companySize        String?
+  website            String?
+  contactName        String?
+  contactEmail       String?
+  contactPhone       String?
+  stage              CommercialStage @default(NEW)
+  score              Int?
+  scoreBreakdown     Json?
+  potentialEstimate  Json?
+  qualificationNotes String?
+  source             String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  actions      CommercialAction[]
+
+  @@index([workspaceId, stage])
+  @@index([installationId])
+}
+
+enum CommercialActionType {
+  EMAIL_DRAFT
+  FOLLOW_UP
+  QUOTE_DRAFT
+  PROPOSAL
+  RECOMMENDATION
+}
+
+enum CommercialActionStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SENT
+  DISMISSED
+}
+
+/// Action proposée par l'Agent Commercial sur un prospect (email, relance,
+/// devis, proposition, recommandation) — un seul modèle générique plutôt
+/// qu'une table par type, pour rester facilement extensible (un nouveau
+/// type d'action = une valeur d'enum, jamais une nouvelle table) et pour
+/// que le système d'approbation soit uniforme (voir ADR 0017). Toujours
+/// créée `PENDING_APPROVAL` sauf mode autonome explicitement activé
+/// (`AgentInstallation.config.autonomousMode`, désactivé par défaut).
+model CommercialAction {
+  id             String                 @id @default(cuid())
+  organizationId String
+  workspaceId    String
+  prospectId     String
+  installationId String
+  type           CommercialActionType
+  status         CommercialActionStatus @default(PENDING_APPROVAL)
+  title          String
+  payload        Json
+  reasoning      String?
+  autoApproved   Boolean                @default(false)
+  createdAt      DateTime               @default(now())
+  decidedById    String?
+  decidedAt      DateTime?
+  sentAt         DateTime?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  prospect     CommercialProspect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  installation AgentInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  decidedBy    User?              @relation("CommercialActionDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([workspaceId, status])
+  @@index([prospectId])
+}
+
+/// Moteur de prompts (v0.5) : générique, utilisable par n'importe quel
+/// agent (pas seulement le Commercial). Chaque prompt est versionné
+/// (`@@unique([key, version])`), modifiable sans redéploiement (nouvelle
+/// version en base), documenté (`description`), séparé du code (le
+/// texte du template vit en base, pas dans une chaîne TypeScript). Une
+/// seule version active par `key` à la fois.
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  key         String
+  version     Int
+  name        String
+  description String?
+  category    String
+  template    String
+  variables   String[] @default([])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  createdBy User? @relation("PromptTemplateCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([key, version])
+  @@index([key, isActive])
 }

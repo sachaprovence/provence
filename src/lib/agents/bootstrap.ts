@@ -6,9 +6,14 @@ import { echoTool, datetimeTool, workspaceInfoTool } from "@/lib/agents/tools/sy
 import { leadsCountByStageTool } from "@/lib/agents/tools/crm-tools";
 import { placeholderTools } from "@/lib/agents/tools/placeholder-tools";
 import { directorTools } from "@/lib/agents/tools/director-tools";
+import { commercialTools } from "@/lib/agents/tools/commercial-tools";
 import { diagnosticAgentRuntime, DIAGNOSTIC_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/diagnostic-agent";
 import { directorAgentRuntime, DIRECTOR_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/director-agent";
+import { commercialAgentRuntime, COMMERCIAL_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/commercial-agent";
 import { FUTURE_AGENT_CONTRACTS } from "@/lib/agents/director/capability-contracts";
+import { registerBuiltInScoringFactors } from "@/lib/agents/commercial/scoring-engine";
+import { registerBuiltInLlmProviders } from "@/lib/agents/llm";
+import { ensureCommercialPromptSeeds } from "@/lib/agents/commercial/prompt-seeds";
 import { AgentDefinitionStatus } from "@/generated/prisma/enums";
 
 /** Déclaration des outils du registre (voir prisma/schema.prisma#AgentTool). */
@@ -59,6 +64,72 @@ export const AGENT_TOOL_CATALOG = [
     description: "Relance une étape de plan en échec ou annulée (nouvelle exécution reliée à la précédente).",
     category: "director",
   },
+  {
+    key: "commercial.create_prospect",
+    name: "Créer une fiche prospect",
+    description: "Crée un prospect géré par l'Agent Commercial.",
+    category: "commercial",
+  },
+  {
+    key: "commercial.search_prospects",
+    name: "Rechercher des prospects",
+    description: "Liste/filtre les prospects de l'installation (lecture seule).",
+    category: "commercial",
+  },
+  {
+    key: "commercial.enrich_prospect",
+    name: "Enrichir un prospect",
+    description: "Complète les informations connues d'un prospect (secteur, taille, site, contact).",
+    category: "commercial",
+  },
+  {
+    key: "commercial.qualify_prospect",
+    name: "Qualifier un prospect",
+    description: "Fait progresser un prospect dans le pipeline commercial.",
+    category: "commercial",
+  },
+  {
+    key: "commercial.score_prospect",
+    name: "Attribuer un score",
+    description: "Calcule et enregistre le score d'un prospect via le moteur de scoring.",
+    category: "commercial",
+  },
+  {
+    key: "commercial.estimate_potential",
+    name: "Estimer le potentiel",
+    description: "Estime la valeur potentielle d'un prospect (moteur de génération + prompt versionné).",
+    category: "commercial",
+  },
+  {
+    key: "commercial.draft_email",
+    name: "Rédiger un premier email",
+    description: "Génère un email de prise de contact personnalisé — jamais envoyé automatiquement.",
+    category: "commercial",
+  },
+  {
+    key: "commercial.draft_followup",
+    name: "Préparer une relance",
+    description: "Génère une relance personnalisée — jamais envoyée automatiquement.",
+    category: "commercial",
+  },
+  {
+    key: "commercial.draft_proposal",
+    name: "Générer une proposition commerciale",
+    description: "Génère une proposition commerciale — jamais envoyée automatiquement.",
+    category: "commercial",
+  },
+  {
+    key: "commercial.draft_quote",
+    name: "Préparer un devis",
+    description: "Prépare un devis (montant, lignes) — nécessite MANAGE_FINANCE, jamais envoyé automatiquement.",
+    category: "commercial",
+  },
+  {
+    key: "commercial.recommend_next_actions",
+    name: "Proposer les prochaines actions",
+    description: "Recommande la prochaine action pour un prospect, avec justification.",
+    category: "commercial",
+  },
 ] as const;
 
 let registered = false;
@@ -78,9 +149,14 @@ export function registerBuiltInAgentComponents() {
   registerToolHandler(leadsCountByStageTool);
   for (const tool of placeholderTools) registerToolHandler(tool);
   for (const tool of directorTools) registerToolHandler(tool);
+  for (const tool of commercialTools) registerToolHandler(tool);
 
   registerAgentRuntime(diagnosticAgentRuntime);
   registerAgentRuntime(directorAgentRuntime);
+  registerAgentRuntime(commercialAgentRuntime);
+
+  registerBuiltInScoringFactors();
+  registerBuiltInLlmProviders();
 }
 
 /**
@@ -124,6 +200,45 @@ async function ensureGlobalAgentDefinition(data: {
       declaredToolKeys: data.declaredToolKeys,
       declaredPermissions: data.declaredPermissions,
       compatibleAiModels: [],
+      defaultLimits: (data.defaultLimits ?? null) as never,
+    },
+  });
+}
+
+/**
+ * Comme `ensureGlobalAgentDefinition`, mais **met à jour** la définition si
+ * elle existe déjà (au lieu de la laisser inchangée) — nécessaire pour
+ * "promouvoir" un stub `DRAFT` (v0.4, agent métier pas encore implémenté)
+ * en agent réellement `PUBLISHED` une fois son `AgentRuntime` écrit (v0.5,
+ * voir ADR 0012). `previousKeys` permet de retrouver la ligne existante
+ * même si sa `key` change dans le même mouvement (ex.
+ * `future-commercial-agent` -> `commercial-agent`) : la ligne est mise à
+ * jour en place (même `id`), jamais recréée, pour ne jamais casser une
+ * `AgentInstallation` qui la référence déjà par `definitionId`.
+ */
+async function promoteGlobalAgentDefinition(
+  data: Parameters<typeof ensureGlobalAgentDefinition>[0] & { previousKeys?: string[] }
+) {
+  const existing = await prisma.agentDefinition.findFirst({
+    where: { organizationId: null, key: { in: [data.key, ...(data.previousKeys ?? [])] } },
+  });
+
+  if (!existing) return ensureGlobalAgentDefinition(data);
+
+  return prisma.agentDefinition.update({
+    where: { id: existing.id },
+    data: {
+      key: data.key,
+      name: data.name,
+      description: data.description,
+      version: data.version,
+      status: data.status,
+      author: data.author,
+      category: data.category,
+      icon: data.icon,
+      runtimeKey: data.runtimeKey,
+      declaredToolKeys: data.declaredToolKeys,
+      declaredPermissions: data.declaredPermissions,
       defaultLimits: (data.defaultLimits ?? null) as never,
     },
   });
@@ -203,4 +318,38 @@ export async function syncAgentCatalog() {
       declaredPermissions: contract.plannedPermissions,
     });
   }
+
+  // Premier agent MÉTIER d'Autorun (v0.5) : promotion du stub DRAFT créé en
+  // v0.4 (`future-commercial-agent`) en agent réellement PUBLISHED, voir
+  // ADR 0012 (le mécanisme était prévu dès v0.4) et ADR 0014.
+  await promoteGlobalAgentDefinition({
+    key: "commercial-agent",
+    previousKeys: ["future-commercial-agent"],
+    name: "Agent Commercial",
+    description:
+      "Gère le cycle commercial complet d'un prospect : recherche, qualification, enrichissement, scoring, estimation du potentiel, rédaction d'email/relance/proposition/devis, recommandation des prochaines actions. Aucune action n'est envoyée automatiquement sans validation humaine (voir ADR 0017).",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "commercial",
+    icon: "💼",
+    runtimeKey: COMMERCIAL_AGENT_RUNTIME_KEY,
+    declaredToolKeys: [
+      "commercial.create_prospect",
+      "commercial.search_prospects",
+      "commercial.enrich_prospect",
+      "commercial.qualify_prospect",
+      "commercial.score_prospect",
+      "commercial.estimate_potential",
+      "commercial.draft_email",
+      "commercial.draft_followup",
+      "commercial.draft_proposal",
+      "commercial.draft_quote",
+      "commercial.recommend_next_actions",
+    ],
+    declaredPermissions: ["MANAGE_LEADS", "MANAGE_FINANCE", "VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  await ensureCommercialPromptSeeds();
 }

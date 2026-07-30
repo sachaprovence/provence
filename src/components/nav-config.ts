@@ -5,6 +5,7 @@ export type NavItem = { href: string; label: string; roles?: MembershipRole[] };
 export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Tableau de bord" },
   { href: "/leads", label: "Prospects", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/commercial", label: "Agent Commercial", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/pipeline", label: "Pipeline", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/campaigns", label: "Campagnes", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/sequences", label: "Séquences", roles: ["OWNER_ADMIN"] },

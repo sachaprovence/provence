@@ -629,3 +629,121 @@ manquantes, cloisonnement entre orchestrateurs), `tests/agents/director-memory.t
 (conversation plafonnée, décisions, préférences fusionnées, contexte,
 résumés de run), et `tests/tenant-isolation/director.test.ts` (isolation
 multi-tenant des plans/étapes, falsification d'identifiant).
+
+## 12. Agent Commercial — premier agent métier (v0.5 — `ROADMAP.md` MOD-24)
+
+Voir `docs/adr/0014` à `0017` pour la justification complète des choix
+ci-dessous. L'Agent Commercial est **un agent comme les autres** (§10) :
+une `AgentDefinition`/`AgentInstallation`, exécutée par le même
+`executeAgentRun`, délégable par l'Agent Director (§11) via
+`targetCategory: "commercial"` — aucun contournement, aucun code
+spécifique en dehors du Framework.
+
+### Modèle de données : générique, pas `Lead`
+
+`CommercialProspect`/`CommercialAction` (délibérément distincts du
+`Lead`/`Opportunity`/`Quote` de Provence 360, spécifiques au vertical
+photographie 360° — voir ADR 0014) — scopés à une `AgentInstallation`,
+même principe que `AgentMemoryEntry`/`AgentPlan`. `CommercialStage` (10
+étapes : NEW/TO_QUALIFY/QUALIFIED/FIRST_CONTACT/FOLLOW_UP/MEETING/
+QUOTE_SENT/NEGOTIATION/WON/LOST) est le pipeline. `CommercialAction` est
+un modèle générique à discriminant `type`
+(EMAIL_DRAFT/FOLLOW_UP/QUOTE_DRAFT/PROPOSAL/RECOMMENDATION) plutôt qu'une
+table par type — extensible sans migration, système d'approbation
+uniforme.
+
+### Moteur de génération LLM générique (`src/lib/agents/llm/`)
+
+Abstraction bas niveau (`LlmProvider.complete(messages) -> texte`),
+délibérément distincte de l'`AIProvider` existant de Provence 360
+(`src/lib/ai/`, orienté tâches métier structurées — voir ADR 0015).
+Registre `Map`-based (même idiome que `registry.ts`/`tool-registry.ts`,
+v0.3). Fournisseur actif piloté par `LLM_PROVIDER` (défaut `"demo"`,
+déterministe, sans réseau) — jamais un fournisseur choisi en dur. 7
+adaptateurs réels (`providers/*.ts` : OpenAI, Anthropic, Google, Mistral,
+OpenRouter, Azure, Ollama) effectuent un vrai appel HTTP si les
+identifiants requis sont présents dans l'environnement, sinon lèvent une
+erreur explicite **au moment de l'appel**, jamais à l'enregistrement —
+même principe que les outils `notYetImplemented` (v0.3). Les champs
+structurés d'une action (sujet, montant) restent toujours calculés par le
+code appelant, jamais extraits du texte généré par analyse.
+
+### Moteur de prompts versionnés (`src/lib/agents/prompts/`)
+
+`PromptTemplate` (`@@unique([key, version])`) : chaque prompt est
+versionné (une nouvelle version, jamais une modification en place),
+modifiable sans redéploiement, documenté, séparé du code, réutilisable
+par n'importe quel agent — voir ADR 0016. `renderPrompt` substitue les
+variables déclarées et refuse explicitement toute variable manquante.
+Les prompts par défaut du Commercial sont créés une seule fois (version 1)
+si la clé n'a encore aucune version (`commercial/prompt-seeds.ts`),
+jamais réécrits ensuite.
+
+### Moteur de scoring extensible (`src/lib/agents/commercial/scoring-engine.ts`)
+
+Registre de facteurs pondérés (`registerScoringFactor`), 9 facteurs par
+défaut couvrant exactement les critères demandés (taille de l'entreprise,
+secteur, présence web, qualité du site, présence Google, présence
+réseaux sociaux, historique, potentiel estimé, probabilité de
+conversion — poids sommant à 100). Chaque facteur est **heuristique et
+déterministe** (pas d'appel IA), dans la continuité de la décomposition du
+Director (ADR 0011). `computeScore` ne change jamais pour ajouter un
+facteur.
+
+### Les 11 outils déclaratifs et le système d'approbation
+
+`src/lib/agents/tools/commercial-tools.ts` : un outil par capacité
+(`commercial.create_prospect`, `search_prospects`, `enrich_prospect`,
+`qualify_prospect`, `score_prospect`, `estimate_potential`, `draft_email`,
+`draft_followup`, `draft_proposal`, `draft_quote`,
+`recommend_next_actions`), chacun vérifié par une permission de workspace
+(`MANAGE_LEADS`/`MANAGE_FINANCE`/`VIEW_WORKSPACE`) en plus du plafond
+d'outils de l'installation.
+
+`createAction` (`commercial-service.ts`) crée toujours une
+`CommercialAction` à `PENDING_APPROVAL`, **sauf** si
+`AgentInstallation.config.autonomousMode === true` (architecture prête
+pour un mode autonome futur, désactivée par défaut — voir ADR 0017), et
+même alors, l'envoi (`sendAction`) reste toujours une étape explicite
+distincte : aucune action n'atteint jamais `SENT` automatiquement. Le
+pipeline (`CommercialProspect.stage`) ne progresse qu'au moment de
+l'envoi réel, jamais à la simple rédaction.
+
+### Mémoire commerciale
+
+Historique/emails/devis/rendez-vous : déjà structurés et interrogeables
+directement via `CommercialProspect`/`CommercialAction`, aucune
+duplication nécessaire. Préférences/objections (qualitatives) :
+`src/lib/agents/commercial/memory.ts`, construit sur `setMemory`/
+`getMemory` (v0.3, portée PERSISTENT), même principe que la mémoire du
+Director (§11).
+
+### Interface
+
+`/commercial` (`src/components/commercial-dashboard-client.tsx`) : statut
+de l'agent, compteurs par étape du pipeline, formulaire de cycle complet
+(`full_cycle` : création → qualification → score → potentiel → email →
+recommandation en une seule demande), actions en attente d'approbation
+(accepter/refuser), actions approuvées prêtes à l'envoi, pipeline,
+historique. Accessible aux rôles Owner/Admin/Sales
+(`src/components/nav-config.ts`), cohérent avec `/leads`/`/pipeline`.
+
+### Délégation depuis le Director
+
+Le Director délègue une étape à l'Agent Commercial exactement comme à
+n'importe quel autre agent (`targetInstallationId` explicite ou
+`targetCategory: "commercial"` résolu dynamiquement, §11) — aucune
+logique spécifique au Commercial dans le Director. Testé de bout en bout
+(`tests/agents/commercial-director-delegation.test.ts`) : le Director
+délègue un `full_cycle`, et le travail a réellement eu lieu (prospect
+créé/qualifié/scoré, email en attente d'approbation), pas seulement
+rapporté par le plan.
+
+### Tests
+
+`tests/agents/commercial-scoring.test.ts`, `commercial-llm.test.ts`,
+`commercial-prompts.test.ts` (moteurs, sans dépendance aux uns aux
+autres), `tests/agents/commercial-agent.test.ts` (qualification, scoring,
+génération, mémoire, permissions, reprise après erreur, journalisation,
+mode autonome), `tests/agents/commercial-director-delegation.test.ts`, et
+`tests/tenant-isolation/commercial.test.ts`.

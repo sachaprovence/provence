@@ -145,16 +145,55 @@ ce périmètre :
   toujours préférer fournir `steps` explicitement
   (`directorRequestSchema`, `src/lib/validations/director.ts`) plutôt que
   de compter sur l'heuristique.
-- **Un futur agent métier** (Commercial, CRM, Marketing, Comptabilité,
-  Support, Analyse, Finance, Développement) doit d'abord avoir son contrat
-  dans `src/lib/agents/director/capability-contracts.ts` avant toute
+- **Un futur agent métier** (CRM, Marketing, Comptabilité, Support,
+  Analyse, Finance, Développement — le Commercial est passé de "futur" à
+  réel en v0.5, voir §0 quinquies) doit d'abord avoir son contrat dans
+  `src/lib/agents/director/capability-contracts.ts` avant toute
   implémentation — voir ADR 0012. Passer son `AgentDefinition` de `DRAFT`
-  à `PUBLISHED` est la seule étape qui le rend installable.
+  à `PUBLISHED` (`promoteGlobalAgentDefinition`, `bootstrap.ts`) est la
+  seule étape qui le rend installable.
 - **Toute nouvelle fonctionnalité du Framework des Agents doit être
   vérifiée au moins une fois par une vraie requête HTTP contre un build de
   production** (`next build && next start`), pas seulement par la suite
   `vitest` — c'est ce test précis qui a révélé le défaut corrigé en
   ADR 0013, invisible dans un process `vitest` unique.
+
+## 0 quinquies. État de l'Agent Commercial (v0.5)
+
+Le premier agent **métier** d'Autorun (`ROADMAP.md` MOD-24,
+`docs/02-ARCHITECTURE.md` §12) est livré, en remplacement du plan initial
+de v0.5 (voir `MILESTONES.md`). Points à connaître pour tout nouveau code
+touchant ce périmètre :
+
+- **Ne jamais réutiliser `Lead`/`LeadCategory`** pour un besoin
+  générique multi-vertical : ce sont des modèles spécifiques au vertical
+  photographie 360° de Provence 360. Le Commercial a son propre modèle
+  (`CommercialProspect`/`CommercialAction`) — voir ADR 0014. Un futur
+  agent métier doit suivre le même principe, pas réutiliser les tables de
+  Provence 360.
+- **Toute action proposée par un agent métier doit naître
+  `PENDING_APPROVAL`** (voir `createAction`, `commercial-service.ts`) —
+  jamais `SENT` directement, même en mode autonome
+  (`AgentInstallation.config.autonomousMode`). Un futur agent métier qui
+  produit des actions (email, document, paiement...) doit reproduire ce
+  même principe : approbation par défaut, autonomie une option explicite,
+  envoi toujours une étape distincte de l'approbation — voir ADR 0017.
+- **Un nouveau fournisseur LLM** s'ajoute dans
+  `src/lib/agents/llm/providers/*.ts` (implémente `LlmProvider`, lève une
+  erreur explicite si non configuré, seulement au moment de l'appel) puis
+  s'enregistre dans `src/lib/agents/llm/index.ts` — jamais un fournisseur
+  choisi en dur dans un outil ou un runtime d'agent (toujours via
+  `getActiveLlmProvider()`, piloté par `LLM_PROVIDER`).
+- **Un nouveau prompt** se crée via `createPromptVersion`
+  (`src/lib/agents/prompts/prompt-engine.ts`), jamais comme une chaîne
+  TypeScript inline dans un outil — voir ADR 0016.
+- **Un nouveau facteur de scoring** s'ajoute via `registerScoringFactor`
+  (`src/lib/agents/commercial/scoring-engine.ts`), jamais en modifiant
+  `computeScore`.
+- Le champ générique `AgentInstallation.config` (v0.3) porte maintenant un
+  premier usage concret réel : `{ autonomousMode: boolean }` pour le
+  Commercial. Un futur agent peut y ajouter ses propres clés de
+  configuration sans migration de schéma.
 
 ## 1. Avant de commencer une tâche du backlog
 

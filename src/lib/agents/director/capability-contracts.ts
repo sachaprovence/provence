@@ -30,11 +30,6 @@ export type FutureAgentContract = {
   readonly exampleTaskShape: string;
 };
 
-export interface CommercialAgentTask {
-  action: "qualify_lead" | "draft_proposal" | "negotiate_terms" | "schedule_followup";
-  [key: string]: unknown;
-}
-
 export interface CrmAgentTask {
   action: "update_lead_stage" | "enrich_contact" | "merge_duplicates" | "score_lead";
   [key: string]: unknown;
@@ -71,18 +66,14 @@ export interface DeveloppementAgentTask {
  * "roadmap", jamais installables) via `bootstrap.ts#syncAgentCatalog`.
  * Ajouter un futur domaine = ajouter une entrée ici, jamais modifier le
  * Framework ou le Director.
+ *
+ * L'agent Commercial (catégorie "commercial") a quitté cette liste en
+ * v0.5 : il est désormais réellement implémenté (voir
+ * `definitions/commercial-agent.ts`) — sa définition est passée de
+ * `DRAFT` à `PUBLISHED` par `bootstrap.ts#promoteGlobalAgentDefinition`,
+ * même mécanisme que celui prévu par l'ADR 0012 pour chaque futur agent.
  */
 export const FUTURE_AGENT_CONTRACTS: FutureAgentContract[] = [
-  {
-    category: "commercial",
-    key: "future-commercial-agent",
-    name: "Agent Commercial (à venir)",
-    description: "Qualification de prospects, rédaction de propositions, négociation — non implémenté.",
-    icon: "💼",
-    plannedToolKeys: ["crm.leads_count_by_stage", "documents.generate", "email.send"],
-    plannedPermissions: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
-    exampleTaskShape: "CommercialAgentTask",
-  },
   {
     category: "crm",
     key: "future-crm-agent",

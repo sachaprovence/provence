@@ -95,6 +95,30 @@ Développement) restent hors périmètre — seuls leurs contrats/interfaces
 sont préparés (voir ADR 0012). Les décisions d'architecture prises pour
 `MOD-23` sont documentées dans `docs/adr/0010`, `0011`, `0012` et `0013`.
 
+## 1 quinquies. Changement de plan explicite : v0.5 devient l'Agent Commercial, pas le paiement Stripe réel
+
+La version `v0.5` initialement envisagée dans ce document (`MOD-12`
+partie 2, paiement Stripe réel) a été **remplacée, sur demande
+explicite**, par un nouveau module prioritaire : `MOD-24` (Agent
+Commercial — premier agent **métier** d'Autorun, construit intégralement
+sur le Framework des Agents (v0.3) et délégable par l'Agent Director
+(v0.4)). Raison : prouver que le Framework/Director savent réellement
+porter un agent métier complet (recherche, qualification, scoring,
+génération, approbation humaine) avant d'investir davantage dans des
+fonctionnalités indépendantes des agents.
+
+Conséquence sur l'ordre : `MOD-12` partie 2 (paiement Stripe réel) n'est
+pas abandonné, seulement **reporté après `MOD-24`** — de toute façon
+dépendant de `MOD-12` partie 1 (facturation, socle), elle-même toujours
+reportée depuis `v0.4` (voir §1 quater). `MOD-24` introduit trois
+extensions génériques et réutilisables du Framework des Agents (pas
+propres au Commercial) : le moteur de génération multi-fournisseur LLM
+(`src/lib/agents/llm/`), le moteur de prompts versionnés
+(`src/lib/agents/prompts/`), et documente le principe d'un moteur de
+scoring extensible par registre (`src/lib/agents/commercial/scoring-engine.ts`).
+Les décisions d'architecture prises pour `MOD-24` sont documentées dans
+`docs/adr/0014`, `0015`, `0016` et `0017`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -112,7 +136,7 @@ sont préparés (voir ADR 0012). Les décisions d'architecture prises pour
 | MOD-09 | Automatisation | Existant (Phase 0) | Moyenne (généralisation) |
 | MOD-10 | Conformité & Audit | Existant (Phase 0) | Haute (extension RGPD) |
 | MOD-11 | Statistiques & Dashboard | Existant (Phase 0) | Basse (généralisation) |
-| MOD-12 | Facturation client final | Reporté après v0.4 (voir §1 quater) | Haute |
+| MOD-12 | Facturation client final | Reporté après v0.5 (voir §1 quater/§1 quinquies) | Haute |
 | MOD-13 | Gestion documentaire | À créer | Moyenne |
 | MOD-14 | Calendrier | À créer | Moyenne |
 | MOD-15 | Infrastructure asynchrone (jobs) | À créer | Haute |
@@ -123,6 +147,7 @@ sont préparés (voir ADR 0012). Les décisions d'architecture prises pour
 | MOD-20 | Vertical Pack — validation par un 2ᵉ vertical fictif | Reporté après v0.4 (voir §1 ter/§1 quater) | Critique (preuve du concept) |
 | MOD-22 | Framework des Agents IA | ✅ Livré (v0.3) | Critique |
 | MOD-23 | Agent Director (orchestrateur) | ✅ Livré (v0.4) | Critique |
+| MOD-24 | Agent Commercial (premier agent métier) | ✅ Livré (v0.5) | Critique |
 
 ## 3. Détail par module
 
@@ -891,6 +916,71 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   production (pas seulement des tests automatisés) ; aucun agent métier
   livré.
 
+---
+
+### MOD-24 — Agent Commercial, premier agent métier (v0.5, priorisé avant MOD-12 partie 2)
+
+- **Objectif** : premier agent métier réel d'Autorun, gérant tout le
+  cycle commercial d'un prospect (recherche, qualification,
+  enrichissement, score, potentiel estimé, premier email, relance,
+  proposition, devis, recommandation des prochaines actions),
+  intégralement construit sur le Framework des Agents (v0.3) et délégable
+  par l'Agent Director (v0.4) — aucun contournement.
+- **Fonctionnalités** : pipeline à 10 étapes (`CommercialStage` :
+  Nouveau/À qualifier/Qualifié/Premier contact/Relance/Rendez-vous/Devis
+  envoyé/Négociation/Signé/Perdu) sur un modèle `CommercialProspect`
+  générique (délibérément distinct du `Lead` de Provence 360, voir ADR
+  0014) ; moteur de scoring extensible par registre, 9 facteurs par
+  défaut (taille, secteur, présence web, qualité du site, présence
+  Google, présence réseaux sociaux, historique, potentiel, probabilité de
+  conversion) ; moteur de génération LLM générique multi-fournisseur
+  (`LlmProvider`, 7 adaptateurs réels — OpenAI/Anthropic/Google/Mistral/
+  OpenRouter/Azure/Ollama — aucun câblé en dur, voir ADR 0015) ; moteur de
+  prompts versionnés en base (`PromptTemplate`, voir ADR 0016) ; 11 outils
+  déclaratifs (`commercial.*`), un par capacité, chacun vérifié par
+  permission de workspace en plus du plafond de l'installation ; système
+  d'approbation (`CommercialAction`, toujours `PENDING_APPROVAL` par
+  défaut, jamais d'envoi automatique) avec architecture de mode autonome
+  prête mais désactivée par défaut (voir ADR 0017) ; mémoire commerciale
+  (historique/emails/devis structurés via `CommercialProspect`/
+  `CommercialAction`, préférences/objections via la mémoire d'agent
+  existante) ; tableau de bord `/commercial`.
+- **Dépendances** : `MOD-22` (Framework des Agents, v0.3), `MOD-23`
+  (Agent Director, v0.4 — délégation testée de bout en bout).
+- **Priorité** : Critique — condition explicite de cette phase.
+- **Risques techniques** :
+  - Tentation de réutiliser `Lead`/`LeadCategory` (déjà riches) — écartée
+    car spécifiques au vertical photographie 360° de Provence 360 ; voir
+    ADR 0014 pour l'arbitrage complet.
+  - Sortie libre d'un LLM difficile à parser de façon fiable pour des
+    champs structurés (sujet, montant) — mitigé en gardant ces champs
+    toujours calculés par le code appelant, jamais extraits du texte
+    généré (voir ADR 0015).
+  - Risque qu'une action soit envoyée sans validation humaine — mitigé
+    par `PENDING_APPROVAL` par défaut sur toute création d'action,
+    vérifié explicitement par test, et par la séparation stricte entre
+    "approuver" et "envoyer" (voir ADR 0017).
+- **Choix d'architecture** : voir ADR 0014 (modèle de prospect générique),
+  ADR 0015 (abstraction LLM générique, distincte de l'`AIProvider`
+  existant de Provence 360), ADR 0016 (moteur de prompts versionné en
+  base), ADR 0017 (approbation par défaut, architecture de mode autonome).
+- **Tests à prévoir** (tous livrés, voir `tests/agents/commercial-*.test.ts`
+  et `tests/tenant-isolation/commercial.test.ts`) : qualification
+  (transition de pipeline), scoring (9 facteurs + extensibilité du
+  registre), génération (moteur LLM + prompts, toujours en attente
+  d'approbation), délégation réelle depuis le Director (cycle complet
+  bout en bout), mémoire (objections mémorisées et réutilisées), permissions
+  (refus d'un devis sans `MANAGE_FINANCE`), reprise automatique après
+  échec du fournisseur LLM, journalisation, mode autonome (jamais
+  d'envoi automatique même activé), isolation multi-tenant des prospects/
+  actions.
+- **Critères de fin** : golden path Provence 360, isolation multi-tenant
+  et Framework des Agents/Director inchangés après cette phase ; 100 % des
+  tests listés ci-dessus passent contre une vraie base PostgreSQL ; le
+  cycle complet d'un prospect validé par une vraie requête HTTP contre le
+  serveur (pas seulement des tests automatisés) ; aucune action envoyée
+  automatiquement par défaut ; aucun autre agent métier livré.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -926,10 +1016,11 @@ business du moment (voir `MILESTONES.md` §"Flexibilité de l'ordre").
 Ce diagramme reflète le plan initial de ce document. En pratique, `v0.2` a
 livré `MOD-21` (multi-tenant) à la place de `MOD-02` (voir §1 bis),
 `v0.3` a livré `MOD-22` (Framework des Agents) à la place de `MOD-20`
-(voir §1 ter), et `v0.4` a livré `MOD-23` (Agent Director) à la place de
-`MOD-12` (voir §1 quater) ; `MOD-02`, `MOD-12` et `MOD-20` restent à
-faire, désormais après `v0.4`. Voir `MILESTONES.md` pour l'état réel
-version par version.
+(voir §1 ter), `v0.4` a livré `MOD-23` (Agent Director) à la place de
+`MOD-12` partie 1 (voir §1 quater), et `v0.5` a livré `MOD-24` (Agent
+Commercial) à la place de `MOD-12` partie 2 (voir §1 quinquies) ;
+`MOD-02`, `MOD-12` et `MOD-20` restent à faire, désormais après `v0.5`.
+Voir `MILESTONES.md` pour l'état réel version par version.
 
 ## 5. Éléments parallélisables
 

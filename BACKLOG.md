@@ -839,7 +839,138 @@ code existant, tests inclus.
 
 ---
 
-## Version 0.5 — Facturation, paiement Stripe réel (MOD-12 partie 2)
+## Version 0.5 — Agent Commercial (MOD-24, remplace le plan initial)
+
+> **Statut : ✅ livrée.** Comme pour v0.2/v0.3/v0.4, le plan initial de
+> v0.5 (paiement Stripe réel — `MOD-12` partie 2) a été remplacé sur
+> demande explicite par un module jugé plus urgent : le premier agent
+> **métier** d'Autorun, construit intégralement sur le Framework des
+> Agents (v0.3) et délégable par l'Agent Director (v0.4). Le plan initial
+> (AR-0027 à AR-0030) est conservé ci-dessous pour référence, reporté
+> après v0.5.
+
+### AR-0094 — Schéma Prisma `CommercialProspect`/`CommercialAction`/`PromptTemplate`
+- **Description** : migration additive — pipeline à 10 étapes
+  (`CommercialStage`), modèle de prospect générique (délibérément
+  distinct du `Lead` de Provence 360, voir ADR 0014), action générique à
+  discriminant de type (`CommercialActionType`) avec statut d'approbation
+  (`CommercialActionStatus`), et modèle de prompt versionné
+  (`PromptTemplate`, `@@unique([key, version])`).
+- **Fichiers concernés** : `prisma/schema.prisma`,
+  `prisma/migrations/20260730121924_add_commercial_agent/`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0078 (schéma du Framework des Agents, v0.3).
+- **Tests nécessaires** : migration purement additive ; isolation
+  multi-tenant (voir AR-0101).
+
+### AR-0095 — Moteur de génération LLM générique multi-fournisseur
+- **Description** : `LlmProvider` (`complete(messages) -> texte`),
+  registre `Map`-based (même idiome que `registry.ts`/`tool-registry.ts`),
+  fournisseur de démonstration déterministe, et 7 adaptateurs réels
+  (OpenAI, Anthropic, Google, Mistral, OpenRouter, Azure, Ollama) —
+  chacun lève une erreur explicite au moment de l'appel s'il n'est pas
+  configuré, jamais à l'enregistrement. Aucun fournisseur câblé en dur
+  (piloté par `LLM_PROVIDER`).
+- **Fichiers concernés** : `src/lib/agents/llm/**`.
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0094.
+- **Tests nécessaires** : voir `tests/agents/commercial-llm.test.ts`.
+
+### AR-0096 — Moteur de prompts versionnés
+- **Description** : `createPromptVersion`/`activatePromptVersion`/
+  `renderPrompt` — chaque prompt versionné en base
+  (`@@unique([key, version])`), une seule version active à la fois,
+  substitution de variables déclarées avec refus explicite si une
+  variable manque.
+- **Fichiers concernés** : `src/lib/agents/prompts/prompt-engine.ts`,
+  `src/lib/agents/commercial/prompt-seeds.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0094.
+- **Tests nécessaires** : voir `tests/agents/commercial-prompts.test.ts`.
+
+### AR-0097 — Moteur de scoring extensible
+- **Description** : registre de facteurs pondérés (taille de l'entreprise,
+  secteur, présence web, qualité du site, présence Google, présence
+  réseaux sociaux, historique, potentiel estimé, probabilité de
+  conversion — 9 facteurs par défaut, somme des poids = 100),
+  `registerScoringFactor` pour l'extensibilité, `computeScore` jamais
+  modifié pour ajouter un facteur.
+- **Fichiers concernés** : `src/lib/agents/commercial/scoring-engine.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0094.
+- **Tests nécessaires** : voir `tests/agents/commercial-scoring.test.ts`.
+
+### AR-0098 — Service commercial + 11 outils déclaratifs
+- **Description** : `commercial-service.ts` (CRUD prospect/action,
+  approbation, mode autonome via `AgentInstallation.config`) et les 11
+  outils `commercial.*` (créer/rechercher/enrichir/qualifier/scorer/
+  estimer/rédiger email/relance/proposition/devis/recommander), chacun
+  vérifié par permission de workspace (`MANAGE_LEADS`/`MANAGE_FINANCE`/
+  `VIEW_WORKSPACE`) en plus du plafond d'outils de l'installation.
+- **Fichiers concernés** : `src/lib/agents/commercial/commercial-service.ts`,
+  `src/lib/agents/commercial/generation.ts`,
+  `src/lib/agents/commercial/memory.ts`,
+  `src/lib/agents/tools/commercial-tools.ts`.
+- **Complexité** : Élevée.
+- **Estimation** : 3 jours.
+- **Prérequis** : AR-0095, AR-0096, AR-0097.
+- **Tests nécessaires** : voir `tests/agents/commercial-agent.test.ts`.
+
+### AR-0099 — Runtime de l'Agent Commercial + promotion du stub v0.4
+- **Description** : `commercial.sales-agent` (dispatch action → outil, et
+  `full_cycle` orchestrant tout le cycle en un seul run) ; promotion de
+  la définition `DRAFT` créée en v0.4 (`future-commercial-agent`) en
+  définition `PUBLISHED` réelle (`commercial-agent`) — mécanisme
+  `promoteGlobalAgentDefinition` prévu dès l'ADR 0012.
+- **Fichiers concernés** : `src/lib/agents/definitions/commercial-agent.ts`,
+  `src/lib/validations/commercial.ts`, `src/lib/agents/bootstrap.ts`,
+  `src/lib/agents/director/capability-contracts.ts` (retrait de
+  "commercial" des agents futurs).
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0098.
+- **Tests nécessaires** : voir `tests/agents/commercial-director-delegation.test.ts`
+  (délégation réelle depuis le Director).
+
+### AR-0100 — API et tableau de bord de l'Agent Commercial
+- **Description** : routes de demande/approbation/refus/envoi
+  (`/api/commercial/**`), page `/commercial` (KPIs par étape du pipeline,
+  formulaire de cycle complet, actions en attente d'approbation, pipeline,
+  historique).
+- **Fichiers concernés** : `src/app/api/commercial/**`,
+  `src/app/(app)/commercial/page.tsx`,
+  `src/components/commercial-dashboard-client.tsx`,
+  `src/components/nav-config.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0099.
+- **Tests nécessaires** : validé par une vraie requête HTTP contre le
+  serveur (voir le rapport de livraison v0.5).
+
+### AR-0101 — Tests d'isolation multi-tenant de l'Agent Commercial
+- **Description** : `CommercialProspect`/`CommercialAction` d'une
+  organisation invisibles à une autre ; falsification d'identifiant
+  rejetée par `NotFoundError`.
+- **Fichiers concernés** : `tests/tenant-isolation/commercial.test.ts`.
+- **Complexité** : Faible.
+- **Estimation** : 0,5 jour.
+- **Prérequis** : AR-0098.
+
+**Total estimé du travail réellement livré pour v0.5 : ~12 jours.**
+
+---
+
+### Plan initial de v0.5 (non traité dans cette version, conservé pour référence)
+
+> Les tâches `AR-0027` à `AR-0030` (paiement Stripe réel) ci-dessous n'ont
+> pas été traitées dans cette version — voir `ROADMAP.md` §1 quinquies.
+> Reportées après v0.5.
+
+## Version 0.5 bis — Facturation, paiement Stripe réel (MOD-12 partie 2)
 
 ### AR-0027 — Interface `PaymentProvider` + implémentation Stripe
 - **Description** : interface générique (`createPaymentLink`,
@@ -1372,9 +1503,11 @@ difficulté réelle de tout le reste.
 Ce tableau reflète le plan initial de ce document. En pratique, `v0.2`
 (~13 jours réels) a livré `MOD-21` à la place de `MOD-02`, `v0.3`
 (~13,5 jours réels) a livré `MOD-22` (Framework des Agents) à la place de
-`MOD-20`, et `v0.4` (~11,5 jours réels) a livré `MOD-23` (Agent Director)
-à la place de `MOD-12` — voir les sections « Total estimé du travail
-réellement livré » correspondantes ci-dessus.
+`MOD-20`, `v0.4` (~11,5 jours réels) a livré `MOD-23` (Agent Director) à
+la place de `MOD-12` partie 1, et `v0.5` (~12 jours réels) a livré
+`MOD-24` (Agent Commercial) à la place de `MOD-12` partie 2 — voir les
+sections « Total estimé du travail réellement livré » correspondantes
+ci-dessus.
 
 ---
 

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { MembershipRole, WorkspaceRole, AgentDefinitionStatus } from "@/generated/prisma/enums";
 import { DIAGNOSTIC_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/diagnostic-agent";
 import { DIRECTOR_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/director-agent";
+import { COMMERCIAL_AGENT_RUNTIME_KEY } from "@/lib/agents/commercial/constants";
 import type { WorkspaceActor } from "@/lib/workspace-context";
 
 /**
@@ -104,6 +105,44 @@ export async function createDirectorTestFixture(suffix: string) {
   });
 
   return { ...base, directorDefinition, targetDefinition: base.definition };
+}
+
+/**
+ * Même gabarit que `createAgentTestFixture`, avec en plus une
+ * `AgentDefinition` de test pour l'Agent Commercial (référençant le
+ * runtime `commercial.sales-agent` déjà enregistré) — pour les tests
+ * d'intégration du premier agent métier (v0.5).
+ */
+export async function createCommercialTestFixture(suffix: string) {
+  const base = await createAgentTestFixture(suffix);
+
+  const commercialDefinition = await prisma.agentDefinition.create({
+    data: {
+      organizationId: null,
+      key: `test-commercial-agent-${suffix}`,
+      name: "Commercial (test)",
+      author: "test",
+      category: "commercial",
+      status: AgentDefinitionStatus.PUBLISHED,
+      runtimeKey: COMMERCIAL_AGENT_RUNTIME_KEY,
+      declaredToolKeys: [
+        "commercial.create_prospect",
+        "commercial.search_prospects",
+        "commercial.enrich_prospect",
+        "commercial.qualify_prospect",
+        "commercial.score_prospect",
+        "commercial.estimate_potential",
+        "commercial.draft_email",
+        "commercial.draft_followup",
+        "commercial.draft_proposal",
+        "commercial.draft_quote",
+        "commercial.recommend_next_actions",
+      ],
+      declaredPermissions: ["MANAGE_LEADS", "MANAGE_FINANCE", "VIEW_WORKSPACE"],
+    },
+  });
+
+  return { ...base, commercialDefinition };
 }
 
 export async function cleanupAgentTestFixtures(
