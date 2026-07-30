@@ -338,3 +338,165 @@ invitation/acceptation, retrait), `tests/workspace-migration.test.ts`
 (invariants de migration sur données réelles), et
 `tests/e2e/two-organizations-isolation.mjs` (Playwright, deux
 organisations/deux utilisateurs).
+
+## 10. Framework des Agents IA (v0.3 — `ROADMAP.md` MOD-22)
+
+Voir `docs/adr/0007`, `0008` et `0009` pour la justification complète des
+choix ci-dessous. **Cette phase ne livre aucun agent métier** — uniquement
+l'infrastructure commune que tout futur agent (Commercial, CRM, Marketing,
+Comptabilité, Support, Analyse, Directeur, etc.) devra utiliser sans
+exception. Le seul « agent » concret livré est un agent de diagnostic
+non-métier (`system.diagnostic-agent`) servant à valider le framework de
+bout en bout.
+
+### Architecture à deux niveaux : définition vs installation
+
+- `AgentDefinition` : blueprint de catalogue (global si `organizationId`
+  est `null`, ou propre à une organisation), **sans code exécutable** —
+  identifiant (`key`), nom, description, version, statut (`DRAFT` /
+  `PUBLISHED` / `DEPRECATED` / `ARCHIVED`), auteur, catégorie, icône,
+  `runtimeKey` (clé vers le registre de runtimes), `configSchema`,
+  `declaredToolKeys`, `declaredPermissions`, `compatibleAiModels`,
+  `defaultLimits`. Contrainte `@@unique([organizationId, key])`.
+- `AgentInstallation` : instance réelle au sein d'un workspace précis
+  (`organizationId` + `workspaceId` toujours requis), avec ses propres
+  `grantedToolKeys`/`grantedPermissions`/`usageLimits`/`config` — toujours
+  un **sous-ensemble plafonné** de ce que la définition déclare. Statut
+  (`INSTALLED` / `ACTIVE` / `INACTIVE` / `SUSPENDED` / `UNINSTALLED`).
+  Contrainte `@@unique([workspaceId, definitionId])` (un agent ne peut être
+  installé qu'une fois par workspace).
+- **Principe de moindre privilège** (`src/lib/agents/permissions.ts`,
+  `assertGrantsWithinDeclaredCeiling`) : les droits accordés à une
+  installation ne peuvent jamais dépasser (a) ce que la définition
+  déclare, ET (b) ce que le rôle de workspace de l'acteur humain qui
+  installe/modifie autorise lui-même (réutilise `hasWorkspacePermission`
+  et le type `WorkspacePermission` de la §9 — aucun système de permission
+  parallèle).
+
+### Registres en mémoire (runtimes, outils)
+
+Même motif pour les deux : une `Map<string, T>` peuplée une seule fois au
+démarrage du serveur via `src/instrumentation.ts` (`register()`), et
+jamais recréée ensuite — `Map.set` écrase plutôt que de lever une erreur,
+ce qui rend l'enregistrement idempotent et compatible avec le HMR
+Turbopack en développement.
+
+- `src/lib/agents/registry.ts` : `registerAgentRuntime`/`getAgentRuntime`
+  — `AgentDefinition.runtimeKey` résout vers un `AgentRuntime` (interface
+  `{ runtimeKey, execute(context) }`).
+- `src/lib/agents/tool-registry.ts` : `registerToolHandler`/
+  `getToolHandler` — `AgentTool.key` résout vers un `ToolHandler`
+  (interface `{ key, handle(input) }`). Un seul registre pour tous les
+  outils de tous les agents — ajouter un outil ne touche jamais le moteur
+  d'exécution.
+
+### Moteur d'exécution (file interne PostgreSQL)
+
+`src/lib/agents/execution-engine.ts` reprend exactement le motif déjà en
+production de `src/lib/sequence-engine.ts` (`processDueSequences`) plutôt
+que d'introduire une dépendance externe (`pg-boss`) dès maintenant — voir
+ADR 0008 pour la justification et le plan de bascule (`MOD-15`
+remplacera l'implémentation interne sans changer l'API publique du
+moteur).
+
+- `createAgentRun` crée un `AgentRun` (`status=QUEUED`, priorité, entrée,
+  `timeoutMs`, `maxAttempts`, planification différée via `scheduledAt`).
+- `processQueuedAgentRuns(now)` (appelée par
+  `POST /api/cron/process-agent-runs`) sélectionne les runs dus, triés par
+  priorité décroissante puis `scheduledAt` croissant, et les traite un par
+  un avec `try/catch`.
+- `executeAgentRun(runId)` : passe le run en `RUNNING`, incrémente
+  `attempt`, vérifie que l'installation est `ACTIVE` (sinon échec
+  immédiat), résout le runtime, construit un `AgentExecutionContext`
+  (`callTool` qui vérifie la permission d'outil **avant** d'invoquer le
+  handler, `log`), exécute sous `withTimeout` (`Promise.race` contre un
+  rejet de timeout). En cas d'échec : nouvelle tentative planifiée si
+  `attempt < maxAttempts`, sinon `FAILED` (erreur) ou `TIMED_OUT`
+  (dépassement de délai). Chaque étape écrit un `AgentRunLog`.
+- `cancelAgentRun(runId)` : uniquement depuis `QUEUED`/`RUNNING` — refuse
+  (`ValidationError`) toute annulation d'un run déjà terminé.
+
+### Mémoire (temporaire, persistante, partagée)
+
+Une seule table `AgentMemoryEntry` avec un discriminant `scope`
+(`AgentMemoryScope` : `SHORT_TERM` / `PERSISTENT` / `SHARED`) plutôt que
+trois tables séparées — voir ADR 0009. `SHORT_TERM` et `PERSISTENT`
+exigent un `installationId` (mémoire propre à une installation) ;
+`SHARED` exige `installationId = null` (mémoire visible à tout le
+workspace). Un champ `embedding: Json?` est réservé pour une future
+vectorisation, **sans fournisseur externe intégré à ce stade**.
+
+`src/lib/agents/memory.ts` expose `setMemory` comme unique point
+d'écriture : recherche l'entrée existante (`workspaceId` +
+`installationId` + `scope` + `key`) puis met à jour ou crée — **jamais un
+simple `upsert`**, car une contrainte d'unicité SQL ne peut pas distinguer
+plusieurs lignes où `installationId` vaut `NULL` (limitation documentée
+également pour `AgentDefinition.organizationId` ci-dessus). `getMemory`
+renvoie `null` si l'entrée est expirée (`expiresAt`) ; `clearExpiredMemory`
+purge les entrées expirées.
+
+### Communication et interventions
+
+`src/lib/agents/messaging.ts` : `sendAgentMessage` historise chaque
+message (`AgentMessage` : type `TASK_REQUEST` / `TASK_RESPONSE` /
+`RESULT` / `ERROR` / `INTERVENTION_REQUEST` / `INFO`, statut `PENDING` /
+`DELIVERED` / `READ` / `ACTIONED`). Un message de type
+`INTERVENTION_REQUEST` déclenche automatiquement la création d'une
+`AgentInterventionRequest` (demande d'intervention humaine), résolue via
+`resolveInterventionRequest` (audit-logué).
+
+### Outils déclaratifs et permissions
+
+`AgentTool` (registre unique, `key` unique, `isBuiltIn`/`isActive`) décrit
+chaque outil disponible (base de données, email, calendrier, CRM,
+documents, API, recherche, fichiers, génération PDF, etc.) —
+`src/lib/agents/bootstrap.ts` (`AGENT_TOOL_CATALOG`) enregistre les
+handlers *et* synchronise le catalogue en base
+(`syncAgentCatalog`). Chaque appel d'outil par un agent passe par
+`requireAgentToolPermission` (`src/lib/agents/permissions.ts`), qui vérifie
+que l'outil fait partie de `grantedToolKeys` de l'installation et
+journalise systématiquement (`agent.tool_access_denied`) tout refus.
+`requireAgentWorkspacePermission` applique le même principe pour les
+permissions de type workspace (CRM, finance, etc.), en réutilisant la
+matrice `WorkspacePermission` de la §9.
+
+### Scheduler
+
+`src/lib/agents/scheduler.ts` : `AgentSchedule` (`ONE_OFF` / `RECURRING` /
+`EVENT`), `createSchedule` valide les champs requis par type
+(`.refine()` Zod). `processDueAgentSchedules(now)` (appelée par
+`POST /api/cron/process-agent-schedules`) déclenche un `AgentRun` pour
+chaque planification due dont l'installation est `ACTIVE` (sinon
+ignorée), désactive les planifications `ONE_OFF` après exécution.
+**Limite connue** : la replanification `RECURRING` utilise un décalage
+fixe de +1 heure plutôt qu'une évaluation cron réelle — documenté comme
+tel, à lever avant qu'un agent récurrent réel en dépende.
+`triggerEventSchedules(eventKey, input?)` déclenche les planifications de
+type `EVENT` correspondantes.
+
+### Observabilité et coût IA
+
+`src/lib/agents/observability.ts` : `getInstallationStats` agrège les
+statuts de run (`groupBy`), la durée moyenne d'exécution (requête SQL
+brute), et le coût IA en réutilisant le modèle `AIRequest` existant via
+un nouveau champ nullable `AIRequest.agentRunId` — **aucune nouvelle
+table de coût** n'a été créée, le coût des appels IA déclenchés par un
+agent est simplement rattaché à son run. `listRunLogs`/
+`listRunsForInstallation` complètent l'historique.
+
+### Interface d'administration
+
+`/settings/agents` (catalogue + installations du workspace actif) et
+`/settings/agents/[id]` (détail : configuration, permissions, outils
+accordés, statistiques via `StatTile` réutilisé, historique des runs,
+journaux), réservées aux rôles Owner/Admin (`src/components/nav-config.ts`).
+
+### Tests
+
+`tests/agents/installation-lifecycle.test.ts` (cycle de vie complet,
+plafond de droits), `tests/agents/execution-engine.test.ts` (succès,
+refus d'outil, timeout, reprise/échec, annulation, installation non
+active), `tests/agents/memory-messaging-scheduler.test.ts` (mémoire,
+communication, planification), et
+`tests/tenant-isolation/agents.test.ts` (isolation multi-tenant complète
++ falsification d'identifiant).

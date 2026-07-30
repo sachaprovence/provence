@@ -60,6 +60,47 @@ Points à connaître pour tout nouveau code :
   pendant la vérification finale de v0.2 ; `tests/workspace-migration.test.ts`
   couvre désormais cet invariant.
 
+## 0 ter. État du Framework des Agents IA (v0.3)
+
+Le Framework des Agents (`ROADMAP.md` MOD-22, `docs/02-ARCHITECTURE.md`
+§10) est livré, en remplacement du plan initial de v0.3 (voir
+`MILESTONES.md`). **Aucun agent métier n'existe encore** — ce socle est le
+passage obligé de tout futur agent (Commercial, CRM, Marketing,
+Comptabilité, Support, Analyse, Directeur, ou autre). Points à connaître
+pour tout nouveau code touchant ce périmètre :
+
+- **Un agent métier ne se code jamais « à part »** : il s'implémente comme
+  un `AgentRuntime` (`src/lib/agents/types.ts`), enregistré via
+  `registerAgentRuntime` dans `src/instrumentation.ts`, référencé par le
+  `runtimeKey` d'une `AgentDefinition`. Ne jamais créer de route ou de
+  service ad hoc pour un nouvel agent — voir ADR 0007/0008/0009 avant de
+  toucher à ce périmètre.
+- **Toute installation d'agent reste plafonnée** :
+  `assertGrantsWithinDeclaredCeiling` (`src/lib/agents/permissions.ts`)
+  refuse tout droit (outil ou permission) dépassant à la fois ce que la
+  `AgentDefinition` déclare et ce que le rôle de workspace de l'acteur
+  humain autorise lui-même — jamais de contournement, même pour un agent
+  jugé « de confiance ».
+- **Tout appel d'outil par un agent** doit passer par
+  `requireAgentToolPermission` (jamais un appel direct au
+  `ToolHandler` depuis un runtime) — le refus est systématiquement
+  audit-logué (`agent.tool_access_denied`).
+- **Un nouvel outil** s'ajoute uniquement via `src/lib/agents/tools/*.ts`
+  + `registerToolHandler`, puis déclaré dans `AGENT_TOOL_CATALOG`
+  (`src/lib/agents/bootstrap.ts`) — jamais une logique d'outil inline dans
+  un runtime d'agent.
+- **Écriture mémoire** : toujours via `setMemory`
+  (`src/lib/agents/memory.ts`), jamais un `prisma.agentMemoryEntry.upsert`
+  direct — la contrainte d'unicité ne fonctionne pas correctement avec un
+  `installationId` nullable (voir ADR 0009).
+- **Tests d'agent** : le nettoyage de fixtures
+  (`tests/helpers/agent-fixtures.ts`, `cleanupAgentTestFixtures`) doit
+  toujours cibler des identifiants exacts (organisation, utilisateur,
+  définition) collectés par le test lui-même — jamais un filtre large
+  type `startsWith`, et toujours supprimer les organisations avant les
+  `AgentDefinition` (contrainte `ON DELETE RESTRICT` sur
+  `AgentInstallation.definitionId`).
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)
@@ -187,9 +228,14 @@ Une tâche `AR-NNNN` n'est considérée terminée que si :
       l'architecture change réellement) ;
 - [ ] la PR a été revue et approuvée avant merge sur `main`.
 
-## 8. Comment ajouter un nouveau vertical métier (une fois `v0.3` livré)
+## 8. Comment ajouter un nouveau vertical métier (une fois la validation par un second vertical livrée)
 
-Procédure cible, à affiner concrètement pendant `v0.3` (`AR-0015`) :
+> Note : `v0.3` a finalement livré le Framework des Agents IA (MOD-22,
+> voir §0 ter) plutôt que cette validation, reportée — voir
+> `MILESTONES.md` §"v0.3 bis". La procédure ci-dessous reste la cible,
+> à affiner concrètement quand cette tâche (`AR-0015`) sera reprise.
+
+Procédure cible, à affiner concrètement pendant cette phase (`AR-0015`) :
 
 1. Créer un jeu de `PipelineStageDefinition` / `LeadCategoryDefinition` /
    `ServiceCatalogDefinition` pour le nouveau vertical (via l'UI

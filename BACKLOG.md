@@ -387,7 +387,160 @@ code existant, tests inclus.
 
 ---
 
-## Version 0.3 — Validation par un 2ᵉ vertical fictif (MOD-20) + ajustements
+## Version 0.3 — Framework des Agents IA (MOD-22, remplace le plan initial)
+
+> **Statut : ✅ livrée.** Comme pour v0.2, le plan initial de v0.3
+> (validation par un 2ᵉ vertical fictif, `MOD-20`) a été remplacé sur
+> demande explicite par un module jugé plus urgent : le Framework des
+> Agents IA (`MOD-22`), infrastructure commune requise par tout agent
+> métier futur. Aucun agent métier (Commercial, CRM, Marketing,
+> Comptabilité, Support, Analyse, Directeur) n'est développé dans cette
+> version — uniquement leur infrastructure. Le plan initial (AR-0015 à
+> AR-0021) est conservé ci-dessous pour référence, reporté après v0.3.
+
+### AR-0078 — Schéma Prisma du Framework des Agents (définitions, installations, outils, runs, mémoire, messages, interventions, planifications)
+- **Description** : migration additive créant les enums et modèles du
+  Framework des Agents : `AgentDefinition`, `AgentInstallation`,
+  `AgentTool`, `AgentRun`, `AgentRunLog`, `AgentMemoryEntry`,
+  `AgentMessage`, `AgentInterventionRequest`, `AgentSchedule`, ainsi que le
+  champ nullable `AIRequest.agentRunId` pour l'agrégation future du coût
+  IA. Purement additive (aucune suppression/modification de structure
+  existante).
+- **Fichiers concernés** : `prisma/schema.prisma`,
+  `prisma/migrations/20260730065504_add_agent_framework/`.
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0067 (modèle `Workspace`, v0.2).
+- **Tests nécessaires** : migration appliquée sans perte de donnée sur la
+  base existante ; tests d'isolation multi-tenant (voir AR-0084).
+
+### AR-0079 — Registres en mémoire (runtimes d'agent, gestionnaires d'outil)
+- **Description** : `src/lib/agents/registry.ts` et
+  `src/lib/agents/tool-registry.ts` — deux registres `Map` idempotents
+  (`registerAgentRuntime`/`registerToolHandler`), peuplés une fois au
+  démarrage du serveur (`src/instrumentation.ts`), survivant au HMR
+  Turbopack.
+- **Fichiers concernés** : `src/lib/agents/registry.ts`,
+  `src/lib/agents/tool-registry.ts`, `src/lib/agents/types.ts`,
+  `src/instrumentation.ts`.
+- **Complexité** : Faible.
+- **Estimation** : 0,5 jour.
+- **Prérequis** : AR-0078.
+
+### AR-0080 — Permissions du Framework des Agents (plafond, vérification serveur)
+- **Description** : `src/lib/agents/permissions.ts` —
+  `assertGrantsWithinDeclaredCeiling` (les droits accordés à une
+  installation restent toujours un sous-ensemble de ce que la définition
+  déclare ET de ce que le rôle de l'acteur humain autorise, réutilise
+  `WorkspacePermission` de v0.2 sans système parallèle),
+  `requireAgentToolPermission`/`requireAgentWorkspacePermission` (audit-
+  logués en cas de refus).
+- **Fichiers concernés** : `src/lib/agents/permissions.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0079, AR-0070 (matrice de permissions de workspace,
+  v0.2).
+- **Tests nécessaires** : refus d'un outil non déclaré, refus d'une
+  permission dépassant le rôle réel de l'acteur.
+
+### AR-0081 — Cycle de vie des installations d'agent
+- **Description** : `src/lib/agents/installation-service.ts` — catalogue,
+  installation (plafond de droits), mise à jour des droits/config,
+  transitions de statut complètes (installé, actif, inactif, suspendu,
+  désinstallé) avec table de transitions autorisées, audit systématique de
+  chaque action.
+- **Fichiers concernés** : `src/lib/agents/installation-service.ts`,
+  `src/lib/validations/agent.ts`,
+  `src/app/api/agents/catalog/route.ts`,
+  `src/app/api/agents/installations/**`.
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0080.
+- **Tests nécessaires** : voir `tests/agents/installation-lifecycle.test.ts`
+  (installation plafonnée, refus d'excès d'outil/permission, refus de
+  double installation, cycle de vie complet valide/invalide).
+
+### AR-0082 — Moteur d'exécution (file interne, priorités, timeout, reprises)
+- **Description** : `src/lib/agents/execution-engine.ts` — création de
+  runs, file d'attente interne PostgreSQL (mêmes principes que
+  `sequence-engine.ts`), priorités, `withTimeout`, reprises automatiques
+  avec compteur de tentatives, annulation, journal (`AgentRunLog`), route
+  cron `POST /api/cron/process-agent-runs`.
+- **Fichiers concernés** : `src/lib/agents/execution-engine.ts`,
+  `src/app/api/cron/process-agent-runs/route.ts`,
+  `src/app/api/agents/runs/**`.
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : AR-0081.
+- **Tests nécessaires** : voir `tests/agents/execution-engine.test.ts`
+  (succès de bout en bout, refus d'outil non accordé, timeout, reprise
+  puis échec définitif, annulation, refus si installation non active).
+
+### AR-0083 — Mémoire, communication et scheduler des agents
+- **Description** : `src/lib/agents/memory.ts` (portées temporaire/
+  persistante/partagée, TTL, champ `embedding` réservé pour vectorisation
+  future), `src/lib/agents/messaging.ts` (messages historisés, demandes
+  d'intervention humaine), `src/lib/agents/scheduler.ts` (tâches
+  ponctuelles, récurrentes, événementielles), route cron
+  `POST /api/cron/process-agent-schedules`.
+- **Fichiers concernés** : `src/lib/agents/memory.ts`,
+  `src/lib/agents/messaging.ts`, `src/lib/agents/scheduler.ts`,
+  `src/app/api/cron/process-agent-schedules/route.ts`,
+  `src/app/api/agents/installations/[id]/memory/route.ts`,
+  `src/app/api/agents/installations/[id]/messages/route.ts`,
+  `src/app/api/agents/installations/[id]/schedules/route.ts`,
+  `src/app/api/agents/interventions/**`.
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : AR-0082.
+- **Tests nécessaires** : voir
+  `tests/agents/memory-messaging-scheduler.test.ts`.
+
+### AR-0084 — Outils déclaratifs, agent de diagnostic, bootstrap, observabilité
+- **Description** : `src/lib/agents/tools/*` (outils système, CRM,
+  gabarits d'outils non encore implémentés), `src/lib/agents/bootstrap.ts`
+  (registre unique d'outils + synchronisation du catalogue, sans `upsert`
+  sur clé composite nullable), `src/lib/agents/definitions/
+  diagnostic-agent.ts` (seul « agent » livré dans cette version — un
+  runtime de diagnostic non métier servant à valider le framework de bout
+  en bout), `src/lib/agents/observability.ts` (statistiques d'exécution,
+  coût IA agrégé via `AIRequest.agentRunId`).
+- **Fichiers concernés** : `src/lib/agents/tools/**`,
+  `src/lib/agents/bootstrap.ts`, `src/lib/agents/definitions/
+  diagnostic-agent.ts`, `src/lib/agents/observability.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0083.
+- **Tests nécessaires** : voir `tests/tenant-isolation/agents.test.ts`
+  (isolation multi-tenant complète : installations, runs, mémoire,
+  messages).
+
+### AR-0085 — Interface d'administration des agents
+- **Description** : `/settings/agents` (liste du catalogue + installations
+  du workspace actif) et `/settings/agents/[id]` (détail : configuration,
+  permissions, outils accordés, statistiques, historique des runs,
+  journaux), réservée aux rôles Owner/Admin.
+- **Fichiers concernés** :
+  `src/app/(app)/settings/agents/page.tsx`,
+  `src/app/(app)/settings/agents/[id]/page.tsx`,
+  `src/components/agents-client.tsx`,
+  `src/components/agent-detail-client.tsx`,
+  `src/components/nav-config.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0084.
+- **Tests nécessaires** : vérification manuelle des permissions d'accès
+  (rôle Owner/Admin uniquement).
+
+**Total estimé du travail réellement livré pour v0.3 : ~13,5 jours.**
+
+---
+
+### Plan initial de v0.3 (non traité dans cette version, conservé pour référence)
+
+> Les tâches `AR-0015` à `AR-0021` (validation par un 2ᵉ vertical fictif)
+> ci-dessous n'ont pas été traitées dans cette version — voir
+> `ROADMAP.md` §1 ter. Reportées après v0.3.
 
 ### AR-0015 — Définition du vertical fictif de test
 - **Description** : créer un jeu de configuration complet pour un métier
@@ -1068,6 +1221,12 @@ deux développeurs si disponibles → ~8 jours calendaires).
 Ces estimations sont indicatives (planification, pas engagement) et à
 recalibrer une fois `MOD-02` (v0.2) livré, module qui conditionne la
 difficulté réelle de tout le reste.
+
+Ce tableau reflète le plan initial de ce document. En pratique, `v0.2`
+(~13 jours réels) a livré `MOD-21` à la place de `MOD-02`, et `v0.3`
+(~13,5 jours réels) a livré `MOD-22` (Framework des Agents) à la place de
+`MOD-20` — voir les sections « Total estimé du travail réellement livré »
+correspondantes ci-dessus.
 
 ---
 

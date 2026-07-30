@@ -58,6 +58,8 @@ model Organization {
 
   memberships        Membership[]
   workspaces         Workspace[]
+  agentDefinitions   AgentDefinition[]
+  agentInstallations AgentInstallation[]
   territories        Territory[]
   icps               IdealCustomerProfile[]
   leads              Lead[]
@@ -98,19 +100,23 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships              Membership[]
-  workspaceMemberships     WorkspaceMembership[]
-  workspaceInvitationsSent WorkspaceInvitation[] @relation("WorkspaceInvitationInvitedBy")
-  sessions                 Session[]
-  passwordResets           PasswordResetToken[]
-  loginEvents              LoginEvent[]
-  auditLogs                AuditLog[]
-  aiRequests               AIRequest[]
-  tasksAssigned            Task[]                @relation("TaskAssignee")
-  appointments             Appointment[]         @relation("AppointmentOwner")
-  notifications            Notification[]
-  messagesValidated        Message[]             @relation("MessageValidatedBy")
-  notesAuthored            LeadNote[]
+  memberships                 Membership[]
+  workspaceMemberships        WorkspaceMembership[]
+  workspaceInvitationsSent    WorkspaceInvitation[]      @relation("WorkspaceInvitationInvitedBy")
+  agentInstallationsInstalled AgentInstallation[]        @relation("AgentInstalledBy")
+  agentRunsCreated            AgentRun[]                 @relation("AgentRunCreatedBy")
+  agentInterventionsAssigned  AgentInterventionRequest[] @relation("AgentInterventionAssignedTo")
+  agentInterventionsResolved  AgentInterventionRequest[] @relation("AgentInterventionResolvedBy")
+  sessions                    Session[]
+  passwordResets              PasswordResetToken[]
+  loginEvents                 LoginEvent[]
+  auditLogs                   AuditLog[]
+  aiRequests                  AIRequest[]
+  tasksAssigned               Task[]                     @relation("TaskAssignee")
+  appointments                Appointment[]              @relation("AppointmentOwner")
+  notifications               Notification[]
+  messagesValidated           Message[]                  @relation("MessageValidatedBy")
+  notesAuthored               LeadNote[]
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +141,11 @@ model Workspace {
   invitations  WorkspaceInvitation[]
   sessions     Session[]
   leads        Lead[]
+
+  agentInstallations        AgentInstallation[]
+  agentMemoryEntries        AgentMemoryEntry[]
+  agentMessages             AgentMessage[]
+  agentInterventionRequests AgentInterventionRequest[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1122,6 +1133,11 @@ model AIRequest {
   organizationId   String
   userId           String?
   leadId           String?
+  // Rattache un appel IA déclenché par un agent à son exécution — permet
+  // d'agréger le coût IA par run/installation (voir docs/adr/0007 et
+  // ROADMAP.md MOD-22). Nul pour tous les appels IA hors Agent Framework
+  // (le reste de l'application, inchangé).
+  agentRunId       String?
   kind             AIRequestKind
   provider         String
   model            String
@@ -1134,9 +1150,11 @@ model AIRequest {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
   lead         Lead?        @relation(fields: [leadId], references: [id])
+  agentRun     AgentRun?    @relation(fields: [agentRunId], references: [id])
 
   @@index([organizationId, kind])
   @@index([leadId])
+  @@index([agentRunId])
 }
 
 enum IntegrationKind {
@@ -1181,4 +1199,325 @@ model WebhookEvent {
   organization Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, eventType])
+}
+
+// ---------------------------------------------------------------------------
+// Agent Framework (v0.3) — infrastructure uniquement, aucun agent métier.
+// Voir docs/adr/0007, 0008, 0009 et docs/02-ARCHITECTURE.md §10.
+// ---------------------------------------------------------------------------
+
+enum AgentDefinitionStatus {
+  DRAFT
+  PUBLISHED
+  DEPRECATED
+  ARCHIVED
+}
+
+/// Catalogue des agents disponibles (le "quoi"). organizationId nul = agent
+/// global fourni par Autorun ; non nul = agent propre à une organisation
+/// (préparé pour des agents personnalisés futurs). Aucune logique
+/// exécutable ici : `runtimeKey` référence l'implémentation TypeScript
+/// (src/lib/agents/registry.ts).
+model AgentDefinition {
+  id                  String                @id @default(cuid())
+  organizationId      String?
+  key                 String
+  name                String
+  description         String?
+  version             String                @default("0.1.0")
+  status              AgentDefinitionStatus @default(DRAFT)
+  author              String
+  category            String
+  icon                String?
+  runtimeKey          String
+  configSchema        Json?
+  declaredToolKeys    String[]              @default([])
+  declaredPermissions String[]              @default([])
+  compatibleAiModels  String[]              @default([])
+  defaultLimits       Json?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  organization  Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installations AgentInstallation[]
+
+  @@unique([organizationId, key])
+  @@index([status])
+  @@index([category])
+}
+
+enum AgentInstallationStatus {
+  INSTALLED
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  UNINSTALLED
+}
+
+/// L'installation d'une AgentDefinition dans UN workspace (le "où" et le
+/// "avec quels droits"). Tout ce qui découle d'un agent (exécutions,
+/// mémoire, messages, planification) référence une AgentInstallation,
+/// jamais directement une AgentDefinition — garantit l'isolation
+/// multi-tenant dès le modèle de données (voir ADR 0007).
+model AgentInstallation {
+  id                 String                  @id @default(cuid())
+  organizationId     String
+  workspaceId        String
+  definitionId       String
+  status             AgentInstallationStatus @default(INSTALLED)
+  config             Json?
+  grantedToolKeys    String[]                @default([])
+  grantedPermissions String[]                @default([])
+  usageLimits        Json?
+  installedById      String?
+  installedAt        DateTime                @default(now())
+  uninstalledAt      DateTime?
+  suspendedAt        DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  definition   AgentDefinition @relation(fields: [definitionId], references: [id])
+  installedBy  User?           @relation("AgentInstalledBy", fields: [installedById], references: [id])
+
+  runs                 AgentRun[]
+  memoryEntries        AgentMemoryEntry[]
+  schedules            AgentSchedule[]
+  messagesFrom         AgentMessage[]             @relation("AgentMessageFrom")
+  messagesTo           AgentMessage[]             @relation("AgentMessageTo")
+  interventionRequests AgentInterventionRequest[]
+
+  @@unique([workspaceId, definitionId])
+  @@index([organizationId])
+  @@index([workspaceId, status])
+}
+
+/// Registre déclaratif des outils qu'un agent peut se voir accorder.
+/// Une ligne par outil ; l'implémentation réelle (le code appelé) vit dans
+/// src/lib/agents/tool-registry.ts et est référencée par `key`.
+model AgentTool {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  name         String
+  description  String?
+  category     String
+  inputSchema  Json?
+  outputSchema Json?
+  isBuiltIn    Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+}
+
+enum AgentRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
+
+enum AgentRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT
+  API
+}
+
+/// Une exécution d'agent. File d'attente interne sur PostgreSQL (voir ADR
+/// 0008) : `status=QUEUED` + `scheduledAt` jouent le rôle de file, traitée
+/// par `processQueuedAgentRuns` (src/lib/agents/execution-engine.ts).
+model AgentRun {
+  id             String          @id @default(cuid())
+  installationId String
+  status         AgentRunStatus  @default(QUEUED)
+  trigger        AgentRunTrigger @default(MANUAL)
+  priority       Int             @default(0)
+  input          Json?
+  output         Json?
+  error          Json?
+  attempt        Int             @default(0)
+  maxAttempts    Int             @default(1)
+  timeoutMs      Int             @default(30000)
+  scheduledAt    DateTime        @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  cancelledAt    DateTime?
+  parentRunId    String?
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  parentRun    AgentRun?         @relation("AgentRunRetry", fields: [parentRunId], references: [id])
+  retries      AgentRun[]        @relation("AgentRunRetry")
+  createdBy    User?             @relation("AgentRunCreatedBy", fields: [createdById], references: [id])
+
+  logs                 AgentRunLog[]
+  aiRequests           AIRequest[]
+  messages             AgentMessage[]
+  interventionRequests AgentInterventionRequest[]
+
+  @@index([installationId, status])
+  @@index([status, scheduledAt])
+}
+
+/// Journal d'exécution consultable depuis l'UI (distinct des logs pino
+/// applicatifs, qui ne sont pas requêtables depuis l'interface).
+model AgentRunLog {
+  id        String   @id @default(cuid())
+  runId     String
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+enum AgentMemoryScope {
+  SHORT_TERM
+  PERSISTENT
+  SHARED
+}
+
+/// Mémoire d'agent à trois portées (voir ADR 0009) : SHORT_TERM/PERSISTENT
+/// scopées à une installation, SHARED scopée au workspace
+/// (installationId nul). `embedding` réservé pour une vectorisation
+/// future, jamais renseigné par le code actuel. L'unicité par
+/// (portée, clé) est appliquée côté application (src/lib/agents/memory.ts,
+/// seul point d'écriture), pas par contrainte SQL — une contrainte unique
+/// classique ne peut pas distinguer plusieurs lignes SHARED dont
+/// installationId est NULL (NULL n'est jamais égal à NULL en SQL).
+model AgentMemoryEntry {
+  id             String           @id @default(cuid())
+  workspaceId    String
+  installationId String?
+  scope          AgentMemoryScope
+  key            String
+  value          Json
+  embedding      Json?
+  expiresAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scope, key])
+  @@index([installationId, scope, key])
+  @@index([expiresAt])
+}
+
+enum AgentMessageType {
+  TASK_REQUEST
+  TASK_RESPONSE
+  RESULT
+  ERROR
+  INTERVENTION_REQUEST
+  INFO
+}
+
+enum AgentMessageStatus {
+  PENDING
+  DELIVERED
+  READ
+  ACTIONED
+}
+
+/// Communication inter-agents et agent<->humain, systématiquement
+/// historisée (jamais de mutation/suppression, uniquement des lignes
+/// nouvelles + changement de `status`).
+model AgentMessage {
+  id                 String             @id @default(cuid())
+  workspaceId        String
+  fromInstallationId String?
+  toInstallationId   String?
+  runId              String?
+  type               AgentMessageType
+  status             AgentMessageStatus @default(PENDING)
+  payload            Json
+  createdAt          DateTime           @default(now())
+  deliveredAt        DateTime?
+  readAt             DateTime?
+
+  workspace           Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromInstallation    AgentInstallation?        @relation("AgentMessageFrom", fields: [fromInstallationId], references: [id])
+  toInstallation      AgentInstallation?        @relation("AgentMessageTo", fields: [toInstallationId], references: [id])
+  run                 AgentRun?                 @relation(fields: [runId], references: [id])
+  interventionRequest AgentInterventionRequest?
+
+  @@index([workspaceId, createdAt])
+  @@index([toInstallationId])
+  @@index([fromInstallationId])
+}
+
+enum AgentInterventionStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+/// Demande d'intervention humaine ("human in the loop"), typiquement créée
+/// à partir d'un AgentMessage de type INTERVENTION_REQUEST.
+model AgentInterventionRequest {
+  id               String                  @id @default(cuid())
+  workspaceId      String
+  installationId   String
+  runId            String?
+  messageId        String?                 @unique
+  title            String
+  description      String?
+  status           AgentInterventionStatus @default(PENDING)
+  assignedToUserId String?
+  resolvedById     String?
+  resolvedAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  run          AgentRun?         @relation(fields: [runId], references: [id])
+  message      AgentMessage?     @relation(fields: [messageId], references: [id])
+  assignedTo   User?             @relation("AgentInterventionAssignedTo", fields: [assignedToUserId], references: [id])
+  resolvedBy   User?             @relation("AgentInterventionResolvedBy", fields: [resolvedById], references: [id])
+
+  @@index([workspaceId, status])
+}
+
+enum AgentScheduleKind {
+  ONE_OFF
+  RECURRING
+  EVENT
+}
+
+/// Planification des exécutions : ponctuelle (runAt), récurrente
+/// (cronExpression), ou déclenchée par un évènement applicatif
+/// (eventKey — ex. "lead.qualified"), traitée par
+/// processDueAgentSchedules (src/lib/agents/scheduler.ts).
+model AgentSchedule {
+  id             String            @id @default(cuid())
+  installationId String
+  kind           AgentScheduleKind
+  cronExpression String?
+  runAt          DateTime?
+  eventKey       String?
+  input          Json?
+  isActive       Boolean           @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@index([installationId])
+  @@index([isActive, nextRunAt])
 }

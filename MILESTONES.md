@@ -114,7 +114,68 @@ et de la facturation client (`v0.4`/`v0.5`).
   exact sera fixé au moment de la reprendre, sans renuméroter par
   anticipation les jalons `v0.3`+ déjà détaillés ci-dessous).
 
-## v0.3 — Validation par un second vertical fictif
+## v0.3 — Framework des Agents IA (remplace le plan initial)
+
+> **Statut : ✅ livré** (2026-07-30). Comme pour `v0.2`, ce jalon a été
+> **redéfini sur demande explicite** : le contenu initialement prévu ici
+> (validation par un second vertical fictif, `MOD-20`) est reporté à une
+> version ultérieure (voir note en fin de section) et remplacé par un
+> module jugé plus prioritaire : donner à Autorun l'infrastructure
+> commune requise pour héberger plusieurs centaines d'agents IA
+> spécialisés, sans qu'aucun agent métier ne soit encore développé. Voir
+> `ROADMAP.md` §1 ter et §MOD-22, ainsi que `docs/adr/0007`, `0008`
+> et `0009`.
+
+- **Objectif du jalon** : Agent Framework professionnel et extensible —
+  registre central des agents, cycle de vie complet (installer/
+  désinstaller, activer/désactiver, suspendre/reprendre), moteur
+  d'exécution (file, priorités, timeout, reprises automatiques,
+  annulation, journal), mémoire (temporaire, persistante, partagée,
+  vectorisation différée), communication inter-agents historisée, registre
+  unique d'outils déclaratifs, permissions vérifiées côté serveur,
+  scheduler (tâches différées/récurrentes/événementielles), observabilité,
+  interface d'administration — le tout sans coder le moindre agent métier.
+- **Modules** : MOD-22 (avec extension additive de MOD-01/MOD-21 :
+  `AIRequest.agentRunId` pour l'agrégation future du coût IA par agent).
+- **Tâches** : voir `BACKLOG.md`, section v0.3 (AR-0078 à AR-0085 :
+  schéma Prisma, registres, permissions, cycle de vie d'installation,
+  moteur d'exécution, mémoire/communication/scheduler, outils/bootstrap/
+  observabilité, interface d'administration).
+- **Critères de sortie** :
+  - [x] `tests/e2e/golden-path.mjs` passe sans aucune modification de
+    script, sur données fraîchement seedées ;
+  - [x] `tests/e2e/two-organizations-isolation.mjs` passe (multi-tenant
+    toujours fonctionnel) ;
+  - [x] aucune installation, exécution, mémoire ou message d'un agent
+    n'est jamais accessible depuis une autre organisation ; falsification
+    d'identifiant rejetée par `NotFoundError` (pas de fuite d'existence) ;
+  - [x] une installation ne peut jamais détenir un outil ou une permission
+    au-delà de ce que déclare sa définition ET de ce que le rôle réel de
+    l'acteur humain autorise (`assertGrantsWithinDeclaredCeiling`) ;
+  - [x] 51 tests unitaires/intégration (dont 22 nouveaux pour le Framework
+    des Agents) passent contre une vraie base PostgreSQL ;
+  - [x] `npm run lint`, `npx tsc --noEmit` et `npm run build` passent sans
+    erreur ;
+  - [x] aucun agent métier (Commercial, CRM, Marketing, Comptabilité,
+    Support, Analyse, Directeur) livré — seul un agent de diagnostic
+    non-métier existe, pour valider le framework de bout en bout.
+- **État fonctionnel de l'application** : Provence 360 reste **entièrement
+  fonctionnelle** (golden path inchangé) et le multi-tenant reste
+  fonctionnel (isolation vérifiée) ; l'application dispose en plus d'une
+  interface `/settings/agents` (Owner/Admin) permettant d'installer et de
+  piloter des agents IA, sans qu'aucun agent métier réel n'existe encore.
+- **Limite connue** : le contenu initial de `v0.3` (validation par un
+  second vertical fictif — `MOD-20`) n'a pas été traité dans cette phase ;
+  il reste à planifier dans une version ultérieure, de même que les
+  futurs agents métier eux-mêmes (qui devront tous passer par ce
+  framework, sans exception). La vectorisation de la mémoire des agents
+  n'intègre volontairement aucun fournisseur externe à ce stade (champ
+  `embedding` réservé, non exploité). La reprise récurrente du scheduler
+  utilise un décalage fixe (+1 heure) plutôt qu'une évaluation cron réelle
+  — limitation documentée, à lever quand un vrai agent récurrent en aura
+  besoin.
+
+## v0.3 bis — Validation par un second vertical fictif (plan initial, reporté)
 
 - **Objectif du jalon** : prouver, avant d'investir davantage, que `v0.2`
   tient sa promesse de généralisation.
@@ -295,7 +356,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 |---|---|---|---|
 | v0.1 | Outillage | Non | Oui (tout) |
 | v0.2 | Refonte interne | Non (comportement identique) | Oui (v0.3+) |
-| v0.3 | Validation | Non (jalon de preuve) | Oui (v0.4+, en pratique) |
+| v0.3 | Infrastructure (Agent Framework) | Non (aucun agent métier) | Oui (tout agent métier futur) |
+| v0.3 bis | Validation (reportée) | Non (jalon de preuve) | Oui (v0.4+, en pratique) |
 | v0.4 | Fonctionnalité | Oui | Non |
 | v0.5 | Fonctionnalité | Oui | Non |
 | v0.6 | Fonctionnalité | Oui | Non |

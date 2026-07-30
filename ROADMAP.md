@@ -53,6 +53,26 @@ abandonné, seulement **reporté après `MOD-21`** — voir `MILESTONES.md`
 pour le détail. Les décisions d'architecture prises pour `MOD-21` sont
 documentées dans `docs/adr/0005` et `docs/adr/0006`.
 
+## 1 ter. Changement de plan explicite : v0.3 devient le Framework des Agents, pas la validation du 2ᵉ vertical
+
+De la même façon que pour v0.2, la version `v0.3` initialement envisagée
+dans ce document (`MOD-20`, validation par un 2ᵉ vertical fictif) a été
+**remplacée, sur demande explicite**, par un nouveau module prioritaire :
+`MOD-22` (Framework des Agents IA — registre, cycle de vie, moteur
+d'exécution, mémoire, communication, outils, permissions, scheduler,
+observabilité, interface d'administration). Raison : Autorun doit devenir
+une plateforme capable d'accueillir des agents IA spécialisés sans
+modifier son architecture, ce qui est un prérequis pour tout agent métier
+futur (Commercial, CRM, Marketing, etc.) — construire cette infrastructure
+avant les agents eux-mêmes évite de la redéfinir a posteriori.
+
+Conséquence sur l'ordre : `MOD-20` (validation 2ᵉ vertical) n'est pas
+abandonné, seulement **reporté après `MOD-22`**. Aucun agent métier
+(Commercial, CRM, Marketing, Comptabilité, Support, Analyse, Directeur)
+n'est développé dans `MOD-22` : uniquement leur infrastructure commune.
+Les décisions d'architecture prises pour `MOD-22` sont documentées dans
+`docs/adr/0007`, `docs/adr/0008` et `docs/adr/0009`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -78,7 +98,8 @@ documentées dans `docs/adr/0005` et `docs/adr/0006`.
 | MOD-17 | Sécurité avancée & conformité renforcée | À créer | Critique (avant SaaS public) |
 | MOD-18 | Intégrations tierces & API publique | À créer | Moyenne |
 | MOD-19 | Facturation SaaS Autorun (abonnements) | À créer | Haute (condition de v1.0) |
-| MOD-20 | Vertical Pack — validation par un 2ᵉ vertical fictif | À créer | Critique (preuve du concept) |
+| MOD-20 | Vertical Pack — validation par un 2ᵉ vertical fictif | Reporté à v0.4 (voir §1 ter) | Critique (preuve du concept) |
+| MOD-22 | Framework des Agents IA | ✅ Livré (v0.3) | Critique |
 
 ## 3. Détail par module
 
@@ -711,6 +732,83 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   un workspace par défaut fonctionnel ; 100 % des tests listés ci-dessus
   passent contre une vraie base PostgreSQL.
 
+---
+
+### MOD-22 — Framework des Agents IA (v0.3, priorisé avant MOD-20)
+
+- **Objectif** : donner à Autorun une infrastructure unique et uniforme
+  pour héberger plusieurs centaines d'agents IA différents, sans jamais
+  coder un agent « à part ». Cette phase ne livre **aucun agent métier** —
+  uniquement le socle que tout agent métier futur devra utiliser.
+- **Fonctionnalités** : architecture à deux niveaux `AgentDefinition`
+  (catalogue global ou par organisation, aucun code exécutable) /
+  `AgentInstallation` (instance par workspace, droits toujours un
+  sous-ensemble plafonné de ce que la définition déclare et de ce que le
+  rôle de l'acteur humain autorise) ; cycle de vie complet (installer,
+  désinstaller, activer, désactiver, suspendre, reprendre) ; registre de
+  runtimes en mémoire (`registerAgentRuntime`) peuplé au démarrage du
+  serveur ; moteur d'exécution basé sur une file interne PostgreSQL
+  (création, priorités, timeout, reprises automatiques, annulation,
+  journal) ; mémoire à trois portées (temporaire à TTL, persistante,
+  partagée au workspace) avec un champ `embedding` réservé mais inutilisé
+  pour une vectorisation future ; système de communication inter-agents
+  historisé (messages, demandes d'intervention humaine) ; registre unique
+  d'outils déclaratifs, activable/désactivable par agent installé ;
+  permissions vérifiées côté serveur pour chaque appel d'outil et chaque
+  action sensible (réutilise `WorkspacePermission` de v0.2, aucun système
+  parallèle) ; scheduler pour tâches ponctuelles, récurrentes et
+  événementielles ; observabilité (statistiques d'exécution, durée, coût
+  IA agrégé via `AIRequest.agentRunId`, journaux) ; interface
+  d'administration (`/settings/agents`) listant agents, état,
+  configuration, permissions, outils, statistiques, historiques, journaux.
+- **Dépendances** : `MOD-00` (fondations), `MOD-21` (workspace, rôles,
+  audit — l'installation d'un agent est toujours scopée à un workspace).
+- **Priorité** : Critique — condition explicite de cette phase, prérequis
+  de tout agent métier futur.
+- **Risques techniques** :
+  - Confiance implicite dans les droits déclarés par une définition
+    d'agent — mitigé par `assertGrantsWithinDeclaredCeiling`, qui refuse
+    toute installation ou mise à jour de droits dépassant à la fois le
+    plafond déclaré par la définition et le rôle réel de l'acteur humain
+    dans le workspace.
+  - Contrainte SQL : l'unicité `(organizationId, key)` sur
+    `AgentDefinition` et `(workspaceId, installationId, scope, key)` sur
+    `AgentMemoryEntry` ne peut pas s'appliquer correctement quand la
+    colonne nullable vaut `NULL` (deux lignes `NULL` ne sont jamais égales
+    en SQL) — mitigé par une logique applicative de recherche puis
+    création/mise à jour (jamais un simple `upsert`), documentée dans le
+    code et dans l'ADR 0009.
+  - Ordre de suppression en cascade : `AgentInstallation.definitionId` est
+    en `ON DELETE RESTRICT` — toute suppression de test doit supprimer les
+    organisations (qui cascadent les installations) avant les
+    définitions d'agent, jamais l'inverse.
+  - Isolement des tests en exécution parallèle (Vitest exécute les
+    fichiers de test concurremment) : le nettoyage de fixtures de test
+    doit cibler des identifiants exacts, jamais un filtre large type
+    `startsWith`, sous peine de supprimer des lignes encore utilisées par
+    un autre fichier de test en cours d'exécution.
+- **Choix d'architecture** : voir ADR 0007 (catalogue/installation à deux
+  niveaux, réutilisation de `WorkspacePermission`), ADR 0008 (file
+  d'exécution interne PostgreSQL plutôt que `pg-boss` dès maintenant —
+  `MOD-15` remplacera l'implémentation interne sans changer l'API
+  publique du moteur d'exécution) et ADR 0009 (une seule table
+  `AgentMemoryEntry` à discriminant `scope` plutôt que trois tables,
+  vectorisation différée sans fournisseur externe intégré).
+- **Tests à prévoir** (tous livrés, voir `tests/agents/` et
+  `tests/tenant-isolation/agents.test.ts`) : cycle de vie d'installation
+  (plafond de droits, transitions valides/invalides, désinstallation),
+  moteur d'exécution (succès de bout en bout, refus d'outil non accordé,
+  timeout, reprise automatique puis échec définitif, annulation, refus
+  d'exécuter une installation non active), mémoire/communication/
+  planification (portées, expiration, validation, messages,
+  interventions, planifications ponctuelles), isolation multi-tenant
+  (aucune fuite d'installation, d'exécution, de mémoire ou de message
+  entre deux organisations ; falsification d'identifiant rejetée par
+  `NotFoundError`).
+- **Critères de fin** : golden path Provence 360 et isolation multi-tenant
+  inchangés après cette phase ; 100 % des tests listés ci-dessus passent
+  contre une vraie base PostgreSQL ; aucun agent métier livré.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -742,6 +840,12 @@ l'avancer plus tôt si `MOD-04`/`MOD-06` réels sont priorisés avant
 `MOD-12`/`MOD-13`/`MOD-14` — l'ordre strict n'est obligatoire que pour
 `MOD-00 → MOD-02 → MOD-20`, le reste est réordonnable selon les priorités
 business du moment (voir `MILESTONES.md` §"Flexibilité de l'ordre").
+
+Ce diagramme reflète le plan initial de ce document. En pratique, `v0.2` a
+livré `MOD-21` (multi-tenant) à la place de `MOD-02` (voir §1 bis) et
+`v0.3` a livré `MOD-22` (Framework des Agents) à la place de `MOD-20`
+(voir §1 ter) ; `MOD-02` et `MOD-20` restent à faire, désormais après
+`v0.3`. Voir `MILESTONES.md` pour l'état réel version par version.
 
 ## 5. Éléments parallélisables
 

@@ -24,5 +24,19 @@ export async function register() {
       logger.error({ err: error }, "Configuration d'environnement invalide — arrêt du serveur.");
       throw error;
     }
+
+    // Enregistre les runtimes/outils du Framework Agents (en mémoire, voir
+    // src/lib/agents/registry.ts) et synchronise le catalogue en base
+    // (idempotent) — au démarrage plutôt qu'au premier import, pour que le
+    // catalogue soit toujours disponible même sans avoir lancé le seed de
+    // démonstration.
+    try {
+      const { registerBuiltInAgentComponents, syncAgentCatalog } = await import("@/lib/agents/bootstrap");
+      registerBuiltInAgentComponents();
+      await syncAgentCatalog();
+      logger.info("Catalogue du Framework Agents synchronisé.");
+    } catch (error) {
+      logger.error({ err: error }, "Échec de l'initialisation du Framework Agents.");
+    }
   }
 }
