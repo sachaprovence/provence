@@ -375,11 +375,18 @@ bout en bout.
 
 ### Registres en mémoire (runtimes, outils)
 
-Même motif pour les deux : une `Map<string, T>` peuplée une seule fois au
-démarrage du serveur via `src/instrumentation.ts` (`register()`), et
-jamais recréée ensuite — `Map.set` écrase plutôt que de lever une erreur,
-ce qui rend l'enregistrement idempotent et compatible avec le HMR
-Turbopack en développement.
+Même motif pour les deux : une `Map<string, T>` peuplée par
+`registerAgentRuntime`/`registerToolHandler`, jamais recréée — `Map.set`
+écrase plutôt que de lever une erreur, ce qui rend l'enregistrement
+idempotent et compatible avec le HMR Turbopack en développement.
+`src/instrumentation.ts` (`register()`) appelle cet enregistrement une
+fois au démarrage du serveur, mais **ce n'est pas la seule garantie** :
+`execution-engine.ts#executeAgentRun` rappelle lui-même
+`registerBuiltInAgentComponents()` de façon défensive avant toute
+résolution, car Next.js peut charger ce module dans un contexte
+d'exécution distinct de celui d'`instrumentation.ts` — un défaut réel
+découvert et corrigé en v0.4 (voir ADR 0013), qui affectait silencieusement
+tout agent (diagnostic compris) en production depuis v0.3.
 
 - `src/lib/agents/registry.ts` : `registerAgentRuntime`/`getAgentRuntime`
   — `AgentDefinition.runtimeKey` résout vers un `AgentRuntime` (interface
@@ -500,3 +507,125 @@ active), `tests/agents/memory-messaging-scheduler.test.ts` (mémoire,
 communication, planification), et
 `tests/tenant-isolation/agents.test.ts` (isolation multi-tenant complète
 + falsification d'identifiant).
+
+## 11. Agent Director — premier agent orchestrateur (v0.4 — `ROADMAP.md` MOD-23)
+
+Voir `docs/adr/0010`, `0011`, `0012` et `0013` pour la justification
+complète des choix ci-dessous. Le Director est **un agent comme les
+autres** : une `AgentDefinition`/`AgentInstallation` (§10), exécuté par le
+même `executeAgentRun` — aucun raccourci, aucun code spécifique en dehors
+du Framework des Agents. **Il ne réalise jamais lui-même de tâche
+métier** : il décide, décompose, délègue, attend, fusionne.
+
+### Plan d'exécution : `AgentPlan` / `AgentPlanStep`
+
+Deux modèles additifs, génériques (utilisables par tout futur agent
+orchestrateur, pas seulement le Director) :
+
+- `AgentPlan` : une demande décomposée, propriété d'une installation
+  orchestratrice (`installationId`), reliée 1:1 à l'`AgentRun` qui l'a
+  produite (`runId`, `@@unique`). Statut `DRAFT`/`RUNNING`/`SUCCEEDED`/
+  `FAILED`/`CANCELLED`.
+- `AgentPlanStep` : une étape — objectif, cible (`targetInstallationId`
+  explicite ou `targetCategory` à résoudre dynamiquement), priorité,
+  dépendances (`dependsOnStepIds`, référence d'autres étapes du même
+  plan), outils/permissions requis, statut, horodatages, durée
+  (`durationMs`), résultat/erreur, et `subRunId` (l'`AgentRun` réellement
+  créé pour l'agent délégué, 1:1).
+
+`src/lib/agents/director/planning-engine.ts` : `createPlan` valide le DAG
+à la création — une étape ne peut dépendre (`dependsOn`, un index dans le
+même tableau) que d'une étape qui la précède, ce qui exclut trivialement
+tout cycle. `getReadySteps` renvoie les étapes dont toutes les dépendances
+ont `SUCCEEDED` et fait basculer en cascade en `SKIPPED` toute étape dont
+une dépendance a échoué/a été annulée — le mécanisme qui garantit que la
+boucle du Director termine toujours. `mergePlanResults` fusionne les
+résultats de toutes les étapes.
+
+### Moteur de délégation
+
+`src/lib/agents/director/delegation-engine.ts` — appeler, attendre,
+annuler, relancer un agent, sans jamais réimplémenter l'exécution
+elle-même :
+
+- `delegateStep` résout l'agent cible (par id ou par catégorie), vérifie
+  qu'il détient les outils/permissions requis par l'étape, crée son
+  `AgentRun` (`trigger=AGENT`, valeur d'enum ajoutée en v0.4) et **pilote
+  lui-même, de façon synchrone, son exécution jusqu'à un statut terminal**
+  (`driveRunToCompletion`, voir ADR 0010) — sans attendre le délai de
+  recul de 30 s de la file générique (v0.3). N'échoue jamais par
+  exception : un échec de résolution/permission/exécution est toujours
+  capturé dans `step.error`, jamais propagé, pour que les autres étapes
+  indépendantes du plan continuent.
+- `cancelStepDelegation`/`retryStepDelegation` : annulation (réutilise
+  `cancelAgentRun`, v0.3) et relance délibérée (nouveau `AgentRun`, relié
+  au précédent via `AgentRun.parentRunId` — champ du schéma v0.3
+  jusqu'ici inutilisé, la reprise automatique interne à un run réutilisant
+  la même ligne).
+- Exposé à l'exécution du Director exclusivement via 4 outils du registre
+  (`src/lib/agents/tools/director-tools.ts` : `director.list_agents`,
+  `director.delegate_task`, `director.cancel_task`, `director.retry_task`)
+  — jamais un appel direct depuis le runtime, pour que chaque délégation
+  passe par la même vérification de permission
+  (`requireAgentToolPermission`) que n'importe quel autre outil. Chaque
+  outil vérifie en plus que l'étape appartient bien au plan de
+  l'installation appelante (`loadOwnedStep`) — un agent ne peut jamais
+  piloter les étapes du plan d'un autre.
+
+### Décomposition de l'objectif
+
+`src/lib/agents/director/decomposition.ts` — heuristique de
+correspondance de mots-clés (catégorie puis nom d'agent dans le texte de
+l'objectif), explicitement **pas** une compréhension du langage naturel
+(voir ADR 0011). Le point d'extension pour une vraie décomposition
+(NLU/LLM) est `directorRequestSchema.steps`
+(`src/lib/validations/director.ts`) : des étapes structurées fournies
+explicitement court-circuitent entièrement l'heuristique, sans toucher au
+moteur de planification/délégation.
+
+### Mémoire du Director
+
+`src/lib/agents/director/memory-helpers.ts` — construite entièrement sur
+`setMemory`/`getMemory` (v0.3, portée `PERSISTENT`), sans nouvelle table :
+conversation (liste plafonnée des tours), décisions, préférences
+utilisateur (fusionnées, jamais remplacées), contexte de travail
+(remplacé), résumés de run. Compatible avec la vectorisation future de la
+mémoire d'agent (champ `embedding` réservé, v0.3, ADR 0009).
+
+### Tableau de bord et visualisation
+
+`src/lib/agents/director/dashboard-service.ts` : agents actifs, tâches
+par statut, file d'exécution, planifications actives, historique des
+plans, journal des communications, consommation/performance (réutilise et
+étend `observability.ts#getWorkspaceAgentStats`, mêmes agrégats que
+`getInstallationStats` mais à l'échelle du workspace — sans dupliquer la
+logique de calcul). `/settings/director`
+(`src/components/director-dashboard-client.tsx`) : KPIs, formulaire de
+nouvelle demande, agents actifs, planifications, historique des plans,
+journal.
+
+`src/components/director-plan-graph.tsx` : visualisation SVG d'un plan
+(Director en racine, étapes disposées par rang de dépendance — une étape
+qui dépend d'une autre est toujours à un rang strictement supérieur,
+conséquence directe de la validation de DAG à la création), couleur par
+statut, arêtes pleines (délégation) et pointillées (dépendance).
+
+### Agents métier futurs : contrats sans implémentation
+
+`src/lib/agents/director/capability-contracts.ts` (types TypeScript +
+catalogue `FUTURE_AGENT_CONTRACTS`) et des `AgentDefinition` de statut
+`DRAFT` générées depuis ce catalogue (`bootstrap.ts`) pour Commercial,
+CRM, Marketing, Support, Analyse, Finance, Développement — **aucune
+implémentation, aucun runtime enregistré**, jamais installables (`DRAFT`
+refusé par `installAgent`, durcissement v0.4 — voir ADR 0012).
+
+### Tests
+
+`tests/agents/director-planning.test.ts` (validation du DAG, étapes
+prêtes, propagation en cascade, fusion), `tests/agents/director-delegation.test.ts`
+(délégation réussie/historisée, exécution parallèle et séquentielle,
+erreur, timeout, relance avec lignée, annulation, permissions
+manquantes, cloisonnement entre orchestrateurs), `tests/agents/director-memory.test.ts`
+(conversation plafonnée, décisions, préférences fusionnées, contexte,
+résumés de run), et `tests/tenant-isolation/director.test.ts` (isolation
+multi-tenant des plans/étapes, falsification d'identifiant).

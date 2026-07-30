@@ -146,6 +146,7 @@ model Workspace {
   agentMemoryEntries        AgentMemoryEntry[]
   agentMessages             AgentMessage[]
   agentInterventionRequests AgentInterventionRequest[]
+  agentPlans                AgentPlan[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1204,6 +1205,8 @@ model WebhookEvent {
 // ---------------------------------------------------------------------------
 // Agent Framework (v0.3) — infrastructure uniquement, aucun agent métier.
 // Voir docs/adr/0007, 0008, 0009 et docs/02-ARCHITECTURE.md §10.
+// Étendu en v0.4 par l'Agent Director (orchestration, voir plus bas dans ce
+// même fichier) — toujours aucun agent métier réel.
 // ---------------------------------------------------------------------------
 
 enum AgentDefinitionStatus {
@@ -1287,6 +1290,8 @@ model AgentInstallation {
   messagesFrom         AgentMessage[]             @relation("AgentMessageFrom")
   messagesTo           AgentMessage[]             @relation("AgentMessageTo")
   interventionRequests AgentInterventionRequest[]
+  plans                AgentPlan[]
+  planStepsAsTarget    AgentPlanStep[]            @relation("AgentPlanStepTarget")
 
   @@unique([workspaceId, definitionId])
   @@index([organizationId])
@@ -1326,6 +1331,9 @@ enum AgentRunTrigger {
   SCHEDULED
   EVENT
   API
+  /// Exécution créée par délégation d'un autre agent (voir v0.4, Agent
+  /// Director) — distincte de MANUAL (humain) et API (appelant externe).
+  AGENT
 }
 
 /// Une exécution d'agent. File d'attente interne sur PostgreSQL (voir ADR
@@ -1361,6 +1369,8 @@ model AgentRun {
   aiRequests           AIRequest[]
   messages             AgentMessage[]
   interventionRequests AgentInterventionRequest[]
+  directorPlan         AgentPlan?                 @relation("AgentPlanOwnerRun")
+  planStep             AgentPlanStep?             @relation("AgentPlanStepSubRun")
 
   @@index([installationId, status])
   @@index([status, scheduledAt])
@@ -1520,4 +1530,97 @@ model AgentSchedule {
 
   @@index([installationId])
   @@index([isActive, nextRunAt])
+}
+
+// ---------------------------------------------------------------------------
+// Agent Director — orchestration (v0.4). Le Director est un agent comme les
+// autres (AgentDefinition + AgentInstallation, exécuté par le même moteur
+// d'exécution) ; ces deux modèles ajoutent uniquement la structure d'un plan
+// d'exécution multi-étapes qu'un agent orchestrateur peut produire et piloter.
+// Voir docs/adr/0010, 0011, 0012 et docs/02-ARCHITECTURE.md §11.
+// ---------------------------------------------------------------------------
+
+enum AgentPlanStatus {
+  DRAFT
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AgentPlanStepStatus {
+  PENDING
+  READY
+  DELEGATED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+/// Plan d'exécution généré par un agent orchestrateur (le Director, dans
+/// cette version) en réponse à une demande. `installationId` est toujours
+/// l'installation orchestratrice propriétaire du plan — jamais celle d'un
+/// agent délégué (voir `AgentPlanStep.targetInstallationId`). `runId`
+/// référence l'AgentRun du Director qui a produit ce plan (1:1).
+model AgentPlan {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  installationId String
+  runId          String?         @unique
+  goal           String
+  status         AgentPlanStatus @default(DRAFT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  run          AgentRun?         @relation("AgentPlanOwnerRun", fields: [runId], references: [id])
+  steps        AgentPlanStep[]
+
+  @@index([workspaceId, status])
+  @@index([installationId])
+}
+
+/// Une étape d'un plan d'exécution. `targetInstallationId` est résolu soit
+/// explicitement (fourni à la création du plan), soit dynamiquement au
+/// moment de la délégation à partir de `targetCategory` (voir
+/// `src/lib/agents/director/delegation-engine.ts`) — les deux champs
+/// peuvent coexister le temps de la résolution. `dependsOnStepIds`
+/// référence d'autres `AgentPlanStep.id` du même plan ; seules des
+/// références vers des étapes d'index strictement inférieur sont acceptées
+/// à la création (voir `planning-engine.ts`), ce qui exclut trivialement
+/// tout cycle. `subRunId` référence l'AgentRun réellement créé pour
+/// l'agent délégué (1:1, `null` tant que l'étape n'a pas été déléguée).
+model AgentPlanStep {
+  id                   String              @id @default(cuid())
+  planId               String
+  stepIndex            Int
+  objective            String
+  targetInstallationId String?
+  targetCategory       String?
+  priority             Int                 @default(0)
+  dependsOnStepIds     String[]            @default([])
+  requiredToolKeys     String[]            @default([])
+  requiredPermissions  String[]            @default([])
+  input                Json?
+  status               AgentPlanStepStatus @default(PENDING)
+  subRunId             String?             @unique
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  durationMs           Int?
+  result               Json?
+  error                Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  plan               AgentPlan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  targetInstallation AgentInstallation? @relation("AgentPlanStepTarget", fields: [targetInstallationId], references: [id])
+  subRun             AgentRun?          @relation("AgentPlanStepSubRun", fields: [subRunId], references: [id])
+
+  @@index([planId, stepIndex])
+  @@index([targetInstallationId])
 }

@@ -73,6 +73,28 @@ n'est développé dans `MOD-22` : uniquement leur infrastructure commune.
 Les décisions d'architecture prises pour `MOD-22` sont documentées dans
 `docs/adr/0007`, `docs/adr/0008` et `docs/adr/0009`.
 
+## 1 quater. Changement de plan explicite : v0.4 devient l'Agent Director, pas la facturation
+
+La version `v0.4` initialement envisagée dans ce document (`MOD-12`
+partie 1, facturation client final) a été **remplacée, sur demande
+explicite**, par un nouveau module prioritaire : `MOD-23` (Agent
+Director — premier agent orchestrateur, construit intégralement sur le
+Framework des Agents livré en v0.3). Raison : valider que le Framework
+des Agents (v0.3) est réellement suffisant pour héberger un agent réel
+avant d'investir dans des agents métier ou dans de nouvelles
+fonctionnalités indépendantes du Framework — un orchestrateur est le test
+le plus exigeant de ce que ce Framework doit fournir (délégation, attente
+de résultat, mémoire, permissions), plus exigeant que ne l'aurait été un
+premier agent métier isolé.
+
+Conséquence sur l'ordre : `MOD-12` (facturation) n'est pas abandonné,
+seulement **reporté après `MOD-23`**. Le Director ne réalise aucune tâche
+métier lui-même (voir §MOD-23) ; les agents métier
+(Commercial/CRM/Marketing/Comptabilité/Support/Analyse/Finance/
+Développement) restent hors périmètre — seuls leurs contrats/interfaces
+sont préparés (voir ADR 0012). Les décisions d'architecture prises pour
+`MOD-23` sont documentées dans `docs/adr/0010`, `0011`, `0012` et `0013`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -90,7 +112,7 @@ Les décisions d'architecture prises pour `MOD-22` sont documentées dans
 | MOD-09 | Automatisation | Existant (Phase 0) | Moyenne (généralisation) |
 | MOD-10 | Conformité & Audit | Existant (Phase 0) | Haute (extension RGPD) |
 | MOD-11 | Statistiques & Dashboard | Existant (Phase 0) | Basse (généralisation) |
-| MOD-12 | Facturation client final | À créer | Haute |
+| MOD-12 | Facturation client final | Reporté après v0.4 (voir §1 quater) | Haute |
 | MOD-13 | Gestion documentaire | À créer | Moyenne |
 | MOD-14 | Calendrier | À créer | Moyenne |
 | MOD-15 | Infrastructure asynchrone (jobs) | À créer | Haute |
@@ -98,8 +120,9 @@ Les décisions d'architecture prises pour `MOD-22` sont documentées dans
 | MOD-17 | Sécurité avancée & conformité renforcée | À créer | Critique (avant SaaS public) |
 | MOD-18 | Intégrations tierces & API publique | À créer | Moyenne |
 | MOD-19 | Facturation SaaS Autorun (abonnements) | À créer | Haute (condition de v1.0) |
-| MOD-20 | Vertical Pack — validation par un 2ᵉ vertical fictif | Reporté à v0.4 (voir §1 ter) | Critique (preuve du concept) |
+| MOD-20 | Vertical Pack — validation par un 2ᵉ vertical fictif | Reporté après v0.4 (voir §1 ter/§1 quater) | Critique (preuve du concept) |
 | MOD-22 | Framework des Agents IA | ✅ Livré (v0.3) | Critique |
+| MOD-23 | Agent Director (orchestrateur) | ✅ Livré (v0.4) | Critique |
 
 ## 3. Détail par module
 
@@ -809,6 +832,65 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   inchangés après cette phase ; 100 % des tests listés ci-dessus passent
   contre une vraie base PostgreSQL ; aucun agent métier livré.
 
+---
+
+### MOD-23 — Agent Director, premier agent orchestrateur (v0.4, priorisé avant MOD-12)
+
+- **Objectif** : prouver que le Framework des Agents (v0.3) est
+  suffisant pour héberger un vrai agent, en construisant le premier —
+  un orchestrateur qui ne réalise jamais lui-même de tâche métier : il
+  décide quel agent utiliser, dans quel ordre, avec quelles
+  données/outils/permissions, distribue le travail, attend les résultats,
+  les fusionne, gère les erreurs, et produit une réponse finale.
+- **Fonctionnalités** : moteur de planification (`AgentPlan`/
+  `AgentPlanStep`, DAG de dépendances validé à la création, statuts,
+  durée, résultat) ; moteur de délégation (appel/attente synchrone d'un
+  agent, annulation, relance avec lignée via `AgentRun.parentRunId`) ;
+  décomposition heuristique de l'objectif (avec point d'extension pour
+  une vraie décomposition NLU/LLM future) ; mémoire du Director
+  (conversation, décisions, préférences, contexte) construite sur la
+  mémoire d'agent existante (v0.3) ; tableau de bord
+  (`/settings/director`) et visualisation graphique du plan (SVG) ;
+  contrats (types + stubs `DRAFT`) pour les agents métier futurs
+  (Commercial, CRM, Marketing, Support, Analyse, Finance, Développement),
+  sans aucune implémentation.
+- **Dépendances** : `MOD-22` (Framework des Agents, v0.3) — le Director
+  est construit intégralement dessus, sans aucun contournement.
+- **Priorité** : Critique — condition explicite de cette phase.
+- **Risques techniques** :
+  - Le moteur d'exécution (v0.3) traite les reprises avec un délai de
+    recul de 30 s, incompatible avec un orchestrateur qui doit attendre
+    un résultat immédiatement — mitigé par un pilotage synchrone
+    intra-processus dans le moteur de délégation (voir ADR 0010),
+    documenté comme limite (pas de vrai parallélisme distribué).
+  - **Défaut découvert en validant cette phase par un vrai test navigateur
+    (pas seulement `vitest`)** : le registre en mémoire des runtimes/outils
+    (v0.3) pouvait rester vide côté requête HTTP même après un démarrage
+    serveur réussi, en développement **et en production** — affectait
+    silencieusement tout agent installé depuis v0.3, pas seulement le
+    Director. Corrigé par un enregistrement défensif au point d'usage
+    (voir ADR 0013). Une erreur de sérialisation (`Prisma.Decimal` passé
+    tel quel à un Client Component) a été détectée et corrigée dans la
+    même passe de validation (`observability.ts`).
+- **Choix d'architecture** : voir ADR 0010 (délégation synchrone
+  intra-processus), ADR 0011 (décomposition heuristique, pas de LLM), ADR
+  0012 (contrats des agents métier futurs sans implémentation), ADR 0013
+  (enregistrement défensif du registre).
+- **Tests à prévoir** (tous livrés, voir `tests/agents/director-*.test.ts`
+  et `tests/tenant-isolation/director.test.ts`) : validation du DAG à la
+  création, résolution des étapes prêtes, propagation en cascade des
+  échecs, délégation réussie et historisée, exécution parallèle et
+  séquentielle, gestion d'erreur, timeout, relance avec lignée,
+  annulation, permissions manquantes, cloisonnement entre orchestrateurs,
+  mémoire (conversation/décisions/préférences/contexte/résumés),
+  isolation multi-tenant des plans/étapes.
+- **Critères de fin** : golden path Provence 360, isolation multi-tenant
+  et Framework des Agents (v0.3) inchangés après cette phase ; 100 % des
+  tests listés ci-dessus passent contre une vraie base PostgreSQL ; le
+  Director validé par une vraie requête HTTP contre un build de
+  production (pas seulement des tests automatisés) ; aucun agent métier
+  livré.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -842,10 +924,12 @@ l'avancer plus tôt si `MOD-04`/`MOD-06` réels sont priorisés avant
 business du moment (voir `MILESTONES.md` §"Flexibilité de l'ordre").
 
 Ce diagramme reflète le plan initial de ce document. En pratique, `v0.2` a
-livré `MOD-21` (multi-tenant) à la place de `MOD-02` (voir §1 bis) et
+livré `MOD-21` (multi-tenant) à la place de `MOD-02` (voir §1 bis),
 `v0.3` a livré `MOD-22` (Framework des Agents) à la place de `MOD-20`
-(voir §1 ter) ; `MOD-02` et `MOD-20` restent à faire, désormais après
-`v0.3`. Voir `MILESTONES.md` pour l'état réel version par version.
+(voir §1 ter), et `v0.4` a livré `MOD-23` (Agent Director) à la place de
+`MOD-12` (voir §1 quater) ; `MOD-02`, `MOD-12` et `MOD-20` restent à
+faire, désormais après `v0.4`. Voir `MILESTONES.md` pour l'état réel
+version par version.
 
 ## 5. Éléments parallélisables
 

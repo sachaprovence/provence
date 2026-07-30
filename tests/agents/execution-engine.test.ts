@@ -21,6 +21,7 @@ const runIfDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 runIfDatabase("moteur d'exécution des agents", () => {
   const organizationIds: string[] = [];
   const userIds: string[] = [];
+  const definitionIds: string[] = [];
 
   beforeAll(() => {
     registerBuiltInAgentComponents();
@@ -42,7 +43,7 @@ runIfDatabase("moteur d'exécution des agents", () => {
   });
 
   afterAll(async () => {
-    await cleanupAgentTestFixtures(organizationIds, userIds);
+    await cleanupAgentTestFixtures(organizationIds, userIds, definitionIds);
   });
 
   async function activeInstallationWithRuntime(
@@ -53,6 +54,7 @@ runIfDatabase("moteur d'exécution des agents", () => {
     const fixture = await createAgentTestFixture(suffix);
     organizationIds.push(fixture.organization.id);
     userIds.push(fixture.user.id);
+    definitionIds.push(fixture.definition.id);
 
     const definition = await prisma.agentDefinition.update({
       where: { id: fixture.definition.id },
@@ -159,6 +161,7 @@ runIfDatabase("moteur d'exécution des agents", () => {
     const fixture = await createAgentTestFixture("exec-inactive");
     organizationIds.push(fixture.organization.id);
     userIds.push(fixture.user.id);
+    definitionIds.push(fixture.definition.id);
 
     await prisma.agentDefinition.update({
       where: { id: fixture.definition.id },

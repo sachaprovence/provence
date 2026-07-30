@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { NotFoundError, ConflictError, ValidationError } from "@/lib/errors";
 import { assertGrantsWithinDeclaredCeiling } from "./permissions";
-import { AgentInstallationStatus } from "@/generated/prisma/enums";
+import { AgentDefinitionStatus, AgentInstallationStatus } from "@/generated/prisma/enums";
 import type { WorkspaceActor } from "@/lib/workspace-context";
 
 /**
@@ -47,6 +47,13 @@ export async function installAgent(
     where: { id: params.definitionId, OR: [{ organizationId: null }, { organizationId: actor.organization.id }] },
   });
   if (!definition) throw new NotFoundError("Définition d'agent introuvable.");
+  if (definition.status !== AgentDefinitionStatus.PUBLISHED) {
+    // Empêche l'installation d'une définition DRAFT/DEPRECATED/ARCHIVED même
+    // en connaissant son id directement — nécessaire depuis que des stubs
+    // DRAFT existent en base pour les futurs agents métier (v0.4, voir
+    // `src/lib/agents/director/capability-contracts.ts` et ADR 0012).
+    throw new ValidationError("Cette définition d'agent n'est pas publiée et ne peut pas être installée.");
+  }
 
   const existing = await prisma.agentInstallation.findUnique({
     where: { workspaceId_definitionId: { workspaceId: actor.workspace.id, definitionId: definition.id } },

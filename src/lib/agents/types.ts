@@ -43,8 +43,14 @@ export interface AgentRuntime {
 /**
  * Implémentation réelle (code) d'un outil référencé par `AgentTool.key`.
  * Enregistrée une fois via `registerToolHandler` (`tool-registry.ts`).
+ * `run` (l'`AgentRun` courant) est fourni depuis v0.4 en plus de
+ * `installation` — utile aux outils d'orchestration (voir
+ * `src/lib/agents/tools/director-tools.ts`) qui doivent rattacher une
+ * action à l'exécution en cours ; les outils existants qui ne
+ * déstructurent que `installation` continuent de fonctionner sans
+ * modification.
  */
 export interface ToolHandler<TInput = unknown, TOutput = unknown> {
   readonly key: string;
-  handle(input: TInput, context: { installation: AgentInstallation }): Promise<TOutput>;
+  handle(input: TInput, context: { installation: AgentInstallation; run: AgentRun }): Promise<TOutput>;
 }

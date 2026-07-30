@@ -6,6 +6,7 @@ import { getAgentRuntime } from "./registry";
 import { getToolHandler } from "./tool-registry";
 import { requireAgentToolPermission } from "./permissions";
 import { createInterventionRequest } from "./messaging";
+import { registerBuiltInAgentComponents } from "./bootstrap";
 import { AgentRunStatus, AgentRunTrigger, AgentInstallationStatus } from "@/generated/prisma/enums";
 import type { AgentExecutionContext, AgentLogLevel } from "./types";
 
@@ -24,6 +25,8 @@ export async function createAgentRun(params: {
   timeoutMs?: number;
   scheduledAt?: Date;
   createdById?: string;
+  /** Relance délibérée d'un run précédent (voir Agent Director, `delegation-engine.ts#retryStepDelegation`) — lignée visible via `AgentRun.retries`. */
+  parentRunId?: string;
 }) {
   return prisma.agentRun.create({
     data: {
@@ -35,6 +38,7 @@ export async function createAgentRun(params: {
       timeoutMs: params.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       scheduledAt: params.scheduledAt ?? new Date(),
       createdById: params.createdById,
+      parentRunId: params.parentRunId,
     },
   });
 }
@@ -74,6 +78,17 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 
 /** Exécute une exécution précise (appelée par `processQueuedAgentRuns`, ou directement pour un déclenchement synchrone). */
 export async function executeAgentRun(runId: string): Promise<void> {
+  // Next.js peut charger ce module dans un contexte d'exécution (processus/
+  // worker) distinct de celui où `src/instrumentation.ts` a appelé
+  // `registerBuiltInAgentComponents()` au démarrage — le registre en
+  // mémoire (`registry.ts`/`tool-registry.ts`) est alors vide ici même s'il
+  // a bien été peuplé ailleurs. Rappel idempotent et sans effet de bord
+  // significatif (protégé par un indicateur interne) pour garantir que les
+  // runtimes/outils sont bien enregistrés dans CE contexte avant toute
+  // résolution — sans cet appel défensif, `getAgentRuntime` peut renvoyer
+  // `undefined` en production alors que l'agent est parfaitement valide.
+  registerBuiltInAgentComponents();
+
   const run = await prisma.agentRun.update({
     where: { id: runId },
     data: { status: AgentRunStatus.RUNNING, startedAt: new Date(), attempt: { increment: 1 } },
@@ -118,7 +133,7 @@ export async function executeAgentRun(runId: string): Promise<void> {
       const handler = getToolHandler(toolKey);
       if (!handler) throw new NotFoundError(`Outil "${toolKey}" non enregistré.`);
       await logRun(runId, "debug", `Appel de l'outil "${toolKey}".`);
-      return handler.handle(toolInput, { installation });
+      return handler.handle(toolInput, { installation, run });
     },
     log: (level, message, metadata) => logRun(runId, level, message, metadata),
   };

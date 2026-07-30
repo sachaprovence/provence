@@ -99,7 +99,62 @@ pour tout nouveau code touchant ce périmètre :
   définition) collectés par le test lui-même — jamais un filtre large
   type `startsWith`, et toujours supprimer les organisations avant les
   `AgentDefinition` (contrainte `ON DELETE RESTRICT` sur
-  `AgentInstallation.definitionId`).
+  `AgentInstallation.definitionId`). **Chaque fichier de test doit tracer
+  ses propres définitions** (le paramètre `definitionIds` de
+  `cleanupAgentTestFixtures` n'est pas optionnel en pratique) — un oubli
+  a pollué le catalogue réel en base pendant la v0.4 (voir §0 quater),
+  détecté et corrigé.
+- **Le registre en mémoire ne dépend plus uniquement du démarrage** :
+  `src/instrumentation.ts` appelle `registerBuiltInAgentComponents()` une
+  fois au boot, mais `execution-engine.ts#executeAgentRun` le rappelle
+  aussi, défensivement, à chaque exécution (idempotent, coût négligeable)
+  — voir ADR 0013. Ne jamais supposer qu'un enregistrement fait ailleurs
+  suffit : tout nouveau point d'entrée qui résout un runtime/outil doit
+  soit passer par `executeAgentRun`, soit appeler
+  `registerBuiltInAgentComponents()` lui-même en tout début de fonction.
+
+## 0 quater. État de l'Agent Director (v0.4)
+
+Le premier agent réel d'Autorun (`ROADMAP.md` MOD-23,
+`docs/02-ARCHITECTURE.md` §11) est livré, en remplacement du plan initial
+de v0.4 (voir `MILESTONES.md`). **C'est un orchestrateur, pas un agent
+métier** : il ne réalise jamais lui-même de tâche CRM/commerciale/
+financière, il délègue. Points à connaître pour tout nouveau code touchant
+ce périmètre :
+
+- **Le Director est un agent comme les autres** : `AgentDefinition` +
+  `AgentInstallation`, exécuté par `executeAgentRun` (aucun raccourci).
+  Ne jamais faire exécuter sa logique en dehors du moteur d'exécution du
+  Framework.
+- **Toute délégation passe par les 4 outils `director.*`**
+  (`src/lib/agents/tools/director-tools.ts`), jamais par un appel direct
+  à `delegation-engine.ts` depuis un runtime — c'est ce qui garantit la
+  vérification de permission systématique (`requireAgentToolPermission`).
+  Un nouvel agent orchestrateur futur doit suivre le même principe.
+- **Une étape de plan n'appartient qu'à son propre orchestrateur** :
+  `loadOwnedStep` (`director-tools.ts`) vérifie que le plan appartient à
+  l'installation appelante avant toute action — reproduire cette
+  vérification pour tout nouveau point d'accès à `AgentPlanStep`.
+- **La délégation est synchrone et intra-processus** (ADR 0010) : un
+  agent délégué est entièrement exécuté (jusqu'à un statut terminal)
+  avant que `delegateStep` ne rende la main — ne pas supposer un
+  comportement asynchrone/en file pour un sous-agent délégué par le
+  Director.
+- **La décomposition automatique de l'objectif est une heuristique**
+  (ADR 0011), pas une IA réelle — pour un besoin de décomposition fiable,
+  toujours préférer fournir `steps` explicitement
+  (`directorRequestSchema`, `src/lib/validations/director.ts`) plutôt que
+  de compter sur l'heuristique.
+- **Un futur agent métier** (Commercial, CRM, Marketing, Comptabilité,
+  Support, Analyse, Finance, Développement) doit d'abord avoir son contrat
+  dans `src/lib/agents/director/capability-contracts.ts` avant toute
+  implémentation — voir ADR 0012. Passer son `AgentDefinition` de `DRAFT`
+  à `PUBLISHED` est la seule étape qui le rend installable.
+- **Toute nouvelle fonctionnalité du Framework des Agents doit être
+  vérifiée au moins une fois par une vraie requête HTTP contre un build de
+  production** (`next build && next start`), pas seulement par la suite
+  `vitest` — c'est ce test précis qui a révélé le défaut corrigé en
+  ADR 0013, invisible dans un process `vitest` unique.
 
 ## 1. Avant de commencer une tâche du backlog
 

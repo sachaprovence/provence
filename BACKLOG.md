@@ -629,7 +629,154 @@ code existant, tests inclus.
 
 ---
 
-## Version 0.4 — Facturation client final, socle (MOD-12 partie 1)
+## Version 0.4 — Agent Director (MOD-23, remplace le plan initial)
+
+> **Statut : ✅ livrée.** Comme pour v0.2/v0.3, le plan initial de v0.4
+> (facturation client final, socle — `MOD-12` partie 1) a été remplacé sur
+> demande explicite par un module jugé plus urgent : le premier agent réel
+> d'Autorun, un orchestrateur (l'Agent Director) construit intégralement
+> sur le Framework des Agents (v0.3), sans aucun contournement. Aucun
+> agent métier n'est développé dans cette version — le Director ne réalise
+> jamais lui-même de tâche métier. Le plan initial (AR-0022 à AR-0026) est
+> conservé ci-dessous pour référence, reporté après v0.4.
+
+### AR-0086 — Schéma Prisma `AgentPlan`/`AgentPlanStep` + valeur d'enum `AGENT`
+- **Description** : migration additive — deux nouveaux modèles (plan
+  d'exécution multi-étapes, DAG de dépendances par référence vers un index
+  antérieur), et une nouvelle valeur `AGENT` sur `AgentRunTrigger` (un run
+  créé par délégation, distinct de `MANUAL`/`SCHEDULED`/`EVENT`/`API`).
+- **Fichiers concernés** : `prisma/schema.prisma`,
+  `prisma/migrations/20260730074938_add_agent_director/`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0078 (schéma du Framework des Agents, v0.3).
+- **Tests nécessaires** : migration purement additive, vérifiée sans perte
+  de donnée ; validation du DAG (voir AR-0087).
+
+### AR-0087 — Moteur de planification (`planning-engine.ts`)
+- **Description** : `createPlan` (validation du DAG à la création — une
+  étape ne peut dépendre que d'un index strictement antérieur, ce qui
+  exclut tout cycle), `getReadySteps` (dépendances toutes `SUCCEEDED`,
+  propagation en cascade des échecs vers `SKIPPED`), `mergePlanResults`.
+- **Fichiers concernés** : `src/lib/agents/director/planning-engine.ts`.
+- **Complexité** : Élevée.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0086.
+- **Tests nécessaires** : voir `tests/agents/director-planning.test.ts`.
+
+### AR-0088 — Moteur de délégation + outils `director.*`
+- **Description** : `delegation-engine.ts` (appeler/attendre un agent de
+  façon synchrone intra-processus — voir ADR 0010 —, annuler, relancer
+  avec lignée via `AgentRun.parentRunId`), exposé au runtime du Director
+  exclusivement via 4 outils du registre (`director.list_agents`,
+  `director.delegate_task`, `director.cancel_task`, `director.retry_task`)
+  pour que chaque délégation passe par la vérification de permission
+  standard du Framework.
+- **Fichiers concernés** : `src/lib/agents/director/delegation-engine.ts`,
+  `src/lib/agents/tools/director-tools.ts`,
+  `src/lib/agents/types.ts` (contexte d'outil étendu avec `run`).
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : AR-0087.
+- **Tests nécessaires** : voir `tests/agents/director-delegation.test.ts`
+  (délégation réussie, parallèle, séquentielle, erreur, timeout, relance,
+  annulation, permissions manquantes, cloisonnement entre orchestrateurs).
+
+### AR-0089 — Décomposition heuristique de l'objectif + runtime du Director
+- **Description** : `decomposition.ts` (correspondance de mots-clés,
+  explicitement pas une compréhension du langage naturel — voir ADR 0011)
+  et `definitions/director-agent.ts` (le runtime `director.orchestrator` :
+  reçoit, comprend, décompose, planifie, délègue, attend, fusionne,
+  vérifie la cohérence globale, gère les erreurs, produit une réponse
+  finale).
+- **Fichiers concernés** : `src/lib/agents/director/decomposition.ts`,
+  `src/lib/agents/definitions/director-agent.ts`,
+  `src/lib/validations/director.ts`.
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0088.
+- **Tests nécessaires** : voir `tests/agents/director-delegation.test.ts`
+  et `tests/agents/director-planning.test.ts`.
+
+### AR-0090 — Mémoire du Director
+- **Description** : `memory-helpers.ts` — conversation (liste plafonnée),
+  décisions, préférences utilisateur (fusionnées, jamais remplacées),
+  contexte de travail (remplacé), résumés de run — construits
+  entièrement sur `setMemory`/`getMemory` (v0.3), sans nouvelle table ;
+  compatible avec la vectorisation future déjà réservée (ADR 0009).
+- **Fichiers concernés** : `src/lib/agents/director/memory-helpers.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0089.
+- **Tests nécessaires** : voir `tests/agents/director-memory.test.ts`.
+
+### AR-0091 — Contrats des agents métier futurs (types + stubs `DRAFT`)
+- **Description** : `capability-contracts.ts` (types TypeScript et
+  catalogue déclaratif, sans implémentation) pour Commercial, CRM,
+  Marketing, Support, Analyse, Finance, Développement ; génération de
+  leur `AgentDefinition` de statut `DRAFT` (jamais installable) depuis ce
+  catalogue. Durcissement de `installAgent` : refuse désormais toute
+  définition non `PUBLISHED` (nécessaire depuis que des `DRAFT` existent
+  réellement en base — voir ADR 0012).
+- **Fichiers concernés** :
+  `src/lib/agents/director/capability-contracts.ts`,
+  `src/lib/agents/bootstrap.ts`, `src/lib/agents/installation-service.ts`.
+- **Complexité** : Faible.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0089.
+- **Tests nécessaires** : vérification manuelle du catalogue (`DRAFT`,
+  jamais listé comme installable).
+
+### AR-0092 — Tableau de bord Director + visualisation graphique du plan
+- **Description** : `dashboard-service.ts` (agents actifs, tâches par
+  statut, file d'exécution, planifications actives, historique des plans,
+  journal, consommation/performance — étend
+  `observability.ts#getWorkspaceAgentStats` sans dupliquer le calcul),
+  page `/settings/director`, et `director-plan-graph.tsx` (visualisation
+  SVG du plan : Director en racine, étapes par rang de dépendance, couleur
+  par statut, arêtes de délégation/dépendance).
+- **Fichiers concernés** : `src/lib/agents/director/dashboard-service.ts`,
+  `src/app/(app)/settings/director/page.tsx`,
+  `src/components/director-dashboard-client.tsx`,
+  `src/components/director-plan-graph.tsx`,
+  `src/app/api/agents/director/**`, `src/components/nav-config.ts`.
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : AR-0090, AR-0091.
+- **Tests nécessaires** : vérification manuelle (navigateur, build de
+  production) — voir le rapport de livraison v0.4 pour le détail.
+
+### AR-0093 — Correctif : enregistrement défensif du registre d'agents (déjà latent depuis v0.3)
+- **Description** : découvert en validant AR-0092 par une vraie requête
+  HTTP (pas seulement des tests automatisés) : le registre en mémoire des
+  runtimes/outils pouvait rester vide côté requête même après un
+  démarrage serveur réussi, **y compris en production**, faisant échouer
+  silencieusement l'exécution de tout agent installé depuis v0.3
+  (diagnostic compris). Corrigé par un appel défensif et idempotent à
+  `registerBuiltInAgentComponents()` au tout début de `executeAgentRun`
+  (voir ADR 0013). Une erreur de sérialisation (`Prisma.Decimal` passé à
+  un Client Component) découverte dans la même passe a été corrigée dans
+  `observability.ts`.
+- **Fichiers concernés** : `src/lib/agents/execution-engine.ts`,
+  `src/lib/agents/observability.ts`.
+- **Complexité** : Faible (une fois la cause identifiée).
+- **Estimation** : 0,5 jour.
+- **Prérequis** : découvert pendant AR-0092, corrige un défaut de v0.3
+  (AR-0082).
+- **Tests nécessaires** : vérifié par requête HTTP réelle contre un build
+  de production (`next build && next start`), en plus de la suite
+  `vitest` existante qui ne l'avait pas détecté (les tests appellent
+  `registerBuiltInAgentComponents()` eux-mêmes dans le même process).
+
+**Total estimé du travail réellement livré pour v0.4 : ~11,5 jours.**
+
+---
+
+### Plan initial de v0.4 (non traité dans cette version, conservé pour référence)
+
+> Les tâches `AR-0022` à `AR-0026` (facturation client final, socle) ci-
+> dessous n'ont pas été traitées dans cette version — voir `ROADMAP.md`
+> §1 quater. Reportées après v0.4.
 
 ### AR-0022 — Modèle `Invoice` / `InvoiceLine`
 - **Description** : nouveaux modèles Prisma (référence unique par
@@ -1223,10 +1370,11 @@ recalibrer une fois `MOD-02` (v0.2) livré, module qui conditionne la
 difficulté réelle de tout le reste.
 
 Ce tableau reflète le plan initial de ce document. En pratique, `v0.2`
-(~13 jours réels) a livré `MOD-21` à la place de `MOD-02`, et `v0.3`
+(~13 jours réels) a livré `MOD-21` à la place de `MOD-02`, `v0.3`
 (~13,5 jours réels) a livré `MOD-22` (Framework des Agents) à la place de
-`MOD-20` — voir les sections « Total estimé du travail réellement livré »
-correspondantes ci-dessus.
+`MOD-20`, et `v0.4` (~11,5 jours réels) a livré `MOD-23` (Agent Director)
+à la place de `MOD-12` — voir les sections « Total estimé du travail
+réellement livré » correspondantes ci-dessus.
 
 ---
 

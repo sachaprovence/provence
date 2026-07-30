@@ -198,7 +198,80 @@ et de la facturation client (`v0.4`/`v0.5`).
   (AR-0016). Ne pas avancer sur `v0.4+` avec une base de généralisation
   fragile.
 
-## v0.4 — Facturation client, socle fonctionnel
+## v0.4 — Agent Director (remplace le plan initial)
+
+> **Statut : ✅ livré** (2026-07-30). Comme pour `v0.2`/`v0.3`, ce jalon a
+> été **redéfini sur demande explicite** : le contenu initialement prévu
+> ici (facturation client final, socle — `MOD-12` partie 1) est reporté à
+> une version ultérieure (voir note en fin de section) et remplacé par un
+> module jugé plus prioritaire : construire le premier agent réel
+> d'Autorun, un orchestrateur, pour prouver que le Framework des Agents
+> (v0.3) tient sa promesse. Voir `ROADMAP.md` §1 quater et §MOD-23, ainsi
+> que `docs/adr/0010`, `0011`, `0012` et `0013`.
+
+- **Objectif du jalon** : Agent Director — un orchestrateur qui ne réalise
+  jamais lui-même de tâche métier : il reçoit une demande, la comprend, la
+  décompose en sous-tâches, choisit les agents adaptés, distribue le
+  travail, attend les résultats, les fusionne, vérifie la cohérence
+  globale, gère les erreurs, relance si nécessaire, et produit une réponse
+  finale. Construit intégralement sur le Framework des Agents (v0.3),
+  sans aucun contournement ni code spécifique en dehors de celui-ci.
+- **Modules** : MOD-23 (avec extension additive de MOD-22 :
+  `AgentRunTrigger.AGENT`, `AgentRun.parentRunId` désormais utilisé pour
+  la lignée de reprise).
+- **Tâches** : voir `BACKLOG.md`, section v0.4 (AR-0086 à AR-0093 :
+  schéma Prisma, moteur de planification, moteur de délégation + outils,
+  décomposition + runtime, mémoire, contrats des agents métier futurs,
+  tableau de bord + graphe, correctif du registre d'agents).
+- **Critères de sortie** :
+  - [x] `tests/e2e/golden-path.mjs` passe sans aucune modification de
+    script, sur données fraîchement seedées ;
+  - [x] `tests/e2e/two-organizations-isolation.mjs` passe (multi-tenant
+    toujours fonctionnel) ;
+  - [x] les 51 tests du Framework des Agents (v0.3) passent toujours sans
+    modification de leur code (aucune régression) ;
+  - [x] 21 nouveaux tests (72 au total pour le Framework + Director)
+    passent contre une vraie base PostgreSQL : validation du DAG,
+    délégation réussie/parallèle/séquentielle, erreur, timeout, relance
+    avec lignée, annulation, permissions manquantes, cloisonnement entre
+    orchestrateurs, mémoire, isolation multi-tenant des plans ;
+  - [x] `npm run lint`, `npx tsc --noEmit` et `npm run build` passent sans
+    erreur ;
+  - [x] le Director validé par une **vraie requête HTTP contre un build de
+    production** (`next build && next start`), pas seulement des tests
+    automatisés — voir limite ci-dessous ;
+  - [x] aucun agent métier (Commercial, CRM, Marketing, Comptabilité,
+    Support, Analyse, Finance, Développement) livré — seuls leurs
+    contrats/stubs `DRAFT` existent.
+- **État fonctionnel de l'application** : Provence 360 et le multi-tenant
+  restent **entièrement fonctionnels** (golden path et isolation
+  inchangés) ; l'application dispose en plus d'un Agent Director
+  installable, avec tableau de bord (`/settings/director`) permettant de
+  soumettre une demande, visualiser le plan généré (graphe SVG des
+  délégations et dépendances), et piloter manuellement l'annulation/
+  relance d'une étape.
+- **Défaut découvert et corrigé pendant la vérification finale** : un test
+  de bout en bout réel dans un navigateur (au-delà de la suite `vitest`
+  automatisée) a révélé que le registre en mémoire des runtimes/outils du
+  Framework des Agents (v0.3) pouvait rester vide côté requête HTTP —
+  **y compris contre un build de production** — faisant échouer
+  silencieusement l'exécution de tout agent, diagnostic compris, depuis
+  v0.3. Corrigé par un enregistrement défensif au point d'usage (ADR
+  0013) ; une erreur de sérialisation annexe (`Prisma.Decimal`) a été
+  corrigée dans la même passe. Recommandation retenue : toute nouvelle
+  fonctionnalité du Framework des Agents doit désormais être vérifiée au
+  moins une fois par une vraie requête HTTP contre un build de production,
+  en plus des tests automatisés.
+- **Limite connue** : le contenu initial de `v0.4` (facturation client
+  final — `MOD-12`) n'a pas été traité dans cette phase ; il reste à
+  planifier dans une version ultérieure, de même que `MOD-20` (validation
+  2ᵉ vertical, reportée depuis v0.3) et les agents métier eux-mêmes. La
+  décomposition automatique de l'objectif reste une heuristique de
+  correspondance de mots-clés, pas une compréhension réelle du langage
+  naturel (ADR 0011) ; le pilotage de la délégation reste synchrone
+  intra-processus, sans vrai parallélisme distribué (ADR 0010).
+
+## v0.4 bis — Facturation client, socle fonctionnel (plan initial, reporté)
 
 - **Objectif du jalon** : combler le manque identifié dans la conception
   initiale (aucune facturation) avec un flux devis → facture → suivi
@@ -358,7 +431,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.2 | Refonte interne | Non (comportement identique) | Oui (v0.3+) |
 | v0.3 | Infrastructure (Agent Framework) | Non (aucun agent métier) | Oui (tout agent métier futur) |
 | v0.3 bis | Validation (reportée) | Non (jalon de preuve) | Oui (v0.4+, en pratique) |
-| v0.4 | Fonctionnalité | Oui | Non |
+| v0.4 | Infrastructure (premier agent orchestrateur) | Oui (tableau de bord Director) | Non (agents métier restent optionnels) |
+| v0.4 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.5 | Fonctionnalité | Oui | Non |
 | v0.6 | Fonctionnalité | Oui | Non |
 | v0.7 | Fonctionnalité | Oui | Non |

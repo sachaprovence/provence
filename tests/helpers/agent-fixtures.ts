@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { MembershipRole, WorkspaceRole, AgentDefinitionStatus } from "@/generated/prisma/enums";
 import { DIAGNOSTIC_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/diagnostic-agent";
+import { DIRECTOR_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/director-agent";
 import type { WorkspaceActor } from "@/lib/workspace-context";
 
 /**
@@ -71,6 +72,38 @@ export async function createAgentTestFixture(suffix: string) {
   };
 
   return { organization, workspace, user, membership, workspaceMembership, definition, actor };
+}
+
+/**
+ * Même gabarit que `createAgentTestFixture`, avec en plus une
+ * `AgentDefinition` de test pour le Director (référençant le runtime
+ * `director.orchestrator` déjà enregistré) — pour les tests du moteur de
+ * planification/délégation (v0.4). La définition "diagnostic" existante
+ * sert de cible de délégation par défaut.
+ */
+export async function createDirectorTestFixture(suffix: string) {
+  const base = await createAgentTestFixture(suffix);
+
+  const directorDefinition = await prisma.agentDefinition.create({
+    data: {
+      organizationId: null,
+      key: `test-director-agent-${suffix}`,
+      name: "Director (test)",
+      author: "test",
+      category: "orchestration",
+      status: AgentDefinitionStatus.PUBLISHED,
+      runtimeKey: DIRECTOR_AGENT_RUNTIME_KEY,
+      declaredToolKeys: [
+        "director.list_agents",
+        "director.delegate_task",
+        "director.cancel_task",
+        "director.retry_task",
+      ],
+      declaredPermissions: ["VIEW_WORKSPACE"],
+    },
+  });
+
+  return { ...base, directorDefinition, targetDefinition: base.definition };
 }
 
 export async function cleanupAgentTestFixtures(
