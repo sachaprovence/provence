@@ -1,15 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { ValidationError } from "@/lib/errors";
-import { createAgentRun, executeAgentRun, cancelAgentRun } from "@/lib/agents/execution-engine";
+import { createAgentRun, cancelAgentRun, runAgentToCompletion } from "@/lib/agents/execution-engine";
 import { sendAgentMessage, markMessageDelivered } from "@/lib/agents/messaging";
+import { resolveActiveInstallation } from "@/lib/agents/installation-service";
 import { updateStepStatus } from "./planning-engine";
-import {
-  AgentInstallationStatus,
-  AgentPlanStepStatus,
-  AgentRunTrigger,
-  AgentMessageType,
-} from "@/generated/prisma/enums";
+import { AgentPlanStepStatus, AgentRunTrigger, AgentMessageType } from "@/generated/prisma/enums";
 import type { AgentInstallation, AgentPlanStep, AgentRunStatus } from "@/generated/prisma/client";
 
 /**
@@ -23,52 +19,25 @@ import type { AgentInstallation, AgentPlanStep, AgentRunStatus } from "@/generat
 
 const DEFAULT_DELEGATION_TIMEOUT_MS = 30_000;
 const DEFAULT_DELEGATION_MAX_ATTEMPTS = 1;
-/** Filet de sécurité contre une boucle infinie en cas d'anomalie — jamais atteint en usage normal (`maxAttempts` reste petit). */
-const MAX_DRIVE_ITERATIONS = 25;
 
-const TERMINAL_RUN_STATUSES = new Set<AgentRunStatus>(["SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT"]);
 const CANCELLABLE_STEP_STATUSES = new Set<string>(["PENDING", "READY", "DELEGATED", "RUNNING"]);
 const RETRYABLE_STEP_STATUSES = new Set<string>(["FAILED", "CANCELLED"]);
 
 type DirectorRef = Pick<AgentInstallation, "id" | "workspaceId" | "organizationId">;
 
 async function resolveTargetInstallation(director: DirectorRef, step: AgentPlanStep) {
-  if (step.targetInstallationId) {
-    return prisma.agentInstallation.findFirst({
-      where: {
-        id: step.targetInstallationId,
-        workspaceId: director.workspaceId,
-        status: AgentInstallationStatus.ACTIVE,
-      },
-    });
-  }
-  if (step.targetCategory) {
-    return prisma.agentInstallation.findFirst({
-      where: {
-        workspaceId: director.workspaceId,
-        status: AgentInstallationStatus.ACTIVE,
-        id: { not: director.id },
-        definition: { category: step.targetCategory },
-      },
-      orderBy: { installedAt: "asc" },
-    });
-  }
-  return null;
+  return resolveActiveInstallation({
+    workspaceId: director.workspaceId,
+    installationId: step.targetInstallationId,
+    category: step.targetCategory,
+    excludeInstallationId: director.id,
+  });
 }
 
 function missingGrants(step: AgentPlanStep, target: { grantedToolKeys: string[]; grantedPermissions: string[] }) {
   const missingTools = step.requiredToolKeys.filter((key) => !target.grantedToolKeys.includes(key));
   const missingPermissions = step.requiredPermissions.filter((p) => !target.grantedPermissions.includes(p));
   return { missingTools, missingPermissions };
-}
-
-/** Fait avancer un run jusqu'à un statut terminal, en pilotant nous-mêmes la reprise (pas d'attente du délai de recul de la file générique, voir ADR 0010). */
-async function driveRunToCompletion(runId: string): Promise<void> {
-  for (let i = 0; i < MAX_DRIVE_ITERATIONS; i += 1) {
-    await executeAgentRun(runId);
-    const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: runId } });
-    if (TERMINAL_RUN_STATUSES.has(run.status)) return;
-  }
 }
 
 function mapRunStatusToStepStatus(runStatus: AgentRunStatus): AgentPlanStepStatus {
@@ -152,7 +121,7 @@ export async function delegateStep(
 
     await updateStepStatus(step.id, { subRunId: subRun.id, status: AgentPlanStepStatus.RUNNING });
 
-    await driveRunToCompletion(subRun.id);
+    await runAgentToCompletion(subRun.id);
 
     const finishedRun = await prisma.agentRun.findUniqueOrThrow({ where: { id: subRun.id } });
     const finishedAt = new Date();

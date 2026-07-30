@@ -364,7 +364,77 @@ et de la facturation client (`v0.4`/`v0.5`).
   payer une facture en ligne et voir son statut se mettre à jour
   automatiquement.
 
-## v0.6 — Gestion documentaire
+## v0.6 — Workflow Engine (remplace le plan initial)
+
+> **Statut : ✅ livré** (2026-07-30). Comme pour `v0.2`/`v0.3`/`v0.4`/`v0.5`,
+> ce jalon a été **redéfini sur demande explicite** : le contenu
+> initialement prévu ici (gestion documentaire — `MOD-13`) est reporté à
+> une version ultérieure (voir `v0.6 bis` ci-dessous) et remplacé par un
+> module jugé plus prioritaire et transversal : le moteur d'automatisation
+> d'Autorun. Voir `ROADMAP.md` §1 sexies et §MOD-25, ainsi que
+> `docs/adr/0018` à `0022`.
+
+- **Objectif du jalon** : Workflow Engine — moteur d'automatisation
+  générique et professionnel, indépendant de tout module métier, avec
+  éditeur visuel de type "node editor" ; Autorun devient une plateforme
+  où les agents collaborent automatiquement plutôt qu'une application
+  contenant plusieurs agents isolés.
+- **Modules** : MOD-25 (réutilise intégralement le Framework des Agents,
+  v0.3, et l'Agent Director, v0.4, via une seule action de plugin
+  générique `agent.call` — aucun couplage fort).
+- **Tâches** : voir `BACKLOG.md`, section v0.6 (AR-0102 à AR-0110 : schéma
+  Prisma, moteur d'expressions/de règles, registres de déclencheurs et
+  d'actions, moteur d'exécution ré-entrant, bus d'évènements, service de
+  cycle de vie, templates + tableau de bord, API + éditeur visuel, tests).
+- **Critères de sortie** :
+  - [x] `tests/e2e/golden-path.mjs` et
+    `tests/e2e/two-organisations-isolation.mjs` passent sans modification ;
+  - [x] les 97 tests du Framework/Director/Commercial (v0.3/v0.4/v0.5)
+    passent toujours sans modification de leur comportement (deux
+    fonctions internes ont été extraites/dédupliquées, sans changer leur
+    résultat, voir ADR 0018) ;
+  - [x] 60 nouveaux tests (157 au total) passent contre une vraie base
+    PostgreSQL : déclencheurs (évènement, cron réel, bus d'évènements),
+    conditions (tous opérateurs + combinaison récursive + opérateur
+    personnalisé), variables (résolution de chemin + interpolation
+    `{{ }}`), actions (agent réel, HTTP simulé, email, notification,
+    échec explicite des actions non implémentées), parallélisme,
+    timeouts, reprises (retry/attente/branche d'erreur/compensation
+    logique), permissions (`MANAGE_WORKFLOWS`), isolation multi-tenant,
+    communications réelles avec les agents ;
+  - [x] `npm run lint`, `npx tsc --noEmit` et `npm run build` passent sans
+    erreur ;
+  - [x] validé par une vraie requête HTTP contre le serveur (clonage d'un
+    template, sélection de noeud dans l'éditeur, activation d'une
+    version, déclenchement manuel jusqu'au run `SUCCEEDED`), pas
+    seulement des tests automatisés — captures d'écran de l'éditeur et du
+    détail d'exécution incluses dans le rapport de livraison.
+- **État fonctionnel de l'application** : Provence 360, le multi-tenant,
+  le Framework des Agents, l'Agent Director et l'Agent Commercial restent
+  **entièrement fonctionnels** ; l'application dispose en plus d'un
+  Workflow Engine complet avec tableau de bord (`/workflows`) : créer un
+  workflow (vide ou depuis un modèle), l'éditer graphiquement, le
+  versionner, l'activer/désactiver/archiver, le déclencher manuellement
+  ou via un évènement/cron/webhook, suivre l'historique d'exécution
+  noeud par noeud avec journal détaillé, annuler/relancer une exécution.
+- **Limite connue** : "Exécuter un script" du brief est couvert
+  fonctionnellement (moteur d'expressions sûr + action `variable.set`)
+  mais pas littéralement — aucune exécution de code arbitraire n'est
+  implémentée, choix de sécurité documenté (ADR 0020). Sept actions
+  (`sms.send`, `file.write`, `document.generate`, `customer.update`,
+  `task.create`, `quote.create`, `invoice.create`, `appointment.create`)
+  sont déclarées mais échouent explicitement à l'exécution : aucune
+  n'a de couche de service réutilisable aujourd'hui sans risquer de
+  dupliquer/contourner la logique déjà présente dans les routes
+  existantes de Provence 360 (ADR 0022). Le mécanisme d'automatisation
+  hérité (`AutomationRule`/`automation-engine.ts`, v0.1) n'a pas été
+  migré vers le Workflow Engine dans cette phase. Un corps de boucle
+  interrompu reprend depuis la première itération (pas de reprise fine
+  par itération) ; un sous-workflow qui passe en attente fait échouer
+  explicitement l'action appelante plutôt que de propager la suspension
+  au run parent (ADR 0019).
+
+## v0.6 bis — Gestion documentaire (plan initial, reporté)
 
 - **Objectif du jalon** : combler le deuxième manque identifié (aucun
   stockage de fichiers).
@@ -495,7 +565,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.4 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.5 | Fonctionnalité (premier agent métier) | Oui (tableau de bord Commercial) | Non |
 | v0.5 bis | Fonctionnalité (reportée) | Oui | Non |
-| v0.6 | Fonctionnalité | Oui | Non |
+| v0.6 | Infrastructure (moteur d'automatisation transversal) | Oui (éditeur + tableau de bord Workflows) | Oui (toute automatisation future) |
+| v0.6 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.7 | Fonctionnalité | Oui | Non |
 | v0.8 | Infrastructure | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |
 | v0.9 | Fonctionnalité + ops | Oui (IA/email réels) | Oui (v0.10 en dépend partiellement) |

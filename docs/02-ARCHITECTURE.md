@@ -747,3 +747,152 @@ autres), `tests/agents/commercial-agent.test.ts` (qualification, scoring,
 génération, mémoire, permissions, reprise après erreur, journalisation,
 mode autonome), `tests/agents/commercial-director-delegation.test.ts`, et
 `tests/tenant-isolation/commercial.test.ts`.
+
+## 13. Workflow Engine — moteur d'automatisation transversal (v0.6 — `ROADMAP.md` MOD-25)
+
+Voir `docs/adr/0018` à `0022` pour la justification complète des choix
+ci-dessous. Le Workflow Engine est un module d'infrastructure à part
+entière (`src/lib/workflows/`), au même niveau que le Framework des
+Agents (§10) et l'Agent Director (§11) — jamais une automatisation codée
+en dur dans un module métier. Il ne réimplémente jamais l'exécution
+d'agent : la seule intégration est l'action de plugin générique
+`agent.call`.
+
+### Graphe versionné, purement déclaratif
+
+`WorkflowDefinition` (identité + cycle de vie DRAFT/ACTIVE/INACTIVE/
+ARCHIVED, `activeVersionId` pilote seul les déclenchements) et
+`WorkflowVersion` (graphe JSON immuable une fois créé) — même séparation
+identité/version que `PromptTemplate` (§12). Un noeud (`WorkflowNode`,
+`src/lib/workflows/graph-types.ts`) ne référence jamais de code
+exécutable, seulement une clé (`triggerKey`/`actionKey`) résolue par un
+registre en mémoire — même principe que `AgentDefinition.runtimeKey`
+(ADR 0007, réappliqué ici — voir ADR 0018). Les templates
+(`isTemplate: true`, `organizationId`/`workspaceId` nuls) sont des
+`WorkflowDefinition` globaux, jamais activables directement : ils doivent
+être clonés dans un workspace (`cloneWorkflowDefinition`), même
+convention que les `AgentDefinition` globaux.
+
+### Moteur d'expressions et de règles (`src/lib/workflows/expressions/`, `conditions/`)
+
+Aucun `eval`/interpréteur de langage arbitraire (voir ADR 0020) : un
+`Expr` ne peut être qu'une valeur littérale ou une référence de variable
+(`{{ portée.chemin }}`, même convention `{{ }}` que le moteur de prompts,
+§12) ; un `Rule` ne combine que des opérateurs fermés
+(eq/neq/gt/gte/lt/lte/and/or/not/regex/exists/in/date_before/date_after/
+permission) plus un point d'extension enregistré
+(`conditions/registry.ts`, `op: "custom"`). L'action `variable.set`
+substitue "Exécuter un script" du brief sans ouvrir de canal d'exécution
+de code. Le contexte de variables (`VariableContext`) couvre exactement
+les portées demandées : workflow/contexte/utilisateur/organisation/
+workspace/agents/résultats/API/formulaires.
+
+### Registres de déclencheurs et d'actions (système de plugins)
+
+`triggers/registry.ts` : 14 types déclaratifs (évènements applicatifs,
+planification — heure/cron réel à 5 champs, voir ADR 0021 — webhook,
+action utilisateur, fin d'un autre workflow, exécution d'un agent).
+`actions/registry.ts` : `WorkflowActionHandler` enregistré une fois,
+même idiome que `tool-registry.ts` (v0.3). 6 actions réellement
+implémentées (`agent.call`, `email.send` via l'abstraction email
+existante, `http.call_api`, `notification.create`, `workflow.run_subworkflow`,
+`variable.set`) et 7 actions honnêtement déclarées "non encore
+implémentées" (`sms.send`, `file.write`, `document.generate`,
+`customer.update`, `task.create`, `quote.create`, `invoice.create`,
+`appointment.create` — même principe que `placeholder-tools.ts`, v0.3,
+voir ADR 0022) plutôt que de dupliquer/contourner la logique déjà présente
+dans les routes de Provence 360.
+
+### Découplage par bus d'évènements (`src/lib/events/domain-events.ts`)
+
+Pub/sub générique en mémoire, sans dépendance à aucun module métier ni au
+Framework ni au Workflow Engine : `agents/execution-engine.ts` publie
+`"agent_run.finished"` à la fin de chaque `AgentRun`, sans rien savoir du
+Workflow Engine ; `workflows/trigger-engine.ts` s'y abonne indépendamment
+pour le déclencheur "Exécution d'un agent" — voir ADR 0018. L'action
+`agent.call` (couche supérieure) réutilise
+`agents/installation-service.ts#resolveActiveInstallation` (factorisée,
+aussi utilisée par le Director) et `agents/execution-engine.ts#runAgentToCompletion`
+(extrait de `director/delegation-engine.ts`, comportement inchangé).
+
+### Moteur d'exécution ré-entrant (`execution-engine.ts`)
+
+Même principe de file interne sur PostgreSQL que `AgentRun` (ADR 0008,
+réappliqué — voir ADR 0019) : `WorkflowRun.status=QUEUED` +
+`scheduledAt` pour la file, `status=WAITING` + `resumeAt` pour les
+noeuds d'attente. La progression réelle vit uniquement dans
+`WorkflowRunStep` (jamais un état en mémoire) : `executeWorkflowRun` est
+ré-entrante, rejoue seulement les noeuds non terminaux à chaque appel.
+Séquentiel et parallèle : les noeuds "prêts" (dépendances terminales,
+arête satisfaite) d'un même tick s'exécutent concurremment
+(`Promise.allSettled`) ; jointure de type "OU" documentée comme limite
+assumée (ADR 0019). Boucle (`type: "loop"`) : sous-graphe interne
+(`bodyNodeIds`) exécuté séquentiellement par itération, non résumable
+finement. Sous-workflow : délègue entièrement à l'action
+`workflow.run_subworkflow` (un seul code, jamais deux implémentations),
+pilotée de façon synchrone et bornée. Erreurs par noeud : `onError`
+(stop/retry avec recul/ignore/alternative_branch via une arête
+`branch: "error"`/notify/escalate_director — résout l'installation
+Director active et lui crée un `AgentRun`). Compensation logique
+(`compensateActionKey`) : rejoue, en ordre inverse, l'action de
+compensation des étapes déjà réussies si une étape ultérieure échoue —
+jamais un rollback SQL transactionnel (ADR 0019).
+
+### Service de cycle de vie (`workflow-service.ts`)
+
+Créer/modifier (nouvelle version, jamais en place)/activer (réindexe les
+noeuds déclencheurs vers `WorkflowTriggerBinding` pour une résolution
+rapide)/désactiver/cloner/exporter/importer/archiver. Validation
+structurelle (`graph-validation.ts` : cycles hors boucle explicite,
+arêtes orphelines, branches condition manquantes) appliquée avant tout
+enregistrement — le même module, sans import "server-only", est
+réutilisé côté client par l'éditeur pour la validation graphique
+immédiate.
+
+### 10 templates et tableau de bord
+
+`templates/seed-templates.ts` : Prospection, Relance, Suivi client,
+Création devis, Signature, Facturation, Support, Onboarding client, Suivi
+visite virtuelle, Relance paiement — `WorkflowDefinition` globaux,
+clonables. `dashboard-service.ts` : workflows actifs/inactifs/brouillon/
+archivés, historique, taux de succès/échec, durée moyenne, files
+d'attente, exécutions en cours, goulots d'étranglement (agrégation par
+type de noeud/clé d'action, même convention que `agents/observability.ts`).
+
+### API et éditeur visuel
+
+`src/app/api/workflows/**` (CRUD, versions, activation/désactivation/
+archivage, clonage, export/import, déclenchement manuel, dashboard,
+registre pour la palette), `src/app/api/workflows/runs/**` (détail,
+annulation, relance), `src/app/api/webhooks/workflows/[workspaceId]/
+[workflowKey]` (déclencheur webhook générique), `POST /api/cron/
+process-workflow-runs` (file d'attente + attentes + cron, même
+convention que `process-agent-runs`).
+
+`/workflows` (liste + tableau de bord + templates),
+`/workflows/[id]` (éditeur : canevas SVG/HTML glisser-déposer,
+zoom/déplacement, connexion par clic, inspecteur de noeud par type de
+bloc, inspecteur d'arête pour les branches, inspecteur de variables,
+versions, exécutions récentes — `src/components/workflow-editor-client.tsx`,
+`workflow-graph-canvas.tsx`, sans dépendance à une librairie de graphes,
+même parti pris que `director-plan-graph.tsx`, §11), `/workflows/runs/[runId]`
+(chronologie des étapes, journal, annulation/relance). Accessible aux
+rôles Owner/Admin/Sales, permission `MANAGE_WORKFLOWS` pour les mutations.
+
+### Relation avec l'automatisation héritée de Provence 360
+
+`AutomationRule`/`automation-engine.ts` (v0.1) restent en l'état, non
+migrés — voir ADR 0022. C'est le chemin que toute automatisation future
+doit emprunter, pas une réécriture rétroactive de l'existant.
+
+### Tests
+
+`tests/workflows/execution-engine.test.ts` (séquentiel, branchement,
+parallèle, attente/reprise, retry, arrêt, boucle, timeout, branche
+d'erreur, compensation), `tests/workflows/workflow-service.test.ts`
+(cycle de vie complet, clonage/export/import, graphe invalide rejeté),
+`tests/workflows/expressions.test.ts` (25 cas, tous les opérateurs),
+`tests/workflows/actions.test.ts` (agent réel, HTTP simulé, email,
+notification, variable, échecs explicites), `tests/workflows/triggers.test.ts`
+(évènement, cron réel, bus d'évènements), `tests/workflows/permissions.test.ts`,
+et `tests/tenant-isolation/workflows.test.ts`.

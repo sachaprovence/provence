@@ -1027,7 +1027,139 @@ code existant, tests inclus.
 
 ---
 
-## Version 0.6 — Gestion documentaire (MOD-13)
+## Version 0.6 — Workflow Engine (MOD-25, remplace le plan initial)
+
+### AR-0102 — Schéma Prisma `WorkflowDefinition`/`WorkflowVersion`/`WorkflowTriggerBinding`/`WorkflowRun`/`WorkflowRunStep`/`WorkflowRunLog`
+- **Description** : identité/version séparées (comme `PromptTemplate`),
+  cycle de vie `DRAFT`/`ACTIVE`/`INACTIVE`/`ARCHIVED`, index des
+  déclencheurs pour résolution rapide, exécutions et journal détaillés.
+  Migration purement additive.
+- **Fichiers concernés** : `prisma/schema.prisma`,
+  `prisma/migrations/20260730133557_add_workflow_engine/`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : aucun (nouvelles tables).
+
+### AR-0103 — Moteur d'expressions et de règles combinables
+- **Description** : résolution de variables par portée (workflow/contexte/
+  utilisateur/organisation/workspace/agents/résultats/API/formulaires),
+  interpolation `{{ }}`, opérateurs de règle (égalité/différence/
+  comparaisons/ET/OU/NON/regex/exists/in/dates/permission) plus un point
+  d'extension par opérateur personnalisé.
+- **Fichiers concernés** : `src/lib/workflows/expressions/**`,
+  `src/lib/workflows/conditions/registry.ts`, `src/lib/workflows/graph-types.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0102.
+
+### AR-0104 — Registres de déclencheurs et d'actions (système de plugins)
+- **Description** : 14 types de déclencheurs déclaratifs ; 6 actions
+  réellement implémentées (appel d'agent générique, envoi d'email, appel
+  API sortant, notification, sous-workflow, définition de variable) et 7
+  actions honnêtement déclarées non implémentées (voir ADR 0022) ;
+  analyseur cron réel à 5 champs.
+- **Fichiers concernés** : `src/lib/workflows/triggers/**`,
+  `src/lib/workflows/actions/**`.
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0103.
+
+### AR-0105 — Moteur d'exécution ré-entrant
+- **Description** : graphe de noeuds/arêtes exécuté par ticks successifs,
+  séquentiel et parallèle (noeuds prêts exécutés concurremment),
+  branchement conditionnel avec cascade de noeuds sautés, boucle sur
+  collection, attente/délai avec suspension et reprise, sous-workflow
+  synchrone borné, timeout par étape, retry avec recul, politiques
+  d'erreur (arrêt/ignorer/branche alternative/notifier/escalade au
+  Director), compensation logique (rollback non transactionnel).
+- **Fichiers concernés** : `src/lib/workflows/execution-engine.ts`,
+  `src/lib/agents/installation-service.ts` (helper de résolution
+  d'installation extrait pour réutilisation, voir AR-0106),
+  `src/lib/agents/execution-engine.ts` (helper `runAgentToCompletion`
+  extrait de `delegation-engine.ts`).
+- **Complexité** : Élevée.
+- **Estimation** : 3 jours.
+- **Prérequis** : AR-0104.
+
+### AR-0106 — Bus d'évènements générique + intégration Framework des Agents
+- **Description** : `src/lib/events/domain-events.ts` (pub/sub en
+  mémoire) pour découpler `agents/execution-engine.ts` (qui publie la fin
+  d'un `AgentRun`) du Workflow Engine (qui s'y abonne pour le déclencheur
+  "Exécution d'un agent"), sans dépendance de compilation dans les deux
+  sens. Extraction de `resolveActiveInstallation` (déduplique la
+  résolution d'installation par id/catégorie, déjà utilisée par le
+  Director).
+- **Fichiers concernés** : `src/lib/events/domain-events.ts`,
+  `src/lib/workflows/trigger-engine.ts`,
+  `src/lib/agents/installation-service.ts`,
+  `src/lib/agents/director/delegation-engine.ts` (mis à jour pour
+  réutiliser le helper).
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0105.
+
+### AR-0107 — Service de cycle de vie des workflows (CRUD/versioning/lifecycle)
+- **Description** : créer/modifier (nouvelle version)/activer/désactiver/
+  cloner/exporter/importer/archiver ; validation structurelle du graphe
+  (cycles, arêtes orphelines, branches condition manquantes) appliquée
+  avant tout enregistrement.
+- **Fichiers concernés** : `src/lib/workflows/workflow-service.ts`,
+  `src/lib/workflows/graph-validation.ts`,
+  `src/lib/validations/workflow.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0105.
+
+### AR-0108 — 10 templates prêts à l'emploi + tableau de bord
+- **Description** : Prospection/Relance/Suivi client/Création devis/
+  Signature/Facturation/Support/Onboarding client/Suivi visite virtuelle/
+  Relance paiement, clonables dans un workspace ; tableau de bord
+  (workflows actifs/inactifs, historique, temps d'exécution, taux de
+  succès/échec, files d'attente, exécutions en cours, goulots
+  d'étranglement).
+- **Fichiers concernés** : `src/lib/workflows/templates/seed-templates.ts`,
+  `src/lib/workflows/dashboard-service.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0107.
+
+### AR-0109 — API complète + éditeur visuel (node editor)
+- **Description** : routes CRUD/activation/déclenchement manuel/
+  annulation/relance/export/import/webhook générique ; canevas
+  glisser-déposer avec zoom/déplacement, connexion par clic,
+  inspecteur de noeud/arête par type de bloc, inspecteur de variables,
+  validation graphique côté client.
+- **Fichiers concernés** : `src/app/api/workflows/**`,
+  `src/app/api/webhooks/workflows/**`, `src/app/api/cron/process-workflow-runs/`,
+  `src/app/(app)/workflows/**`, `src/components/workflow-*.tsx`,
+  `src/components/workflows-list-client.tsx`.
+- **Complexité** : Élevée.
+- **Estimation** : 3 jours.
+- **Prérequis** : AR-0108.
+
+### AR-0110 — Tests du Workflow Engine + isolation multi-tenant
+- **Description** : déclencheurs (évènement, cron, bus d'évènements),
+  conditions (tous opérateurs), variables, actions (agent réel, HTTP
+  simulé, email, notification, échecs explicites), parallélisme,
+  timeouts, reprises (retry/attente/branche d'erreur/compensation),
+  permissions, isolation multi-tenant, communications avec les agents.
+- **Fichiers concernés** : `tests/workflows/*.test.ts`,
+  `tests/tenant-isolation/workflows.test.ts`, `tests/helpers/workflow-fixtures.ts`.
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0109.
+
+**Total estimé du travail réellement livré pour v0.6 : ~15,5 jours.**
+
+---
+
+### Plan initial de v0.6 (non traité dans cette version, conservé pour référence)
+
+> Les tâches `AR-0031` et suivantes (gestion documentaire) ci-dessous
+> n'ont pas été traitées dans cette version — voir `ROADMAP.md` §1 sexies.
+> Reportées après v0.6.
+
+## Version 0.6 bis — Gestion documentaire (MOD-13)
 
 ### AR-0031 — Interface `StorageProvider` + implémentation locale
 - **Description** : interface (`upload`, `download`, `delete`,
@@ -1504,10 +1636,11 @@ Ce tableau reflète le plan initial de ce document. En pratique, `v0.2`
 (~13 jours réels) a livré `MOD-21` à la place de `MOD-02`, `v0.3`
 (~13,5 jours réels) a livré `MOD-22` (Framework des Agents) à la place de
 `MOD-20`, `v0.4` (~11,5 jours réels) a livré `MOD-23` (Agent Director) à
-la place de `MOD-12` partie 1, et `v0.5` (~12 jours réels) a livré
-`MOD-24` (Agent Commercial) à la place de `MOD-12` partie 2 — voir les
-sections « Total estimé du travail réellement livré » correspondantes
-ci-dessus.
+la place de `MOD-12` partie 1, `v0.5` (~12 jours réels) a livré
+`MOD-24` (Agent Commercial) à la place de `MOD-12` partie 2, et `v0.6`
+(~15,5 jours réels) a livré `MOD-25` (Workflow Engine) à la place de
+`MOD-13` — voir les sections « Total estimé du travail réellement livré »
+correspondantes ci-dessus.
 
 ---
 

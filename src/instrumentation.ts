@@ -38,5 +38,15 @@ export async function register() {
     } catch (error) {
       logger.error({ err: error }, "Échec de l'initialisation du Framework Agents.");
     }
+
+    // Enregistre les registres du Workflow Engine (déclencheurs, actions) et
+    // seed les templates (idempotent) — voir src/lib/workflows/bootstrap.ts.
+    try {
+      const { syncWorkflowCatalog } = await import("@/lib/workflows/bootstrap");
+      await syncWorkflowCatalog();
+      logger.info("Catalogue du Workflow Engine synchronisé.");
+    } catch (error) {
+      logger.error({ err: error }, "Échec de l'initialisation du Workflow Engine.");
+    }
   }
 }

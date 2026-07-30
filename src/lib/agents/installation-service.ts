@@ -20,6 +20,38 @@ export async function resolveInstallationOrThrow(actor: { organization: { id: st
   return installation;
 }
 
+/**
+ * Résout une installation active par id explicite ou par catégorie —
+ * extrait en v0.6 de `director/delegation-engine.ts#resolveTargetInstallation`
+ * (identique) pour que l'action `agent.call` du Workflow Engine
+ * (`workflows/actions/builtin/agent-action.ts`) réutilise la même
+ * résolution plutôt que de la dupliquer.
+ */
+export async function resolveActiveInstallation(params: {
+  workspaceId: string;
+  installationId?: string | null;
+  category?: string | null;
+  excludeInstallationId?: string;
+}) {
+  if (params.installationId) {
+    return prisma.agentInstallation.findFirst({
+      where: { id: params.installationId, workspaceId: params.workspaceId, status: AgentInstallationStatus.ACTIVE },
+    });
+  }
+  if (params.category) {
+    return prisma.agentInstallation.findFirst({
+      where: {
+        workspaceId: params.workspaceId,
+        status: AgentInstallationStatus.ACTIVE,
+        ...(params.excludeInstallationId ? { id: { not: params.excludeInstallationId } } : {}),
+        definition: { category: params.category },
+      },
+      orderBy: { installedAt: "asc" },
+    });
+  }
+  return null;
+}
+
 /** Catalogue disponible pour une organisation : agents globaux + agents propres à l'organisation. */
 export async function listCatalog(actor: { organization: { id: string } }) {
   return prisma.agentDefinition.findMany({

@@ -145,9 +145,9 @@ ce périmètre :
   toujours préférer fournir `steps` explicitement
   (`directorRequestSchema`, `src/lib/validations/director.ts`) plutôt que
   de compter sur l'heuristique.
-- **Un futur agent métier** (CRM, Marketing, Comptabilité, Support,
-  Analyse, Finance, Développement — le Commercial est passé de "futur" à
-  réel en v0.5, voir §0 quinquies) doit d'abord avoir son contrat dans
+- **Un futur agent métier** (CRM, Marketing, Support, Analyse, Finance,
+  Développement — le Commercial est passé de "futur" à réel en v0.5, voir
+  §0 quinquies) doit d'abord avoir son contrat dans
   `src/lib/agents/director/capability-contracts.ts` avant toute
   implémentation — voir ADR 0012. Passer son `AgentDefinition` de `DRAFT`
   à `PUBLISHED` (`promoteGlobalAgentDefinition`, `bootstrap.ts`) est la
@@ -194,6 +194,61 @@ touchant ce périmètre :
   premier usage concret réel : `{ autonomousMode: boolean }` pour le
   Commercial. Un futur agent peut y ajouter ses propres clés de
   configuration sans migration de schéma.
+
+## 0 sexies. État du Workflow Engine (v0.6)
+
+Le moteur d'automatisation transversal d'Autorun (`ROADMAP.md` MOD-25,
+`docs/02-ARCHITECTURE.md` §13) est livré, en remplacement du plan initial
+de v0.6 (voir `MILESTONES.md`). Points à connaître pour tout nouveau code
+touchant ce périmètre :
+
+- **Ajouter un nouveau déclencheur ou une nouvelle action = enregistrer
+  une entrée de registre**, jamais modifier `execution-engine.ts`. Un
+  déclencheur : `registerTriggerType` (`triggers/registry.ts`, métadonnée
+  pure, n'importe quelle `eventKey` fonctionne même non enregistrée). Une
+  action : implémenter `WorkflowActionHandler` et l'enregistrer via
+  `registerWorkflowAction` (`actions/registry.ts`) — voir
+  `actions/builtin/*.ts` comme modèles, en particulier le principe
+  honnête des stubs "non encore implémenté" (`not-yet-implemented-actions.ts`,
+  ADR 0022) plutôt qu'un faux succès ou une logique métier dupliquée.
+- **Ne jamais coupler fortement le Workflow Engine à un agent métier
+  spécifique** : la seule façon dont un workflow parle à un agent est
+  l'action générique `agent.call` (par `installationId` ou `category`),
+  jamais un import direct d'un service d'agent (`commercial-service.ts`
+  etc.) — voir ADR 0018. Le déclencheur "Exécution d'un agent" passe par
+  le bus d'évènements générique (`src/lib/events/domain-events.ts`),
+  jamais par un import direct entre `agents/execution-engine.ts` et le
+  Workflow Engine.
+- **Aucune exécution de code arbitraire** : "Exécuter un script" est
+  couvert par le moteur d'expressions sûr (`expressions/evaluator.ts`) et
+  l'action `variable.set`, jamais par `eval`/`new Function` — voir
+  ADR 0020. Un besoin de calcul plus riche se couvre en écrivant une
+  nouvelle action de plugin TypeScript déployée, jamais en élargissant le
+  langage d'expression accepté depuis l'éditeur.
+- **La progression d'un run vit uniquement dans `WorkflowRunStep`**,
+  jamais dans un état en mémoire du moteur — `executeWorkflowRun` doit
+  toujours rester ré-entrante (rechargée depuis la base à chaque appel).
+  Toute nouvelle sémantique d'exécution doit préserver cette propriété
+  pour que la reprise après interruption continue de fonctionner — voir
+  ADR 0019 pour les limites déjà assumées (jointure "OU", boucle
+  non-résumable finement, sous-workflow suspendu non pris en charge).
+- **Un nouvel opérateur de condition** s'ajoute via
+  `registerConditionOperator` (`conditions/registry.ts`, `Rule` avec
+  `op: "custom"`), jamais en modifiant les opérateurs fermés de
+  `evaluator.ts`.
+- **`AutomationRule`/`automation-engine.ts` (Provence 360, v0.1) ne sont
+  pas touchés** et ne doivent pas l'être sans décision explicite — voir
+  ADR 0022. Toute nouvelle automatisation doit passer par le Workflow
+  Engine, jamais par une extension de ce mécanisme hérité.
+- **Toute nouvelle fonctionnalité du Workflow Engine doit être vérifiée
+  au moins une fois par une vraie requête HTTP contre un serveur en cours
+  d'exécution** (pas seulement `vitest`) — même discipline que le
+  Framework des Agents (§0 quater/quinquies) : c'est ce test qui a
+  révélé, en v0.6, un bug d'auto-référence sur le noeud "fin" (jamais
+  renvoyer `ctx.results` directement une fois affecté à
+  `ctx.results[nodeId]`) et une erreur de résolution de l'expression de
+  collection d'une boucle, invisibles dans les tests unitaires seuls tant
+  que le graphe testé restait trivial.
 
 ## 1. Avant de commencer une tâche du backlog
 

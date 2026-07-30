@@ -13,6 +13,7 @@ export type WorkspacePermission =
   | "VALIDATE_MESSAGES" // valider un message généré avant envoi
   | "MANAGE_FINANCE" // devis, factures (futur), comptabilité
   | "EXECUTE_MISSIONS" // missions terrain, livrables
+  | "MANAGE_WORKFLOWS" // créer/modifier/activer/déclencher un workflow (v0.6)
   | "VIEW_WORKSPACE"; // lecture seule sur tout le périmètre du workspace
 
 const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly WorkspacePermission[]> = {
@@ -23,6 +24,7 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly WorkspacePermission[]> = 
     "VALIDATE_MESSAGES",
     "MANAGE_FINANCE",
     "EXECUTE_MISSIONS",
+    "MANAGE_WORKFLOWS",
     "VIEW_WORKSPACE",
   ],
   ADMIN: [
@@ -32,9 +34,10 @@ const ROLE_PERMISSIONS: Record<WorkspaceRole, readonly WorkspacePermission[]> = 
     "VALIDATE_MESSAGES",
     "MANAGE_FINANCE",
     "EXECUTE_MISSIONS",
+    "MANAGE_WORKFLOWS",
     "VIEW_WORKSPACE",
   ],
-  MANAGER: ["MANAGE_LEADS", "VALIDATE_MESSAGES", "EXECUTE_MISSIONS", "VIEW_WORKSPACE"],
+  MANAGER: ["MANAGE_LEADS", "VALIDATE_MESSAGES", "EXECUTE_MISSIONS", "MANAGE_WORKFLOWS", "VIEW_WORKSPACE"],
   COMMERCIAL: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
   OPERATOR: ["EXECUTE_MISSIONS", "VIEW_WORKSPACE"],
   ACCOUNTANT: ["MANAGE_FINANCE", "VIEW_WORKSPACE"],

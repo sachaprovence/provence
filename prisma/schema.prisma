@@ -62,6 +62,8 @@ model Organization {
   agentInstallations   AgentInstallation[]
   commercialProspects  CommercialProspect[]
   commercialActions    CommercialAction[]
+  workflowDefinitions  WorkflowDefinition[]
+  workflowRuns         WorkflowRun[]
   territories          Territory[]
   icps               IdealCustomerProfile[]
   leads              Lead[]
@@ -111,6 +113,9 @@ model User {
   agentInterventionsResolved  AgentInterventionRequest[] @relation("AgentInterventionResolvedBy")
   commercialActionsDecided    CommercialAction[]         @relation("CommercialActionDecidedBy")
   promptTemplatesCreated      PromptTemplate[]           @relation("PromptTemplateCreatedBy")
+  workflowDefinitionsCreated  WorkflowDefinition[]       @relation("WorkflowDefinitionCreatedBy")
+  workflowVersionsCreated     WorkflowVersion[]          @relation("WorkflowVersionCreatedBy")
+  workflowRunsCreated         WorkflowRun[]              @relation("WorkflowRunCreatedBy")
   sessions                    Session[]
   passwordResets              PasswordResetToken[]
   loginEvents                 LoginEvent[]
@@ -153,6 +158,9 @@ model Workspace {
   agentPlans                AgentPlan[]
   commercialProspects       CommercialProspect[]
   commercialActions         CommercialAction[]
+  workflowDefinitions       WorkflowDefinition[]
+  workflowRuns              WorkflowRun[]
+  workflowTriggerBindings   WorkflowTriggerBinding[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1766,4 +1774,244 @@ model PromptTemplate {
 
   @@unique([key, version])
   @@index([key, isActive])
+}
+
+// ---------------------------------------------------------------------------
+// Workflow Engine (v0.6) — moteur d'automatisation générique d'Autorun.
+// Aucune automatisation métier n'est codée en dur ici : un workflow ne
+// référence que des clés déclaratives (déclencheurs/conditions/actions)
+// résolues au démarrage par les registres de src/lib/workflows/*/registry.ts,
+// exactement comme AgentDefinition.runtimeKey ne contient jamais de code
+// exécutable (voir ADR 0007, réappliqué ici — voir ADR 0018). Distinct du
+// mécanisme `AutomationRule`/`automation-engine.ts` (v0.1, spécifique au
+// vertical photographie 360°, laissé tel quel — voir ADR 0022) : c'est le
+// chemin que toute automatisation FUTURE doit emprunter.
+// ---------------------------------------------------------------------------
+
+enum WorkflowDefinitionStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+/// Identité stable d'un workflow (le "quoi"), versionnée séparément (voir
+/// WorkflowVersion) — même séparation identité/version que PromptTemplate
+/// (v0.5), avec en plus un cycle de vie explicite. `organizationId`/
+/// `workspaceId` nuls = modèle global fourni par Autorun (catalogue de
+/// templates, jamais déclenché directement — doit d'abord être cloné dans
+/// un workspace via `cloneWorkflowDefinition`, même convention que
+/// `AgentDefinition`). `activeVersionId` référence la version qui pilote
+/// réellement les déclenchements (`WorkflowTriggerBinding`) ; les autres
+/// versions restent consultables (historique, rollback) mais inertes.
+model WorkflowDefinition {
+  id                String                   @id @default(cuid())
+  organizationId    String?
+  workspaceId       String?
+  key               String
+  name              String
+  description       String?
+  category          String
+  status            WorkflowDefinitionStatus @default(DRAFT)
+  isTemplate        Boolean                  @default(false)
+  sourceTemplateKey String?
+  activeVersionId   String?                  @unique
+  createdById       String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  archivedAt        DateTime?
+
+  organization  Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User?            @relation("WorkflowDefinitionCreatedBy", fields: [createdById], references: [id])
+  activeVersion WorkflowVersion? @relation("WorkflowDefinitionActiveVersion", fields: [activeVersionId], references: [id])
+
+  versions        WorkflowVersion[]        @relation("WorkflowVersionOwner")
+  runs            WorkflowRun[]
+  triggerBindings WorkflowTriggerBinding[]
+
+  @@unique([workspaceId, key])
+  @@index([organizationId])
+  @@index([workspaceId, status])
+  @@index([isTemplate])
+}
+
+/// Un graphe de noeuds/arêtes versionné et immuable une fois créé — on ne
+/// modifie jamais une version en place, on en crée une nouvelle (même
+/// principe que PromptTemplate). `graph` (voir
+/// src/lib/workflows/graph-types.ts pour la forme TypeScript) ne contient
+/// que des références déclaratives à des clés enregistrées au registre —
+/// jamais de code exécutable.
+model WorkflowVersion {
+  id                   String   @id @default(cuid())
+  workflowDefinitionId String
+  version              Int
+  graph                Json
+  changelog            String?
+  createdById          String?
+  createdAt            DateTime @default(now())
+
+  workflowDefinition WorkflowDefinition  @relation("WorkflowVersionOwner", fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  createdBy          User?               @relation("WorkflowVersionCreatedBy", fields: [createdById], references: [id])
+  activeFor          WorkflowDefinition? @relation("WorkflowDefinitionActiveVersion")
+  runs               WorkflowRun[]
+  triggerBindings    WorkflowTriggerBinding[]
+
+  @@unique([workflowDefinitionId, version])
+}
+
+/// Index des noeuds "déclencheur" extraits du graphe à l'activation d'une
+/// version (voir workflow-service.ts#activateWorkflowVersion), pour
+/// résoudre rapidement "quels workflows écoutent cet évènement / ce cron /
+/// ce webhook" sans charger et parser le JSON de chaque graphe à chaque
+/// évènement applicatif — même motivation que `AgentSchedule` pour les
+/// agents (v0.3).
+model WorkflowTriggerBinding {
+  id                   String   @id @default(cuid())
+  workflowDefinitionId String
+  workflowVersionId    String
+  workspaceId          String
+  nodeId               String
+  triggerKey           String
+  config               Json?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  workflowVersion    WorkflowVersion    @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, triggerKey, isActive])
+  @@index([workflowDefinitionId])
+}
+
+enum WorkflowRunStatus {
+  QUEUED
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
+
+enum WorkflowRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT
+  WEBHOOK
+  API
+  /// Créée par un autre workflow (noeud "sous-workflow") — distincte de
+  /// AGENT (créée par un agent, ex. escalade) et de MANUAL/API.
+  WORKFLOW
+  AGENT
+}
+
+/// Une exécution de workflow. File d'attente interne sur PostgreSQL, même
+/// principe que `AgentRun` (voir ADR 0008, réappliqué ici — voir ADR 0018) :
+/// `status=QUEUED` + `scheduledAt` jouent le rôle de file (voir
+/// `processQueuedWorkflowRuns`), `status=WAITING` + `resumeAt` pour les
+/// noeuds d'attente/délai (voir `processDueWorkflowWaits`). Ré-entrant :
+/// une exécution peut être interrompue (attente, redémarrage serveur) et
+/// reprise plus tard en ne rejouant que les étapes non terminales — la
+/// progression réelle vit toujours dans `WorkflowRunStep`, jamais dans un
+/// état en mémoire du moteur.
+model WorkflowRun {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  workspaceId          String
+  workflowDefinitionId String
+  workflowVersionId    String
+  status               WorkflowRunStatus  @default(QUEUED)
+  trigger              WorkflowRunTrigger @default(MANUAL)
+  triggerKey           String?
+  priority             Int                @default(0)
+  input                Json?
+  context              Json?
+  output               Json?
+  error                Json?
+  escalatedToDirector  Boolean            @default(false)
+  attempt              Int                @default(0)
+  maxAttempts          Int                @default(1)
+  scheduledAt          DateTime           @default(now())
+  resumeAt             DateTime?
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  cancelledAt          DateTime?
+  parentRunId          String?
+  createdById          String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  workflowVersion    WorkflowVersion    @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  parentRun          WorkflowRun?       @relation("WorkflowRunRetry", fields: [parentRunId], references: [id])
+  retries            WorkflowRun[]      @relation("WorkflowRunRetry")
+  createdBy          User?              @relation("WorkflowRunCreatedBy", fields: [createdById], references: [id])
+
+  steps WorkflowRunStep[]
+  logs  WorkflowRunLog[]
+
+  @@index([workflowDefinitionId, status])
+  @@index([workspaceId, status])
+  @@index([status, scheduledAt])
+  @@index([status, resumeAt])
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+  /// Une compensation (rollback logique) a été exécutée pour cette étape
+  /// suite à l'échec d'une étape ultérieure du même run.
+  COMPENSATED
+}
+
+/// Statut d'un noeud du graphe pour UNE exécution donnée — source de
+/// vérité de la progression (voir `WorkflowRun`). `nodeId` référence
+/// l'identifiant du noeud dans `WorkflowVersion.graph`, jamais une clé
+/// primaire SQL (le graphe n'est pas normalisé en tables).
+model WorkflowRunStep {
+  id         String             @id @default(cuid())
+  runId      String
+  nodeId     String
+  nodeType   String
+  actionKey  String?
+  status     WorkflowStepStatus @default(PENDING)
+  attempt    Int                @default(0)
+  input      Json?
+  output     Json?
+  error      Json?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  durationMs Int?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, nodeId])
+  @@index([runId, status])
+}
+
+/// Journal d'exécution consultable depuis l'UI (même rôle que
+/// `AgentRunLog`).
+model WorkflowRunLog {
+  id        String   @id @default(cuid())
+  runId     String
+  nodeId    String?
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
 }

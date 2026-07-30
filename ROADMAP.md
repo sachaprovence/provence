@@ -119,6 +119,32 @@ scoring extensible par registre (`src/lib/agents/commercial/scoring-engine.ts`).
 Les décisions d'architecture prises pour `MOD-24` sont documentées dans
 `docs/adr/0014`, `0015`, `0016` et `0017`.
 
+## 1 sexies. Changement de plan explicite : v0.6 devient le Workflow Engine, pas la documentation (MOD-13)
+
+La version `v0.6` initialement envisagée dans l'ordre logique (`MOD-13`,
+gestion documentaire) a été **remplacée, sur demande explicite**, par un
+nouveau module prioritaire et transversal : `MOD-25` (Workflow Engine —
+moteur d'automatisation générique d'Autorun, avec éditeur visuel de type
+"node editor"). Raison : Autorun ne doit pas rester "une application
+contenant plusieurs agents" mais devenir "une plateforme où les agents
+collaborent automatiquement" — ce module fournit l'infrastructure
+d'orchestration transversale (déclencheurs, conditions, actions en
+plugins, exécution séquentielle/parallèle/planifiée) sur laquelle toute
+automatisation future (y compris `MOD-13`) devra s'appuyer, plutôt que de
+continuer à ajouter des fonctionnalités indépendantes les unes des autres.
+
+Conséquence sur l'ordre : `MOD-13` (documents) n'est pas abandonné,
+seulement **reporté après `MOD-25`**. `MOD-25` réutilise intégralement le
+Framework des Agents (v0.3) et l'Agent Director (v0.4) via une seule
+action de plugin générique (`agent.call`, voir ADR 0018) — aucune
+duplication de la logique d'exécution d'agent, aucun couplage fort entre
+les deux systèmes (découplés par un bus d'évènements générique,
+`src/lib/events/domain-events.ts`). Le mécanisme d'automatisation hérité
+de Provence 360 (`AutomationRule`/`automation-engine.ts`, v0.1) n'est ni
+supprimé ni migré dans cette phase — voir ADR 0022. Les décisions
+d'architecture prises pour `MOD-25` sont documentées dans
+`docs/adr/0018` à `0022`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -137,7 +163,7 @@ Les décisions d'architecture prises pour `MOD-24` sont documentées dans
 | MOD-10 | Conformité & Audit | Existant (Phase 0) | Haute (extension RGPD) |
 | MOD-11 | Statistiques & Dashboard | Existant (Phase 0) | Basse (généralisation) |
 | MOD-12 | Facturation client final | Reporté après v0.5 (voir §1 quater/§1 quinquies) | Haute |
-| MOD-13 | Gestion documentaire | À créer | Moyenne |
+| MOD-13 | Gestion documentaire | Reporté après v0.6 (voir §1 sexies) | Moyenne |
 | MOD-14 | Calendrier | À créer | Moyenne |
 | MOD-15 | Infrastructure asynchrone (jobs) | À créer | Haute |
 | MOD-16 | Observabilité | À créer | Haute |
@@ -148,6 +174,7 @@ Les décisions d'architecture prises pour `MOD-24` sont documentées dans
 | MOD-22 | Framework des Agents IA | ✅ Livré (v0.3) | Critique |
 | MOD-23 | Agent Director (orchestrateur) | ✅ Livré (v0.4) | Critique |
 | MOD-24 | Agent Commercial (premier agent métier) | ✅ Livré (v0.5) | Critique |
+| MOD-25 | Workflow Engine (moteur d'automatisation + éditeur visuel) | ✅ Livré (v0.6) | Critique |
 
 ## 3. Détail par module
 
@@ -981,6 +1008,82 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   serveur (pas seulement des tests automatisés) ; aucune action envoyée
   automatiquement par défaut ; aucun autre agent métier livré.
 
+### MOD-25 — Workflow Engine, moteur d'automatisation transversal (v0.6, priorisé avant MOD-13)
+
+- **Objectif** : moteur d'automatisation générique et professionnel,
+  indépendant de tout module métier, sur lequel toute automatisation
+  future doit s'appuyer — pas une simple application contenant plusieurs
+  agents, mais une plateforme où les agents collaborent automatiquement.
+- **Fonctionnalités** : workflows versionnés (`WorkflowDefinition`/
+  `WorkflowVersion`, créés/modifiés/versionnés/activés/désactivés/clonés/
+  exportés/importés/archivés) ; éditeur visuel de type "node editor"
+  (glisser-déposer, connexion par clic, zoom/déplacement du canevas,
+  validation graphique côté client et serveur) pour 7 types de blocs
+  (déclencheur/condition/action/boucle/attente/sous-workflow/fin) ;
+  registre extensible de 14 déclencheurs (évènements applicatifs,
+  planification cron réelle, webhook, action utilisateur, fin d'un autre
+  workflow, exécution d'un agent) ; système de plugins pour les actions
+  (6 actions réellement implémentées — appel d'agent générique, envoi
+  d'email, appel API sortant, notification, sous-workflow, définition de
+  variable — et 7 actions honnêtement déclarées "non encore
+  implémentées", voir ADR 0022) ; moteur de règles combinables
+  (égalité/différence/comparaisons/ET/OU/NON/dates/regex/variables/
+  permissions, plus un point d'extension par opérateur personnalisé) ;
+  système complet de variables (workflow/contexte/utilisateur/
+  organisation/workspace/agents/résultats/API/formulaires) avec
+  inspecteur dans l'éditeur ; moteur d'exécution ré-entrant gérant
+  séquentiel, parallèle, attente, timeout, annulation, reprise, retry,
+  compensation/rollback logique, avec statut et journal par étape ;
+  gestion avancée des erreurs (retry, ignorer, branche alternative,
+  notifier, arrêt, escalade vers l'Agent Director) ; 10 templates prêts à
+  l'emploi et clonables ; tableau de bord (`/workflows` : actifs/
+  inactifs, historique, temps d'exécution, taux de succès/échec, files
+  d'attente, exécutions en cours, goulots d'étranglement) ; API complète
+  (CRUD, activation, déclenchement manuel, historique, relecture,
+  duplication).
+- **Dépendances** : `MOD-22` (Framework des Agents, v0.3), `MOD-23`
+  (Agent Director, v0.4 — seule intégration via l'action générique
+  `agent.call`, aucune logique d'agent dupliquée).
+- **Priorité** : Critique — condition explicite de cette phase.
+- **Risques techniques** :
+  - "Exécuter un script" demandé littéralement aurait ouvert un canal
+    d'exécution de code arbitraire dans une plateforme multi-tenant —
+    remplacé par un moteur d'expressions sûr et une action `variable.set`
+    couvrant le même besoin fonctionnel sans le risque (voir ADR 0020).
+  - Risque de coupler fortement le Workflow Engine et le Framework des
+    Agents — mitigé par un bus d'évènements générique
+    (`src/lib/events/domain-events.ts`) et une action `agent.call`
+    générique, jamais d'import direct d'un service d'agent métier (voir
+    ADR 0018).
+  - Reprise après interruption d'un graphe arbitraire (boucles,
+    sous-workflows, branches) plus complexe que pour une file simple —
+    limites documentées et testées explicitement (jointure "OU", boucle
+    non-résumable finement, sous-workflow suspendu non pris en charge —
+    voir ADR 0019) plutôt que découvertes en production.
+- **Choix d'architecture** : voir ADR 0018 (graphe versionné + registres
+  déclaratifs, découplage par bus d'évènements), ADR 0019 (sémantique du
+  moteur d'exécution et ses limites assumées), ADR 0020 (moteur
+  d'expressions sûr au lieu d'un script arbitraire), ADR 0021 (analyseur
+  cron réel), ADR 0022 (`AutomationRule` hérité, non migré).
+- **Tests à prévoir** (tous livrés, voir `tests/workflows/*.test.ts` et
+  `tests/tenant-isolation/workflows.test.ts`) : déclencheurs (évènement,
+  cron, fin d'exécution d'agent via le bus d'évènements), conditions (tous
+  les opérateurs + combinaison récursive + opérateur personnalisé),
+  variables (résolution de chemin + interpolation `{{ }}`), actions
+  (agent réel, HTTP simulé, email, notification, variable, échec explicite
+  des actions non implémentées), parallélisme (branches indépendantes),
+  timeouts (action dépassant son délai), reprises (retry avec backoff,
+  suspension/reprise après attente, branche d'erreur, compensation
+  logique), permissions (`MANAGE_WORKFLOWS` par rôle), multi-tenant
+  (isolation stricte + rejet d'un id falsifié), communications avec les
+  agents (délégation réelle via `agent.call`).
+- **Critères de fin** : golden path Provence 360, isolation multi-tenant,
+  Framework des Agents/Director et Agent Commercial inchangés après cette
+  phase ; 100 % des tests listés ci-dessus passent contre une vraie base
+  PostgreSQL ; un workflow cloné depuis un template, activé et déclenché
+  validé par une vraie requête HTTP contre le serveur (pas seulement des
+  tests automatisés) ; aucune régression sur les 157 tests existants.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -1017,10 +1120,12 @@ Ce diagramme reflète le plan initial de ce document. En pratique, `v0.2` a
 livré `MOD-21` (multi-tenant) à la place de `MOD-02` (voir §1 bis),
 `v0.3` a livré `MOD-22` (Framework des Agents) à la place de `MOD-20`
 (voir §1 ter), `v0.4` a livré `MOD-23` (Agent Director) à la place de
-`MOD-12` partie 1 (voir §1 quater), et `v0.5` a livré `MOD-24` (Agent
-Commercial) à la place de `MOD-12` partie 2 (voir §1 quinquies) ;
-`MOD-02`, `MOD-12` et `MOD-20` restent à faire, désormais après `v0.5`.
-Voir `MILESTONES.md` pour l'état réel version par version.
+`MOD-12` partie 1 (voir §1 quater), `v0.5` a livré `MOD-24` (Agent
+Commercial) à la place de `MOD-12` partie 2 (voir §1 quinquies), et
+`v0.6` a livré `MOD-25` (Workflow Engine) à la place de `MOD-13`
+(voir §1 sexies) ; `MOD-02`, `MOD-12`, `MOD-13` et `MOD-20` restent à
+faire, désormais après `v0.6`. Voir `MILESTONES.md` pour l'état réel
+version par version.
 
 ## 5. Éléments parallélisables
 

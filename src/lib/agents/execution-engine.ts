@@ -7,6 +7,7 @@ import { getToolHandler } from "./tool-registry";
 import { requireAgentToolPermission } from "./permissions";
 import { createInterventionRequest } from "./messaging";
 import { registerBuiltInAgentComponents } from "./bootstrap";
+import { publishDomainEvent } from "@/lib/events/domain-events";
 import { AgentRunStatus, AgentRunTrigger, AgentInstallationStatus } from "@/generated/prisma/enums";
 import type { AgentExecutionContext, AgentLogLevel } from "./types";
 
@@ -14,6 +15,10 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 1;
 const RETRY_BACKOFF_MS = 30_000;
 const MAX_RUNS_PER_BATCH = 20;
+
+const TERMINAL_RUN_STATUSES = new Set<AgentRunStatus>(["SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT"]);
+/** Filet de sécurité contre une boucle infinie en cas d'anomalie — jamais atteint en usage normal (`maxAttempts` reste petit). */
+const MAX_DRIVE_ITERATIONS = 25;
 
 /** Crée une exécution en file d'attente (voir ADR 0008 : file interne sur PostgreSQL, pas de nouvelle brique d'infra). */
 export async function createAgentRun(params: {
@@ -157,6 +162,8 @@ export async function executeAgentRun(runId: string): Promise<void> {
       });
       await logRun(runId, "info", "Demande d'intervention humaine créée.");
     }
+
+    await publishDomainEvent("agent_run.finished", { runId, installationId: installation.id, status: AgentRunStatus.SUCCEEDED });
   } catch (error) {
     const isTimeout = error instanceof Error && error.message === "AGENT_RUN_TIMEOUT";
     const message = error instanceof Error ? error.message : String(error);
@@ -177,14 +184,30 @@ export async function executeAgentRun(runId: string): Promise<void> {
       return;
     }
 
+    const finalStatus = isTimeout ? AgentRunStatus.TIMED_OUT : AgentRunStatus.FAILED;
     await prisma.agentRun.update({
       where: { id: runId },
-      data: {
-        status: isTimeout ? AgentRunStatus.TIMED_OUT : AgentRunStatus.FAILED,
-        finishedAt: new Date(),
-        error: { message },
-      },
+      data: { status: finalStatus, finishedAt: new Date(), error: { message } },
     });
+    await publishDomainEvent("agent_run.finished", { runId, installationId: installation.id, status: finalStatus });
+  }
+}
+
+/**
+ * Fait avancer un run jusqu'à un statut terminal, en pilotant nous-mêmes la
+ * reprise (pas d'attente du délai de recul de la file générique). Extrait
+ * en v0.6 de `director/delegation-engine.ts` (qui l'utilisait déjà en
+ * interne sous le nom `driveRunToCompletion`) pour que le Workflow Engine
+ * (action `agent.call`) réutilise exactement le même code plutôt que de le
+ * dupliquer — voir ADR 0010 (v0.4) pour la justification du pilotage
+ * synchrone intra-processus, réappliquée ici sans changement de
+ * comportement pour le Director.
+ */
+export async function runAgentToCompletion(runId: string): Promise<void> {
+  for (let i = 0; i < MAX_DRIVE_ITERATIONS; i += 1) {
+    await executeAgentRun(runId);
+    const run = await prisma.agentRun.findUniqueOrThrow({ where: { id: runId } });
+    if (TERMINAL_RUN_STATUSES.has(run.status)) return;
   }
 }
 
