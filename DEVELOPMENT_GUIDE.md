@@ -250,6 +250,57 @@ touchant ce périmètre :
   collection d'une boucle, invisibles dans les tests unitaires seuls tant
   que le graphe testé restait trivial.
 
+## 0 septies. État de l'intelligence documentaire (v0.7)
+
+Les quatre moteurs Memory/Knowledge/Context/Prompt Engine (`ROADMAP.md`
+MOD-26, `docs/02-ARCHITECTURE.md` §14) sont livrés, en remplacement du
+plan initial de v0.7 (voir `MILESTONES.md`). Points à connaître pour tout
+nouveau code touchant ce périmètre :
+
+- **Tout nouvel appel à un fournisseur IA générative doit passer par
+  `assembleContext` (`src/lib/context/context-engine.ts`) avant l'appel
+  au fournisseur LLM actif** — jamais un agent qui gère lui-même sa
+  mémoire ou son contexte. Aujourd'hui, `generateNarrative`
+  (`agents/commercial/generation.ts`) est le seul point d'appel réel et
+  il est déjà câblé ; un futur agent générant du texte doit être câblé de
+  la même façon dès sa création, pas après coup — voir ADR 0029.
+- **Ajouter une nouvelle source de connaissance = enregistrer un
+  `DocumentParser`**, jamais modifier `indexing-engine.ts`
+  (`parsers/registry.ts`, un par `KnowledgeSourceType`) — voir
+  `parsers/record-parsers.ts`/`text-parsers.ts` comme modèles, en
+  particulier le principe honnête des stubs "non encore implémenté"
+  (`not-yet-implemented-parsers.ts`, ADR 0027) plutôt qu'un faux contenu
+  extrait. Même principe pour un nouveau fournisseur d'embedding
+  (`embeddings/registry.ts`) ou une nouvelle base vectorielle
+  (`vector-stores/registry.ts`).
+- **Un parseur de source déjà en base (CRM/Devis/Conversation/Décision/
+  Workflow/Log) doit toujours scoper sa lecture par
+  `ctx.organizationId`/`ctx.workspaceId`, jamais faire confiance à
+  `sourceRef` seul** — voir ADR 0026. Même discipline pour toute nouvelle
+  requête de recherche : re-vérifier la portée même après une réponse
+  d'un index externe déjà filtré (voir `search/vector-search.ts`).
+- **`MemoryEntry` (générique, tous niveaux) et `AgentMemoryEntry` (v0.3,
+  Director/Commercial) sont deux mécanismes distincts qui coexistent
+  volontairement** — voir ADR 0023. Tout nouveau code doit utiliser
+  `MemoryEntry`/`memory-engine.ts` ; ne jamais faire évoluer
+  `AgentMemoryEntry` en pensant "améliorer la mémoire" sans vérifier
+  d'abord lequel des deux systèmes est concerné.
+- **Le Prompt Engine reste unique** (`agents/prompts/prompt-engine.ts`,
+  étendu en v0.7 avec locale/héritage/schéma typé, jamais dupliqué) —
+  voir ADR 0028. Un nouveau prompt s'ajoute via `createPromptVersion`,
+  jamais codé en dur dans un service.
+- **Aucune extension `pgvector` n'est disponible dans cet environnement**
+  : la base vectorielle par défaut (`pgvector-store.ts`) reste
+  fonctionnellement équivalente (Postgres natif + cosinus applicatif) mais
+  balaie l'ensemble des candidats filtrés — ne pas supposer un index
+  approximatif sans vérifier d'abord `VECTOR_STORE` — voir ADR 0025.
+- **Toute nouvelle fonctionnalité de ce périmètre doit être vérifiée au
+  moins une fois par une vraie requête HTTP contre un serveur en cours
+  d'exécution** (pas seulement `vitest`) — même discipline que les phases
+  précédentes : `/settings/knowledge` a été vérifié visuellement (capture
+  d'écran, zéro erreur console) derrière une session admin réelle avant
+  livraison.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)

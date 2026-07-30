@@ -64,6 +64,9 @@ model Organization {
   commercialActions    CommercialAction[]
   workflowDefinitions  WorkflowDefinition[]
   workflowRuns         WorkflowRun[]
+  memoryEntries        MemoryEntry[]
+  knowledgeDocuments   KnowledgeDocument[]
+  embeddingRequests    EmbeddingRequest[]
   territories          Territory[]
   icps               IdealCustomerProfile[]
   leads              Lead[]
@@ -116,6 +119,8 @@ model User {
   workflowDefinitionsCreated  WorkflowDefinition[]       @relation("WorkflowDefinitionCreatedBy")
   workflowVersionsCreated     WorkflowVersion[]          @relation("WorkflowVersionCreatedBy")
   workflowRunsCreated         WorkflowRun[]              @relation("WorkflowRunCreatedBy")
+  memoryEntriesCreated        MemoryEntry[]              @relation("MemoryEntryCreatedBy")
+  knowledgeDocumentsCreated   KnowledgeDocument[]        @relation("KnowledgeDocumentCreatedBy")
   sessions                    Session[]
   passwordResets              PasswordResetToken[]
   loginEvents                 LoginEvent[]
@@ -161,6 +166,9 @@ model Workspace {
   workflowDefinitions       WorkflowDefinition[]
   workflowRuns              WorkflowRun[]
   workflowTriggerBindings   WorkflowTriggerBinding[]
+  memoryEntries             MemoryEntry[]
+  knowledgeDocuments        KnowledgeDocument[]
+  embeddingRequests         EmbeddingRequest[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1751,29 +1759,34 @@ model CommercialAction {
   @@index([prospectId])
 }
 
-/// Moteur de prompts (v0.5) : générique, utilisable par n'importe quel
-/// agent (pas seulement le Commercial). Chaque prompt est versionné
-/// (`@@unique([key, version])`), modifiable sans redéploiement (nouvelle
-/// version en base), documenté (`description`), séparé du code (le
-/// texte du template vit en base, pas dans une chaîne TypeScript). Une
-/// seule version active par `key` à la fois.
+/// Moteur de prompts (v0.5, étendu v0.7 — voir ADR 0028) : générique,
+/// utilisable par n'importe quel agent. Chaque prompt est versionné
+/// (`@@unique([key, version, locale])`), modifiable sans redéploiement
+/// (nouvelle version en base), documenté (`description`), séparé du code.
+/// `locale` rend un prompt multilingue (plusieurs variantes d'une même
+/// version) ; `parentKey` permet l'héritage (un prompt hérite des
+/// variables/instructions d'un prompt parent, résolu à l'affichage) ;
+/// `variableSchema` type chaque variable déclarée (validée avant rendu).
 model PromptTemplate {
-  id          String   @id @default(cuid())
-  key         String
-  version     Int
-  name        String
-  description String?
-  category    String
-  template    String
-  variables   String[] @default([])
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  createdById String?
+  id             String   @id @default(cuid())
+  key            String
+  version        Int
+  locale         String   @default("fr")
+  parentKey      String?
+  name           String
+  description    String?
+  category       String
+  template       String
+  variables      String[] @default([])
+  variableSchema Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  createdById    String?
 
   createdBy User? @relation("PromptTemplateCreatedBy", fields: [createdById], references: [id])
 
-  @@unique([key, version])
-  @@index([key, isActive])
+  @@unique([key, version, locale])
+  @@index([key, locale, isActive])
 }
 
 // ---------------------------------------------------------------------------
@@ -2014,4 +2027,214 @@ model WorkflowRunLog {
   run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@index([runId])
+}
+
+// ---------------------------------------------------------------------------
+// Système d'intelligence documentaire (v0.7) — Memory Engine, Knowledge
+// Engine, Context Engine (le Prompt Engine est étendu ci-dessus sur le
+// modèle PromptTemplate existant, pas dupliqué). Aucun agent ne gère sa
+// propre mémoire ou son contexte : tout passe par cette couche. Voir
+// docs/adr/0023 à 0029 et docs/02-ARCHITECTURE.md §14.
+//
+// `AgentMemoryEntry` (v0.3) n'est ni supprimé ni migré dans cette phase
+// (Director/Commercial en dépendent tel quel) — voir ADR 0023 : le
+// `MemoryEntry` générique ci-dessous est la couche que tout nouveau code
+// doit utiliser.
+// ---------------------------------------------------------------------------
+
+enum MemoryScopeType {
+  USER
+  ORGANIZATION
+  WORKSPACE
+  AGENT
+  WORKFLOW
+  CONVERSATION
+  TASK
+}
+
+enum MemoryKind {
+  LONG_TERM
+  TEMPORARY
+  DECISION
+  DOCUMENT
+  PREFERENCE
+}
+
+/// Mémoire générique multi-niveaux (Memory Engine). `scopeId` est
+/// polymorphe (id d'un User/Organization/Workspace/AgentInstallation/
+/// WorkflowDefinition/conversation/tâche selon `scopeType`), jamais une
+/// clé étrangère SQL — les portées sont trop hétérogènes pour une seule
+/// relation. Versionné comme `PromptTemplate` : une nouvelle version est
+/// toujours créée par `setMemoryEntry`, jamais de modification en place ;
+/// `isCurrent` marque la version active par (scope, clé). `summary`/
+/// `compressed` portent le résultat d'une compression automatique (voir
+/// `memory-engine.ts#compressMemoryEntry`, réutilise le moteur LLM v0.5).
+model MemoryEntry {
+  id             String          @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  scopeType      MemoryScopeType
+  scopeId        String
+  kind           MemoryKind
+  key            String
+  version        Int             @default(1)
+  isCurrent      Boolean         @default(true)
+  value          Json
+  summary        String?
+  compressed     Boolean         @default(false)
+  ttlMs          Int?
+  expiresAt      DateTime?
+  archivedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("MemoryEntryCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, scopeType, scopeId, key, isCurrent])
+  @@index([expiresAt])
+  @@index([archivedAt])
+}
+
+enum KnowledgeSourceType {
+  PDF
+  WORD
+  EXCEL
+  POWERPOINT
+  MARKDOWN
+  HTML
+  EMAIL
+  NOTE
+  CRM
+  QUOTE
+  INVOICE
+  CONVERSATION
+  LOG
+  DECISION
+  WORKFLOW
+  DOCUMENTATION
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+enum KnowledgeDocumentStatus {
+  PENDING
+  INDEXED
+  FAILED
+  ARCHIVED
+}
+
+/// Base de connaissances (Knowledge Engine). Un document par source
+/// ingérée (fichier, enregistrement CRM, conversation, log, décision,
+/// workflow...), toujours scopé organisation + workspace — jamais
+/// accessible sans cette double portée (voir ADR 0026, sécurité).
+/// `checksum` permet la détection de changement pour la réindexation
+/// incrémentale (voir `indexing-engine.ts`). `sourceRef` référence
+/// l'identifiant de la source d'origine (id de prospect, chemin de
+/// fichier...) quand pertinent, pour éviter les doublons à ré-ingestion.
+model KnowledgeDocument {
+  id             String                  @id @default(cuid())
+  organizationId String
+  workspaceId    String
+  sourceType     KnowledgeSourceType
+  sourceRef      String?
+  title          String
+  content        String?
+  metadata       Json?
+  tags           String[]                @default([])
+  checksum       String?
+  status         KnowledgeDocumentStatus @default(PENDING)
+  errorMessage   String?
+  usageCount     Int                     @default(0)
+  lastUsedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  indexedAt      DateTime?
+  archivedAt     DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User?               @relation("KnowledgeDocumentCreatedBy", fields: [createdById], references: [id])
+  chunks       KnowledgeChunk[]
+  indexLogs    KnowledgeIndexLog[]
+
+  @@unique([workspaceId, sourceType, sourceRef])
+  @@index([organizationId, workspaceId, status])
+  @@index([organizationId, workspaceId, sourceType])
+}
+
+/// Un fragment indexable d'un document, avec son embedding. Stocké en
+/// tableau de flottants Postgres natif (pas une colonne `vector`) : aucune
+/// extension pgvector n'est disponible dans cet environnement — repli
+/// portable documenté (similarité cosinus calculée côté application), voir
+/// ADR 0025. `embeddingModel` trace quel modèle a produit le vecteur, pour
+/// ne jamais comparer deux embeddings de dimensions/modèles différents.
+model KnowledgeChunk {
+  id             String   @id @default(cuid())
+  documentId     String
+  chunkIndex     Int
+  content        String
+  tokenCount     Int?
+  embedding      Float[]  @default([])
+  embeddingModel String?
+  createdAt      DateTime @default(now())
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+}
+
+enum KnowledgeIndexAction {
+  ADD
+  UPDATE
+  DELETE
+  RENAME
+  MOVE
+  REINDEX
+}
+
+/// Journal de l'indexation (voir `indexing-engine.ts`) : chaque opération
+/// (ajout/mise à jour/suppression/renommage/déplacement/réindexation) est
+/// historisée, avec sa priorité et sa durée, qu'elle ait réussi ou échoué.
+model KnowledgeIndexLog {
+  id          String               @id @default(cuid())
+  documentId  String?
+  workspaceId String
+  action      KnowledgeIndexAction
+  priority    Int                  @default(0)
+  success     Boolean              @default(true)
+  message     String?
+  durationMs  Int?
+  createdAt   DateTime             @default(now())
+
+  document KnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([documentId])
+}
+
+/// Journal des appels au moteur d'embeddings (coût, cache, version du
+/// modèle) — même rôle que `AIRequest` pour le moteur LLM (v0.5), mais
+/// distinct : un embedding n'est jamais un texte de réponse, il ne
+/// s'intègre pas proprement au même modèle.
+model EmbeddingRequest {
+  id               String   @id @default(cuid())
+  organizationId   String
+  workspaceId      String?
+  provider         String
+  model            String
+  inputCount       Int
+  dimensions       Int?
+  estimatedCostUsd Float    @default(0)
+  cached           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, provider])
 }

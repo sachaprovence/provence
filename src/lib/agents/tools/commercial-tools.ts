@@ -108,11 +108,15 @@ export const estimatePotentialTool: ToolHandler<{ prospectId: string }, { potent
     if (!prospect) throw new NotFoundError("Prospect introuvable.");
 
     const value = COMPANY_SIZE_POTENTIAL[prospect.companySize ?? ""] ?? 1500;
-    const generated = await generateNarrative("commercial.estimate_potential", {
-      companyName: prospect.companyName,
-      sector: prospect.sector ?? "non renseigné",
-      companySize: prospect.companySize ?? "non renseignée",
-    });
+    const generated = await generateNarrative(
+      "commercial.estimate_potential",
+      {
+        companyName: prospect.companyName,
+        sector: prospect.sector ?? "non renseigné",
+        companySize: prospect.companySize ?? "non renseignée",
+      },
+      { organizationId: installation.organizationId, workspaceId: installation.workspaceId, agentScopeId: installation.id }
+    );
 
     const potential = { value, currency: "EUR", rationale: generated.text };
     await recordPotentialEstimate(installation, input.prospectId, potential);
@@ -128,11 +132,15 @@ export const draftEmailTool: ToolHandler<{ prospectId: string }, { action: unkno
     const prospect = prospects.find((p) => p.id === input.prospectId);
     if (!prospect) throw new NotFoundError("Prospect introuvable.");
 
-    const generated = await generateNarrative("commercial.draft_email", {
-      companyName: prospect.companyName,
-      sector: prospect.sector ?? "non renseigné",
-      contactName: prospect.contactName ?? "Madame, Monsieur",
-    });
+    const generated = await generateNarrative(
+      "commercial.draft_email",
+      {
+        companyName: prospect.companyName,
+        sector: prospect.sector ?? "non renseigné",
+        contactName: prospect.contactName ?? "Madame, Monsieur",
+      },
+      { organizationId: installation.organizationId, workspaceId: installation.workspaceId, agentScopeId: installation.id }
+    );
 
     const action = await createAction(installation, {
       prospectId: prospect.id,
@@ -169,10 +177,11 @@ export const draftFollowUpTool: ToolHandler<
         ? `Objection(s) reçue(s) précédemment : ${knownObjections.map((o) => o.objection).join(" ; ")}.`
         : "aucun échange préalable connu");
 
-    const generated = await generateNarrative("commercial.draft_followup", {
-      companyName: prospect.companyName,
-      previousSummary,
-    });
+    const generated = await generateNarrative(
+      "commercial.draft_followup",
+      { companyName: prospect.companyName, previousSummary },
+      { organizationId: installation.organizationId, workspaceId: installation.workspaceId, agentScopeId: installation.id }
+    );
 
     const action = await createAction(installation, {
       prospectId: prospect.id,
@@ -194,11 +203,15 @@ export const draftProposalTool: ToolHandler<{ prospectId: string }, { action: un
     if (!prospect) throw new NotFoundError("Prospect introuvable.");
 
     const potential = prospect.potentialEstimate as { value?: number } | null;
-    const generated = await generateNarrative("commercial.draft_proposal", {
-      companyName: prospect.companyName,
-      sector: prospect.sector ?? "non renseigné",
-      potential: potential?.value ? String(potential.value) : "non estimé",
-    });
+    const generated = await generateNarrative(
+      "commercial.draft_proposal",
+      {
+        companyName: prospect.companyName,
+        sector: prospect.sector ?? "non renseigné",
+        potential: potential?.value ? String(potential.value) : "non estimé",
+      },
+      { organizationId: installation.organizationId, workspaceId: installation.workspaceId, agentScopeId: installation.id }
+    );
 
     const action = await createAction(installation, {
       prospectId: prospect.id,
@@ -246,11 +259,15 @@ export const recommendNextActionsTool: ToolHandler<{ prospectId: string }, { act
     const prospect = prospects.find((p) => p.id === input.prospectId);
     if (!prospect) throw new NotFoundError("Prospect introuvable.");
 
-    const generated = await generateNarrative("commercial.recommend_next_actions", {
-      companyName: prospect.companyName,
-      stage: prospect.stage,
-      score: String(prospect.score ?? "non calculé"),
-    });
+    const generated = await generateNarrative(
+      "commercial.recommend_next_actions",
+      {
+        companyName: prospect.companyName,
+        stage: prospect.stage,
+        score: String(prospect.score ?? "non calculé"),
+      },
+      { organizationId: installation.organizationId, workspaceId: installation.workspaceId, agentScopeId: installation.id }
+    );
 
     const action = await createAction(installation, {
       prospectId: prospect.id,

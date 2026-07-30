@@ -1222,7 +1222,153 @@ code existant, tests inclus.
 
 ---
 
-## Version 0.7 — Calendrier (MOD-14)
+## Version 0.7 — Intelligence documentaire (MOD-26)
+
+### AR-0111 — Schéma Prisma Memory Engine (`MemoryEntry`) + Knowledge Engine (`KnowledgeDocument`/`KnowledgeChunk`/`KnowledgeIndexLog`/`EmbeddingRequest`)
+- **Description** : modèles multi-niveaux (7 `MemoryScopeType` × 5
+  `MemoryKind`, versionné) et documentaire (19 `KnowledgeSourceType`,
+  fragment avec embedding `Float[]`, journal d'indexation, journal
+  d'embedding avec coût estimé) ; extension de `PromptTemplate` (locale,
+  `parentKey`, `variableSchema`).
+- **Fichiers concernés** : `prisma/schema.prisma`, migration associée.
+- **Complexité** : Élevée.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0094 (modèles Commercial/Prompt existants).
+
+### AR-0112 — Memory Engine (`src/lib/memory/memory-engine.ts`)
+- **Description** : écriture versionnée, historique, TTL par défaut par
+  nature, expiration → archivage, purge définitive, compression/résumé
+  automatique via le moteur LLM générique au-delà d'un seuil de taille.
+- **Fichiers concernés** : `src/lib/memory/memory-engine.ts` (nouveau).
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0111, AR-0095 (moteur LLM générique).
+
+### AR-0113 — Abstraction embeddings (8 fournisseurs) + cache/coût/journal
+- **Description** : registre `EmbeddingProvider` (OpenAI, VoyageAI, Jina,
+  Cohere, Nomic, Ollama, HuggingFace/BGE, démonstration déterministe),
+  couche de service avec cache en mémoire, coût estimé, journal
+  (`EmbeddingRequest`).
+- **Fichiers concernés** : `src/lib/knowledge/embeddings/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0111.
+
+### AR-0114 — Abstraction bases vectorielles (8 backends anticipés)
+- **Description** : registre `VectorStore` (PgVector par défaut — Postgres
+  natif + cosinus applicatif, aucune extension `vector` disponible —,
+  Pinecone, Qdrant, Weaviate, Chroma réellement implémentés, Milvus/FAISS/
+  LanceDB honnêtement déclarés non implémentés).
+- **Fichiers concernés** : `src/lib/knowledge/vector-stores/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0111.
+
+### AR-0115 — Pipeline d'ingestion (registre de parseurs, 19 sources)
+- **Description** : registre `DocumentParser` par `KnowledgeSourceType` —
+  parseurs texte (Markdown/Note/Documentation/Email/HTML), parseurs
+  d'enregistrements DB existants (CRM/Devis/Conversation/Décision/
+  Workflow/Log, strictement scopés organisation/workspace), stubs
+  honnêtes (PDF/Word/Excel/PowerPoint/Facture, Image/Audio/Vidéo).
+- **Fichiers concernés** : `src/lib/knowledge/parsers/**` (nouveau).
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0111.
+
+### AR-0116 — Moteur d'indexation (`src/lib/knowledge/indexing-engine.ts`)
+- **Description** : ajout/mise à jour (détection de changement par
+  empreinte), suppression, renommage, déplacement, réindexation
+  incrémentale/complète/en lot avec priorité, journalisation systématique
+  (succès et échec).
+- **Fichiers concernés** : `src/lib/knowledge/indexing-engine.ts`,
+  `src/lib/knowledge/chunking.ts` (nouveaux).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0113, AR-0114, AR-0115.
+
+### AR-0117 — Moteurs de recherche (plein texte/vectorielle/hybride/similarité) + ranking
+- **Description** : recherche plein texte (sans `tsvector`, filtrage SQL +
+  classement applicatif), vectorielle (re-vérification de portée même
+  après un index externe déjà filtré), hybride (fusion de rangs
+  réciproques), par similarité (plus proches voisins d'un fragment),
+  filtrable par tags/type de source/documents/organisation/workspace ;
+  suivi d'usage par document.
+- **Fichiers concernés** : `src/lib/knowledge/search/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0116.
+
+### AR-0118 — Context Engine (`src/lib/context/context-engine.ts`)
+- **Description** : sélection automatique et assemblage du contexte avant
+  un appel IA (documents utiles, préférences, mémoire d'agent, décisions,
+  résultats précédents, historique de conversation, contraintes métier
+  fournies par l'appelant), classement par priorité, compression
+  (troncage puis résumé via le moteur LLM) si le budget de tokens est
+  dépassé.
+- **Fichiers concernés** : `src/lib/context/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0112, AR-0117.
+
+### AR-0119 — Tableau de bord d'observabilité + intégration obligatoire
+- **Description** : `getKnowledgeDashboard`/`getMemoryDashboard`
+  (documents, fragments, embeddings, indexation, cache, coût IA,
+  documents les plus utilisés, mémoire par niveau/nature) ; câblage
+  obligatoire de `generateNarrative` (Agent Commercial) via
+  `assembleContext`, seul point d'appel IA existant dans le Framework des
+  Agents à ce jour.
+- **Fichiers concernés** : `src/lib/knowledge/dashboard-service.ts`,
+  `src/lib/memory/dashboard-service.ts`,
+  `src/app/api/knowledge/dashboard/route.ts`,
+  `src/app/(app)/settings/knowledge/page.tsx` (nouveaux),
+  `src/lib/agents/commercial/generation.ts`,
+  `src/lib/agents/tools/commercial-tools.ts` (modifiés).
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0118.
+
+### AR-0120 — Extension du Prompt Engine (locale/héritage/schéma typé)
+- **Description** : `PromptTemplate` étendu sur place (pas dupliqué) :
+  `locale`, `parentKey` (héritage borné, cycles détectés),
+  `variableSchema` (typage, requis, description), résolution de chaîne
+  d'héritage et repli sur `"fr"`.
+- **Fichiers concernés** : `src/lib/agents/prompts/prompt-engine.ts`
+  (modifié), `prisma/schema.prisma`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0111.
+
+### AR-0121 — Tests (mémoire, ingestion, indexation, embeddings, recherche, contexte, intégration, multi-tenant, performance)
+- **Description** : 41 nouveaux tests contre une vraie base PostgreSQL —
+  voir la liste complète dans `ROADMAP.md` §MOD-26.
+- **Fichiers concernés** : `tests/memory/**`, `tests/knowledge/**`,
+  `tests/context/**`, `tests/agents/context-engine-integration.test.ts`,
+  `tests/tenant-isolation/knowledge.test.ts`.
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : AR-0112 à AR-0120.
+
+### AR-0122 — ADR 0023 à 0029
+- **Description** : documentation des 7 décisions d'architecture de cette
+  version (coexistence mémoire, modèle document/fragment, absence de
+  pgvector, sécurité/scope, honnêteté des stubs, extension du Prompt
+  Engine, intégration obligatoire du Context Engine).
+- **Fichiers concernés** : `docs/adr/0023-*.md` à `docs/adr/0029-*.md`.
+- **Complexité** : Basse.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0111 à AR-0121.
+
+**Total estimé du travail réellement livré pour v0.7 : ~18,5 jours.**
+
+---
+
+### Plan initial de v0.7 (non traité dans cette version, conservé pour référence)
+
+> Les tâches `AR-0036` et suivantes (calendrier) ci-dessous n'ont pas été
+> traitées dans cette version — voir `ROADMAP.md` §1 septies. Reportées
+> après v0.7.
+
+## Version 0.7 bis — Calendrier (MOD-14)
 
 ### AR-0036 — Vue calendrier interne (jour/semaine/mois)
 - **Description** : nouvelle page calendrier affichant les `Appointment`
@@ -1268,8 +1414,8 @@ code existant, tests inclus.
 - **Prérequis** : AR-0037.
 - **Tests nécessaires** : idem AR-0038.
 
-**Total estimé v0.7 : ~12 jours** (AR-0038/AR-0039 parallélisables entre
-deux développeurs si disponibles → ~8 jours calendaires).
+**Total estimé v0.7 bis : ~12 jours** (AR-0038/AR-0039 parallélisables
+entre deux développeurs si disponibles → ~8 jours calendaires).
 
 ---
 
@@ -1637,10 +1783,11 @@ Ce tableau reflète le plan initial de ce document. En pratique, `v0.2`
 (~13,5 jours réels) a livré `MOD-22` (Framework des Agents) à la place de
 `MOD-20`, `v0.4` (~11,5 jours réels) a livré `MOD-23` (Agent Director) à
 la place de `MOD-12` partie 1, `v0.5` (~12 jours réels) a livré
-`MOD-24` (Agent Commercial) à la place de `MOD-12` partie 2, et `v0.6`
+`MOD-24` (Agent Commercial) à la place de `MOD-12` partie 2, `v0.6`
 (~15,5 jours réels) a livré `MOD-25` (Workflow Engine) à la place de
-`MOD-13` — voir les sections « Total estimé du travail réellement livré »
-correspondantes ci-dessus.
+`MOD-13`, et `v0.7` (~18,5 jours réels) a livré `MOD-26` (intelligence
+documentaire) à la place de `MOD-14` — voir les sections « Total estimé
+du travail réellement livré » correspondantes ci-dessus.
 
 ---
 

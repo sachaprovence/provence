@@ -27,7 +27,7 @@ Deux contraintes sont strictes et non négociables :
 
 Entre `v0.4` et `v0.10`, l'ordre est réordonnable selon les priorités
 business (ex. si un client attend la facturation avant le calendrier,
-inverser `v0.4/v0.5` et `v0.7` ne casse aucune dépendance technique).
+inverser `v0.4/v0.5` et `v0.7 bis` ne casse aucune dépendance technique).
 `v1.0` doit rester en dernier : elle dépend de la sécurité durcie (`v0.10`)
 et de la facturation client (`v0.4`/`v0.5`).
 
@@ -450,7 +450,76 @@ et de la facturation client (`v0.4`/`v0.5`).
   jointes peuvent être attachés aux prospects/clients/missions et
   téléchargés en sécurité.
 
-## v0.7 — Calendrier
+## v0.7 — Intelligence documentaire (remplace le plan initial)
+
+> **Statut : ✅ livré** (2026-07-30). Comme pour `v0.2`/`v0.3`/`v0.4`/
+> `v0.5`/`v0.6`, ce jalon a été **redéfini sur demande explicite** : le
+> contenu initialement prévu ici (calendrier — `MOD-14`) est reporté à une
+> version ultérieure (voir `v0.7 bis` ci-dessous) et remplacé par un
+> module jugé plus prioritaire et transversal : le système d'intelligence
+> documentaire d'Autorun (Memory Engine, Knowledge Engine, Context Engine,
+> et extension du Prompt Engine existant). Voir `ROADMAP.md` §1 septies et
+> §MOD-26, ainsi que `docs/adr/0023` à `0029`.
+
+- **Objectif du jalon** : Autorun ne se contente plus d'exécuter des
+  workflows — il comprend une entreprise, apprend d'elle, mémorise son
+  fonctionnement et fournit automatiquement aux agents le meilleur
+  contexte possible, via quatre moteurs indépendants du fournisseur IA.
+- **Modules** : MOD-26 (réutilise le Framework des Agents, v0.3, et
+  s'intègre à l'Agent Commercial, v0.5, au seul point d'appel IA existant
+  aujourd'hui — aucun couplage fort, aucune duplication de la mémoire
+  d'agent ni du Prompt Engine existants).
+- **Tâches** : voir `BACKLOG.md`, section v0.7 (AR-0111 à AR-0122 : schéma
+  Prisma Memory/Knowledge Engine, moteur de mémoire multi-niveaux,
+  abstractions embeddings/bases vectorielles, pipeline de parseurs,
+  moteur d'indexation, moteurs de recherche + ranking, Context Engine,
+  extension du Prompt Engine, tableau de bord, intégration, tests, ADR).
+- **Critères de sortie** :
+  - [x] `tests/e2e/golden-path.mjs` et
+    `tests/e2e/two-organizations-isolation.mjs` passent sans modification ;
+  - [x] les 157 tests de v0.1 à v0.6 passent toujours sans modification de
+    leur comportement (`generateNarrative` a gagné un paramètre de portée
+    obligatoire, répercuté dans ses 5 points d'appel de
+    `commercial-tools.ts`, sans changer le texte généré par le fournisseur
+    de démonstration) ;
+  - [x] 41 nouveaux tests (198 au total) passent contre une vraie base
+    PostgreSQL : niveaux de mémoire/TTL/expiration/archivage/compression,
+    ingestion/indexation (ajout/mise à jour/suppression/renommage/
+    déplacement/réindexation/lot), embeddings (cache, coût, 8
+    fournisseurs), base vectorielle par défaut (similarité cosinus),
+    recherche plein texte/vectorielle/hybride/filtrée, assemblage et
+    compression de contexte, intégration Context Engine ↔ Agent
+    Commercial, tableaux de bord Knowledge/Memory Engine, isolation
+    multi-tenant, performance de recherche ;
+  - [x] `npm run lint`, `npx tsc --noEmit` et `npm run build` passent sans
+    erreur ;
+  - [x] validé par une vraie requête HTTP contre le serveur (tableau de
+    bord `/settings/knowledge` affiché sans erreur console derrière une
+    session admin réelle), pas seulement des tests automatisés.
+- **État fonctionnel de l'application** : Provence 360, le multi-tenant,
+  le Framework des Agents, l'Agent Director, l'Agent Commercial et le
+  Workflow Engine restent **entièrement fonctionnels** ; l'Agent
+  Commercial bénéficie désormais d'un contexte automatiquement assemblé
+  (documents indexés, préférences, décisions passées, historique) avant
+  chaque email/relance/proposition généré, visible dans le tableau de bord
+  `/settings/knowledge` (documents, embeddings, indexation, cache, coût
+  IA, documents les plus utilisés, mémoire par niveau/nature).
+- **Limite connue** : aucune extension `pgvector` disponible dans
+  l'environnement — la base vectorielle par défaut reste fonctionnellement
+  équivalente (Postgres natif + cosinus applicatif) mais pas à l'échelle
+  d'un index approximatif (ADR 0025). PDF/Word/Excel/PowerPoint/Facture et
+  Milvus/FAISS/LanceDB sont déclarés au registre mais échouent
+  explicitement à l'exécution, faute de dépendance/modèle/protocole
+  disponible (ADR 0027) ; Image/Audio/Vidéo n'ont que leur architecture
+  préparée (énumération + point d'extension), sans extraction
+  fonctionnelle, conformément au brief. "Qualité des réponses" est
+  affichée comme indisponible faute de signal de retour utilisateur.
+  Seul l'Agent Commercial appelle une IA générative aujourd'hui : c'est
+  donc le seul agent dont l'intégration au Context Engine a pu être
+  câblée et testée (ADR 0029) — Director/Workflow Engine en bénéficient de
+  façon transitive sans appel direct à câbler.
+
+## v0.7 bis — Calendrier (plan initial, reporté)
 
 - **Objectif du jalon** : offrir une vraie vue calendrier et, en option,
   une synchronisation externe.
@@ -464,8 +533,6 @@ et de la facturation client (`v0.4`/`v0.5`).
 - **État fonctionnel de l'application** : les rendez-vous existants
   deviennent consultables en vue calendrier, avec option de
   synchronisation vers l'agenda personnel de l'utilisateur.
-- **Note** : ce jalon peut être développé **en parallèle** de `v0.6`
-  (aucune dépendance croisée) si deux développeurs sont disponibles.
 
 ## v0.8 — Infrastructure asynchrone
 
@@ -567,7 +634,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.5 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.6 | Infrastructure (moteur d'automatisation transversal) | Oui (éditeur + tableau de bord Workflows) | Oui (toute automatisation future) |
 | v0.6 bis | Fonctionnalité (reportée) | Oui | Non |
-| v0.7 | Fonctionnalité | Oui | Non |
+| v0.7 | Infrastructure (intelligence documentaire transversale) | Oui (tableau de bord Intelligence documentaire) | Oui (tout agent générant du texte, actuellement l'Agent Commercial) |
+| v0.7 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.8 | Infrastructure | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |
 | v0.9 | Fonctionnalité + ops | Oui (IA/email réels) | Oui (v0.10 en dépend partiellement) |
 | v0.10 | Sécurité | Non | **Oui, bloquant pour v1.0** |

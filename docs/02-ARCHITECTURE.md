@@ -896,3 +896,116 @@ d'erreur, compensation), `tests/workflows/workflow-service.test.ts`
 notification, variable, échecs explicites), `tests/workflows/triggers.test.ts`
 (évènement, cron réel, bus d'évènements), `tests/workflows/permissions.test.ts`,
 et `tests/tenant-isolation/workflows.test.ts`.
+
+## 14. Intelligence documentaire — Memory/Knowledge/Context Engine, extension du Prompt Engine (v0.7 — `ROADMAP.md` MOD-26)
+
+Voir `docs/adr/0023` à `0029` pour la justification complète des choix
+ci-dessous. Quatre moteurs indépendants du fournisseur IA
+(`src/lib/memory/`, `src/lib/knowledge/`, `src/lib/context/`, extension de
+`src/lib/agents/prompts/`), au même niveau que le Framework des Agents
+(§10) et le Workflow Engine (§13) : aucun agent ne doit gérer lui-même sa
+mémoire ou son contexte, tout passe par cette couche.
+
+### Memory Engine (`src/lib/memory/memory-engine.ts`)
+
+Mémoire générique multi-niveaux : `MemoryScopeType`
+(USER/ORGANIZATION/WORKSPACE/AGENT/WORKFLOW/CONVERSATION/TASK) croisé
+avec `MemoryKind` (LONG_TERM/TEMPORARY/DECISION/DOCUMENT/PREFERENCE).
+Chaque écriture (`setMemoryEntry`) crée une nouvelle version plutôt que
+de modifier en place — même principe que `PromptTemplate` (§12) —,
+l'historique complet reste consultable (`getMemoryHistory`). TTL par
+défaut configurable par nature (`DEFAULT_TTL_MS_BY_KIND`), expiration
+détectée par `clearExpiredMemoryEntries` (archivage doux) puis
+`purgeArchivedMemoryEntries` (suppression définitive après rétention).
+`compressMemoryEntry` réutilise le moteur LLM générique (§12, v0.5) pour
+résumer une entrée volumineuse sans jamais modifier la valeur brute.
+`AgentMemoryEntry` (v0.3, §10) reste un mécanisme distinct utilisé tel
+quel par Director/Commercial — voir ADR 0023.
+
+### Knowledge Engine (`src/lib/knowledge/`)
+
+`KnowledgeDocument` (titre, contenu textuel complet, métadonnées, tags,
+empreinte, statut de cycle de vie, compteur d'usage) et `KnowledgeChunk`
+(fragment, embedding `Float[]`) — voir ADR 0024. Quatre sous-systèmes :
+
+- **Parseurs** (`parsers/`) : registre `DocumentParser` par
+  `KnowledgeSourceType` (19 types) — texte natif (Markdown/Note/
+  Documentation/Email/HTML), sérialisation d'enregistrements Prisma
+  existants (CRM/Devis/Conversation/Décision/Workflow/Log, strictement
+  scopés organisation/workspace, jamais par `sourceRef` seul — voir ADR
+  0026), stubs honnêtes pour les formats nécessitant une dépendance
+  absente (PDF/Word/Excel/PowerPoint/Facture) et architecture préparée
+  sans extraction pour Image/Audio/Vidéo (voir ADR 0027).
+- **Embeddings** (`embeddings/`) : registre `EmbeddingProvider` (OpenAI,
+  VoyageAI, Jina, Cohere, Nomic, Ollama, HuggingFace/BGE, démonstration
+  déterministe par défaut), sélection par `EMBEDDING_PROVIDER` — même
+  idiome que `LlmProvider` (§12, ADR 0015). `embedding-service.ts` ajoute
+  cache en mémoire, coût estimé et journal (`EmbeddingRequest`).
+- **Bases vectorielles** (`vector-stores/`) : registre `VectorStore`
+  (PgVector par défaut — aucune extension `vector` disponible dans cet
+  environnement, stockage `Float[]` + cosinus calculé côté application,
+  voir ADR 0025 —, Pinecone/Qdrant/Weaviate/Chroma réellement
+  implémentés, Milvus/FAISS/LanceDB honnêtement déclarés non
+  implémentés), sélection par `VECTOR_STORE`.
+- **Indexation** (`indexing-engine.ts`) : `ingestDocument` (ajout ou mise
+  à jour, détection de changement par empreinte SHA-256 du contenu
+  extrait — ignore la ré-vectorisation si inchangé), `deleteDocument`,
+  `renameDocument`, `moveDocument`, `reindexDocument` (recalcule à partir
+  du contenu déjà stocké, sans re-parser la source), `reindexAll` (lot,
+  séquentiel), chaque opération journalisée (`KnowledgeIndexLog`,
+  succès et échec).
+- **Recherche** (`search/`) : `fulltextSearch` (filtrage SQL par présence
+  d'un mot, classement par fréquence — pas de `tsvector`/GIN, voir ADR
+  0025), `vectorSearch` (re-vérifie la portée après réponse de la base
+  vectorielle active, jamais confiance aveugle en un index externe — ADR
+  0026), `hybridSearch` (fusion de rangs réciproques), `findSimilarChunks`
+  (plus proches voisins d'un fragment déjà indexé). `searchKnowledge`
+  (point d'entrée unique, `mode: fulltext|vector|hybrid`) incrémente
+  `KnowledgeDocument.usageCount` une seule fois par appel — jamais par
+  moteur individuel — pour alimenter le tableau de bord.
+
+### Context Engine (`src/lib/context/context-engine.ts`)
+
+`assembleContext` : sélectionne automatiquement, par ordre de priorité
+(contraintes métier fournies par l'appelant > préférences > mémoire
+d'agent > documents utiles > décisions passées > résultats précédents >
+historique de conversation), le contenu pertinent avant un appel IA, puis
+compresse (troncage par priorité croissante, puis résumé via le moteur
+LLM générique si le budget de tokens demandé reste dépassé). Journalise
+systématiquement son résultat (nombre de sections par nature, compression,
+estimation de tokens) via le logger structuré du projet.
+
+### Prompt Engine (extension, pas de duplication — v0.5, §12)
+
+`PromptTemplate` gagne `locale` (contrainte unique déplacée vers
+`(key, version, locale)`, repli sur `"fr"`), `parentKey` (héritage borné,
+cycles détectés) et `variableSchema` (typage/requis/description, fusionné
+enfant-parent). `renderTemplateString` est extrait comme fonction pure,
+testable sans base de données — voir ADR 0028.
+
+### Intégration et observabilité
+
+`generateNarrative` (Agent Commercial, §12) passe désormais
+obligatoirement par `assembleContext` avant tout appel au fournisseur LLM
+actif — seul point d'appel IA du Framework des Agents à ce jour ; le
+Workflow Engine et le Scheduler en bénéficient de façon transitive (ils
+invoquent des agents, jamais un LLM directement) — voir ADR 0029.
+`getKnowledgeDashboard`/`getMemoryDashboard`
+(`src/lib/knowledge/dashboard-service.ts`,
+`src/lib/memory/dashboard-service.ts`) alimentent
+`GET /api/knowledge/dashboard` et `/settings/knowledge` (documents par
+statut/type de source, fragments, embeddings, indexation, cache, coût IA,
+documents les plus utilisés, mémoire par niveau/nature ; "qualité des
+réponses" honnêtement affichée comme indisponible faute de signal de
+retour utilisateur).
+
+### Tests
+
+`tests/memory/memory-engine.test.ts`, `tests/memory/dashboard-service.test.ts`,
+`tests/knowledge/embeddings.test.ts`, `tests/knowledge/vector-store.test.ts`,
+`tests/knowledge/indexing-engine.test.ts`, `tests/knowledge/search.test.ts`,
+`tests/knowledge/search-performance.test.ts`,
+`tests/knowledge/dashboard-service.test.ts`,
+`tests/context/context-engine.test.ts`,
+`tests/agents/context-engine-integration.test.ts`, et
+`tests/tenant-isolation/knowledge.test.ts`.

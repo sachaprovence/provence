@@ -145,6 +145,35 @@ supprimé ni migré dans cette phase — voir ADR 0022. Les décisions
 d'architecture prises pour `MOD-25` sont documentées dans
 `docs/adr/0018` à `0022`.
 
+## 1 septies. Changement de plan explicite : v0.7 devient le système d'intelligence documentaire, pas le calendrier (MOD-14)
+
+La version `v0.7` initialement envisagée dans l'ordre logique (`MOD-14`,
+calendrier) a été **remplacée, sur demande explicite**, par un nouveau
+module prioritaire et transversal : `MOD-26` (système d'intelligence
+documentaire — Memory Engine, Knowledge Engine, Context Engine, et
+extension du Prompt Engine existant). Raison : Autorun ne doit plus
+seulement exécuter des workflows, il doit comprendre une entreprise,
+apprendre d'elle, mémoriser son fonctionnement et fournir automatiquement
+aux agents le meilleur contexte possible — un prérequis transversal pour
+tout agent futur, au même titre que le Workflow Engine (v0.6) l'a été pour
+l'automatisation.
+
+Conséquence sur l'ordre : `MOD-14` (calendrier) n'est pas abandonné,
+seulement **reporté après `MOD-26`**. `MOD-26` s'intègre au Framework des
+Agents (v0.3) au seul point d'appel IA réellement existant aujourd'hui —
+`generateNarrative` (Agent Commercial, v0.5) — sans dupliquer ni modifier
+la mémoire propre de Director/Commercial (`AgentMemoryEntry`, v0.3, non
+touchée — voir ADR 0023) ni le Workflow Engine/Scheduler (qui n'appellent
+jamais de LLM directement, l'intégration est transitive via
+`agent.call`/`runAgentToCompletion`). Le Prompt Engine (v0.5) n'est pas
+dupliqué : `PromptTemplate`/`prompt-engine.ts` sont étendus sur place
+(locale, héritage, schéma de variables typé — voir ADR 0028). Aucune
+extension `pgvector` n'étant disponible dans l'environnement, la base
+vectorielle par défaut stocke les embeddings en `Float[]` Postgres natif
+avec similarité cosinus calculée côté application (voir ADR 0025). Les
+décisions d'architecture prises pour `MOD-26` sont documentées dans
+`docs/adr/0023` à `0029`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -164,7 +193,7 @@ d'architecture prises pour `MOD-25` sont documentées dans
 | MOD-11 | Statistiques & Dashboard | Existant (Phase 0) | Basse (généralisation) |
 | MOD-12 | Facturation client final | Reporté après v0.5 (voir §1 quater/§1 quinquies) | Haute |
 | MOD-13 | Gestion documentaire | Reporté après v0.6 (voir §1 sexies) | Moyenne |
-| MOD-14 | Calendrier | À créer | Moyenne |
+| MOD-14 | Calendrier | Reporté après v0.7 (voir §1 septies) | Moyenne |
 | MOD-15 | Infrastructure asynchrone (jobs) | À créer | Haute |
 | MOD-16 | Observabilité | À créer | Haute |
 | MOD-17 | Sécurité avancée & conformité renforcée | À créer | Critique (avant SaaS public) |
@@ -175,6 +204,7 @@ d'architecture prises pour `MOD-25` sont documentées dans
 | MOD-23 | Agent Director (orchestrateur) | ✅ Livré (v0.4) | Critique |
 | MOD-24 | Agent Commercial (premier agent métier) | ✅ Livré (v0.5) | Critique |
 | MOD-25 | Workflow Engine (moteur d'automatisation + éditeur visuel) | ✅ Livré (v0.6) | Critique |
+| MOD-26 | Intelligence documentaire (Memory/Knowledge/Context/Prompt Engine) | ✅ Livré (v0.7) | Critique |
 
 ## 3. Détail par module
 
@@ -1084,6 +1114,105 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   validé par une vraie requête HTTP contre le serveur (pas seulement des
   tests automatisés) ; aucune régression sur les 157 tests existants.
 
+### MOD-26 — Intelligence documentaire, Memory/Knowledge/Context/Prompt Engine (v0.7, priorisé avant MOD-14)
+
+- **Objectif** : Autorun ne se contente plus d'exécuter des workflows —
+  quatre moteurs indépendants et modulaires lui permettent de mémoriser le
+  fonctionnement d'une entreprise, d'indexer sa documentation, de
+  rechercher dans cette connaissance et de sélectionner automatiquement le
+  meilleur contexte avant tout appel IA. Indépendant de tout fournisseur
+  IA (abstractions uniquement) ; aucun agent ne doit gérer lui-même sa
+  mémoire ou son contexte.
+- **Fonctionnalités** :
+  - **Memory Engine** (`src/lib/memory/`) : mémoire multi-niveaux
+    (utilisateur/organisation/workspace/agent/workflow/conversation/tâche)
+    croisée avec une nature (long terme/temporaire/décisionnelle/
+    documentaire/préférences), versionnée (jamais modifiée en place),
+    avec TTL/expiration/archivage/purge et résumé automatique (compression
+    via le moteur LLM générique au-delà d'un seuil de taille) ;
+    `AgentMemoryEntry` (v0.3, Director/Commercial) reste distinct et
+    inchangé (voir ADR 0023).
+  - **Knowledge Engine** (`src/lib/knowledge/`) : indexation de 19 types
+    de sources (`KnowledgeSourceType`), pipeline d'ingestion par registre
+    de parseurs extensible (texte natif et sérialisation d'enregistrements
+    CRM/Devis/Conversation/Décision/Workflow/Log ; stubs honnêtes pour
+    PDF/Word/Excel/PowerPoint/Facture et Image/Audio/Vidéo — voir ADR
+    0027) ; moteur d'indexation complet (ajout, mise à jour par détection
+    de changement via empreinte, suppression, renommage, déplacement,
+    réindexation incrémentale/complète/en lot, priorités, historique
+    journalisé) ; abstraction d'embedding (8 fournisseurs : OpenAI,
+    VoyageAI, Jina, Cohere, Nomic, Ollama, HuggingFace/BGE, + un
+    fournisseur de démonstration déterministe) avec cache, coût estimé et
+    journal (`EmbeddingRequest`) ; abstraction de base vectorielle (8
+    backends anticipés : PgVector par défaut sans extension réelle —
+    `Float[]` + cosinus applicatif —, Pinecone, Qdrant, Weaviate, Chroma
+    réellement implémentés, Milvus/FAISS/LanceDB honnêtement déclarés non
+    implémentés, voir ADR 0025) ; moteurs de recherche plein
+    texte/vectorielle/hybride (fusion de rangs réciproques)/par
+    similarité, filtrables par tags/type de source/documents/organisation/
+    workspace ; suivi d'usage par document (`usageCount`) pour le tableau
+    de bord.
+  - **Context Engine** (`src/lib/context/`) : assemblage automatique du
+    contexte avant tout appel IA — documents utiles (recherche hybride
+    multi-sources), préférences, mémoire d'agent, décisions passées,
+    résultats précédents, historique de conversation, contraintes métier
+    fournies par l'appelant — classés par priorité, puis compressés
+    (troncage par priorité puis résumé via le moteur LLM) si le budget de
+    tokens demandé est dépassé.
+  - **Prompt Engine** : étendu sur place (v0.5, pas dupliqué — voir ADR
+    0028) avec locale, héritage (`parentKey`) et schéma de variables typé.
+  - **Observabilité** : tableau de bord (`/settings/knowledge`,
+    `GET /api/knowledge/dashboard`) — documents par statut/type de source,
+    fragments, embeddings (volume/cache/coût), indexation (temps moyen,
+    succès/échec par action), documents les plus utilisés, mémoire par
+    niveau/nature ; "qualité des réponses" honnêtement affichée comme
+    indisponible faute de signal de retour utilisateur.
+  - **Intégration** : `generateNarrative` (seul point d'appel IA du
+    Framework des Agents aujourd'hui, Agent Commercial) passe désormais
+    obligatoirement par `assembleContext` — voir ADR 0029. Workflow
+    Engine/Scheduler en bénéficient de façon transitive (ils invoquent des
+    agents, jamais un LLM directement).
+- **Dépendances** : `MOD-22` (Framework des Agents, v0.3), `MOD-24` (Agent
+  Commercial, v0.5 — seul point d'intégration IA existant).
+- **Priorité** : Critique — condition explicite de cette phase.
+- **Risques techniques** :
+  - Aucune extension `pgvector` disponible dans cet environnement — mitigé
+    par un adaptateur Postgres natif équivalent fonctionnellement, avec
+    limite de performance assumée et documentée (voir ADR 0025).
+  - Risque qu'un agent contourne le Context Engine — mitigé en rendant le
+    scope obligatoire dans la signature de `generateNarrative` (impossible
+    d'appeler le fournisseur LLM sans l'avoir renseigné), mais reste une
+    convention de revue de code pour tout futur point d'appel IA (voir ADR
+    0029).
+  - Risque de dupliquer le Prompt Engine (v0.5) ou la mémoire d'agent
+    (v0.3) en croyant "créer" un nouveau moteur — tranché explicitement en
+    étendant/coexistant plutôt qu'en dupliquant (voir ADR 0023/0028).
+- **Choix d'architecture** : voir ADR 0023 (`AgentMemoryEntry` vs
+  `MemoryEntry`), ADR 0024 (modèle document/fragment), ADR 0025 (pgvector
+  indisponible), ADR 0026 (sécurité/scope strict), ADR 0027 (honnêteté des
+  parseurs/backends), ADR 0028 (Prompt Engine étendu), ADR 0029 (Context
+  Engine obligatoire).
+- **Tests à prévoir** (tous livrés) : niveaux de mémoire, TTL/expiration/
+  archivage/purge/compression (`tests/memory/memory-engine.test.ts`) ;
+  ingestion/indexation (`tests/knowledge/indexing-engine.test.ts`) ;
+  embeddings (`tests/knowledge/embeddings.test.ts`) ; base vectorielle
+  (`tests/knowledge/vector-store.test.ts`) ; recherche plein texte/
+  vectorielle/hybride/filtrée (`tests/knowledge/search.test.ts`) ;
+  assemblage de contexte et compression
+  (`tests/context/context-engine.test.ts`) ; intégration Context Engine ↔
+  Agent Commercial (`tests/agents/context-engine-integration.test.ts`) ;
+  tableaux de bord (`tests/knowledge/dashboard-service.test.ts`,
+  `tests/memory/dashboard-service.test.ts`) ; isolation multi-tenant
+  (`tests/tenant-isolation/knowledge.test.ts`) ; performance de recherche
+  (`tests/knowledge/search-performance.test.ts`).
+- **Critères de fin** : golden path Provence 360, isolation multi-tenant,
+  Framework des Agents/Director/Agent Commercial/Workflow Engine inchangés
+  après cette phase ; 100 % des tests listés ci-dessus passent contre une
+  vraie base PostgreSQL (198/198 au total, zéro régression) ; lint,
+  typecheck et build de production passent ; les deux suites E2E (golden
+  path, isolation multi-tenant) validées contre une instance réellement
+  démarrée.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -1123,9 +1252,10 @@ livré `MOD-21` (multi-tenant) à la place de `MOD-02` (voir §1 bis),
 `MOD-12` partie 1 (voir §1 quater), `v0.5` a livré `MOD-24` (Agent
 Commercial) à la place de `MOD-12` partie 2 (voir §1 quinquies), et
 `v0.6` a livré `MOD-25` (Workflow Engine) à la place de `MOD-13`
-(voir §1 sexies) ; `MOD-02`, `MOD-12`, `MOD-13` et `MOD-20` restent à
-faire, désormais après `v0.6`. Voir `MILESTONES.md` pour l'état réel
-version par version.
+(voir §1 sexies), et `v0.7` a livré `MOD-26` (intelligence documentaire)
+à la place de `MOD-14` (voir §1 septies) ; `MOD-02`, `MOD-12`, `MOD-13`,
+`MOD-14` et `MOD-20` restent à faire, désormais après `v0.7`. Voir
+`MILESTONES.md` pour l'état réel version par version.
 
 ## 5. Éléments parallélisables
 
