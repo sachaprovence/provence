@@ -1419,7 +1419,202 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 
 ---
 
-## Version 0.8 — Infrastructure asynchrone (MOD-15)
+## Version 0.8 — Automation Engine Enterprise (MOD-27, remplace le plan initial)
+
+### AR-0123 — Schéma Prisma du noyau de jobs (`Automation`/`AutomationVersion`/`AutomationTriggerBinding`/`AutomationRun`/`AutomationRunLog`/`AutomationJob`/`AutomationJobLog`/`AutomationLock`/`AutomationCircuitBreaker`)
+- **Description** : identité/version séparées (même principe que
+  `WorkflowDefinition`/`WorkflowVersion`), noyau de jobs durable
+  (`AutomationJob` — statut, tentative, politique de retry, clé de
+  verrou/concurrence, priorité, planification, réclamation), verrou par
+  bail (`AutomationLock`) et disjoncteur persisté
+  (`AutomationCircuitBreaker`).
+- **Fichiers concernés** : `prisma/schema.prisma`, deux migrations
+  additives.
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0094 (modèles Workflow Engine existants, même gabarit
+  identité/version).
+
+### AR-0124 — Queue Manager (Postgres par défaut + mémoire + stubs BullMQ/Redis/RabbitMQ/SQS/Kafka)
+- **Description** : réclamation atomique (`FOR UPDATE SKIP LOCKED`, deux
+  instructions simples — jamais une CTE imbriquée, voir ADR 0032) ;
+  fournisseur mémoire réel pour les tests ; fournisseurs distants
+  honnêtement déclarés non implémentés.
+- **Fichiers concernés** : `src/lib/automation/queue/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0123.
+
+### AR-0125 — Lock Manager (bail Postgres + mémoire) et Concurrency Manager
+- **Description** : verrou par bail (jamais `pg_advisory_lock`, voir ADR
+  0032) ; limite globale de jobs `RUNNING`, limite par `concurrencyKey`,
+  rate limiter en mémoire par processus.
+- **Fichiers concernés** : `src/lib/automation/lock/**`,
+  `src/lib/automation/concurrency/**` (nouveaux).
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0123.
+
+### AR-0126 — Retry Engine (7 stratégies) + Circuit Breaker persisté
+- **Description** : exponentiel, linéaire, immédiat, manuel, conditionnel
+  (réutilise le Condition Engine), infini borné en durée, limité ;
+  disjoncteur à 3 états (`CLOSED`/`OPEN`/`HALF_OPEN`) persisté, cohérent
+  entre plusieurs instances de worker.
+- **Fichiers concernés** : `src/lib/automation/retry/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0123.
+
+### AR-0127 — Dead Letter Queue + Priority Manager
+- **Description** : DLQ = vue sur `AutomationJob.status = 'DEAD_LETTERED'`
+  (jamais une table séparée), relance strictement scopée organisation/
+  workspace ; niveaux de priorité nommés au-dessus de l'entier de tri déjà
+  appliqué par le Queue Manager.
+- **Fichiers concernés** : `src/lib/automation/dlq/**`,
+  `src/lib/automation/priority/**` (nouveaux).
+- **Complexité** : Basse.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0123, AR-0124.
+
+### AR-0128 — Enterprise Scheduler (cron complexe, fuseau/DST, calendriers, blackout, fenêtres d'exécution)
+- **Description** : évaluateur cron avec plages/listes/pas/alias ;
+  extraction de champs "heure murale" par fuseau IANA via
+  `Intl.DateTimeFormat` natif (aucune nouvelle dépendance) ; combinaison
+  cron + jours ouvrés + jours fériés + blackout + fenêtres d'exécution en
+  une fonction sans état, testable.
+- **Fichiers concernés** : `src/lib/automation/scheduler/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : aucun (module autonome, voir ADR 0036).
+
+### AR-0129 — Condition Engine (réutilisé) + Trigger Engine/Event Dispatcher (catalogue de 26 déclencheurs)
+- **Description** : ré-export du moteur d'expressions du Workflow Engine
+  (aucune duplication) ; bus d'évènements générique réutilisé ; catalogue
+  déclaratif des 26 types de déclencheurs demandés par le brief.
+- **Fichiers concernés** : `src/lib/automation/conditions/**`,
+  `src/lib/automation/triggers/**` (nouveaux).
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : aucun.
+
+### AR-0130 — Câblage réel des points d'émission (leads CRUD, auth, organisation/workspace, import) + Trigger Engine (évènements/cron/webhook)
+- **Description** : `fireAutomationsForEvent` (scopé strictement par
+  organisation), `processDueAutomationSchedules` (`schedule.cron` réel),
+  `fireAutomationWebhook` ; abonnement explicite à 8 clés d'évènement
+  réellement publiées par 6 routes existantes.
+- **Fichiers concernés** : `src/lib/automation/trigger-engine.ts`,
+  `src/lib/automation/bootstrap.ts` (nouveaux),
+  `src/app/api/leads/**`, `src/app/api/auth/{register,login}/route.ts`,
+  `src/lib/workspace-service.ts` (modifiés : un appel
+  `publishAutomationEvent` ajouté par point d'émission).
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0129.
+
+### AR-0131 — Automation Registry (CRUD/versions/cycle de vie/export-import) + graphe versionné (10 types de noeuds)
+- **Description** : même gabarit que `workflow-service.ts` (v0.6) ; graphe
+  avec `switch`/`map`/`join` explicite en plus de l'ensemble du Workflow
+  Engine.
+- **Fichiers concernés** : `src/lib/automation/registry/**`,
+  `src/lib/automation/graph-types.ts`,
+  `src/lib/automation/graph-validation.ts` (nouveaux).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0123.
+
+### AR-0132 — Registre de jobs/actions pluggables (12 gestionnaires réels + 8 stubs honnêtes)
+- **Description** : HTTP, email, notification, variable, agent, workflow,
+  automatisation imbriquée, indexation Knowledge Engine, écriture Memory
+  Engine, CRUD Lead ; SMS/fichier/document/client/tâche/devis/facture/
+  rendez-vous honnêtement déclarés non implémentés.
+- **Fichiers concernés** : `src/lib/automation/actions/**` (nouveau).
+- **Complexité** : Moyenne.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0123.
+
+### AR-0133 — Job Executor (progression de graphe ré-entrante, noeuds `loop`/`map`/`join`/`subautomation`, notification parent↔enfant)
+- **Description** : `advanceAutomationRun` (jamais bloquant),
+  `processAutomationJobs` (réclamation + exécution + retry/disjoncteur/
+  DLQ), moteur de tick générique réutilisé pour le graphe racine et les
+  corps de boucle/map, notification explicite du run parent à la
+  terminaison d'un run enfant.
+- **Fichiers concernés** : `src/lib/automation/executor/**` (nouveau).
+- **Complexité** : Élevée.
+- **Estimation** : 3 jours.
+- **Prérequis** : AR-0124, AR-0125, AR-0126, AR-0127, AR-0129, AR-0131,
+  AR-0132.
+
+### AR-0134 — Tableau de bord d'observabilité
+- **Description** : automatisations par statut, runs (succès/échec/durée
+  moyenne/min/max), jobs par statut/type (durée, taux d'échec), retries
+  totaux, profondeur de file, workers actifs (heuristique honnête), DLQ.
+- **Fichiers concernés** : `src/lib/automation/dashboard-service.ts`
+  (nouveau).
+- **Complexité** : Moyenne.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0133.
+
+### AR-0135 — API REST typée (CRUD/cycle de vie/versions/runs/jobs/DLQ/tableau de bord/catalogue/cron/webhook)
+- **Description** : 18 routes mirroir de `src/app/api/workflows/**`, plus
+  jobs/DLQ (sans équivalent Workflow Engine), plus cron applicatif et
+  webhook entrant dédiés.
+- **Fichiers concernés** : `src/app/api/automations/**`,
+  `src/app/api/cron/process-automations/route.ts`,
+  `src/app/api/webhooks/automations/[workspaceId]/[automationKey]/route.ts`
+  (nouveaux), `src/lib/validations/automation.ts`,
+  `src/lib/workspace-permissions.ts` (permission `MANAGE_AUTOMATIONS`).
+- **Complexité** : Élevée.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0130, AR-0131, AR-0133, AR-0134.
+
+### AR-0136 — UI (liste + tableau de bord, éditeur de version JSON, détail de run, Dead Letter Queue) + navigation
+- **Description** : `/automations`, `/automations/[id]`,
+  `/automations/runs/[runId]`, `/automations/dlq` ; entrée de navigation.
+  Éditeur de graphe en JSON (pas de canevas visuel glisser-déposer pour
+  cette phase — voir limite connue, `MILESTONES.md` §v0.8).
+- **Fichiers concernés** : `src/app/(app)/automations/**`,
+  `src/components/automation-*-client.tsx` (nouveaux),
+  `src/components/nav-config.ts` (modifié).
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : AR-0135.
+
+### AR-0137 — Tests (Queue/Lock/Concurrency/Retry/DLQ/Priority/Scheduler/Trigger Engine/Registry/actions/Job Executor/tableau de bord/permissions) + E2E dédié
+- **Description** : 90 nouveaux tests contre une vraie base PostgreSQL,
+  dont un test de charge de concurrence du Queue Manager (ayant révélé et
+  fait corriger un bug réel, voir ADR 0032) ; un nouveau parcours de bout
+  en bout (`tests/e2e/automation-golden-path.mjs`).
+- **Fichiers concernés** : `tests/automation/**`,
+  `tests/e2e/automation-golden-path.mjs`.
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : AR-0124 à AR-0136.
+
+### AR-0138 — ADR 0030 à 0037
+- **Description** : documentation des 8 décisions d'architecture de cette
+  version (coexistence + noyau de jobs, exécution asynchrone/registre vs
+  exécuteur, Queue/Lock Manager, Circuit Breaker persisté, Condition
+  Engine/Event Dispatcher réutilisés, DLQ scopée tenant, Scheduler
+  autonome/Priority Manager, honnêteté du câblage des déclencheurs).
+- **Fichiers concernés** : `docs/adr/0030-*.md` à `docs/adr/0037-*.md`.
+- **Complexité** : Basse.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0123 à AR-0137.
+
+**Total estimé du travail réellement livré pour v0.8 : ~26,5 jours.**
+
+---
+
+### Plan initial de v0.8 (non traité dans cette version, conservé pour référence)
+
+> Les tâches `AR-0040` à `AR-0046` (infrastructure de jobs minimale via
+> `pg-boss`) ci-dessous n'ont pas été traitées dans cette version — leur
+> périmètre technique est entièrement délivré par le noyau de jobs de
+> `MOD-27` ci-dessus (Postgres, pas `pg-boss` — voir ADR 0032). Reportée
+> après v0.8 sous forme de migration des modules existants vers ce noyau,
+> voir `ROADMAP.md` §1 octies.
+
+## Version 0.8 bis — Infrastructure asynchrone minimale pour les traitements existants (MOD-15, plan initial, reporté)
 
 ### AR-0040 — Intégration `pg-boss`
 - **Description** : mise en place de `pg-boss` (file de jobs sur
@@ -1502,7 +1697,7 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 - **Tests nécessaires** : test qu'un job en dead-letter apparaît et peut
   être relancé manuellement.
 
-**Total estimé v0.8 : ~12,5 jours.**
+**Total estimé v0.8 bis (plan initial, reporté) : ~12,5 jours.**
 
 ---
 
@@ -1785,9 +1980,13 @@ Ce tableau reflète le plan initial de ce document. En pratique, `v0.2`
 la place de `MOD-12` partie 1, `v0.5` (~12 jours réels) a livré
 `MOD-24` (Agent Commercial) à la place de `MOD-12` partie 2, `v0.6`
 (~15,5 jours réels) a livré `MOD-25` (Workflow Engine) à la place de
-`MOD-13`, et `v0.7` (~18,5 jours réels) a livré `MOD-26` (intelligence
-documentaire) à la place de `MOD-14` — voir les sections « Total estimé
-du travail réellement livré » correspondantes ci-dessus.
+`MOD-13`, `v0.7` (~18,5 jours réels) a livré `MOD-26` (intelligence
+documentaire) à la place de `MOD-14`, et `v0.8` (~26,5 jours réels) a livré
+`MOD-27` (Automation Engine Enterprise) — qui délivre entièrement le
+périmètre technique de `MOD-15` — à la place de la migration initialement
+prévue de `MOD-04`/`MOD-05`/`MOD-06`/`MOD-12`/`MOD-14` vers ce noyau — voir
+les sections « Total estimé du travail réellement livré » correspondantes
+ci-dessus.
 
 ---
 

@@ -301,6 +301,74 @@ nouveau code touchant ce périmètre :
   d'écran, zéro erreur console) derrière une session admin réelle avant
   livraison.
 
+## 0 octies. État de l'Automation Engine (v0.8)
+
+Le moteur d'automatisation Enterprise (`ROADMAP.md` MOD-27,
+`docs/02-ARCHITECTURE.md` §15) est livré, en remplacement du plan initial
+de v0.8 (infrastructure de jobs minimale, `MOD-15` — voir `MILESTONES.md`
+§v0.8 bis). Points à connaître pour tout nouveau code touchant ce
+périmètre :
+
+- **`src/lib/automation/` coexiste avec `src/lib/workflows/` (v0.6), jamais
+  une modification de ce dernier** — voir ADR 0030. Un nouveau besoin
+  d'automatisation synchrone légère (pas de garanties de reprise/verrou/
+  concurrence par étape) reste du ressort du Workflow Engine ; un besoin de
+  job durable (retry, verrou, concurrence, priorité, dead-letter) passe par
+  l'Automation Engine.
+- **Aucun point d'entrée de l'Automation Engine n'attend un run jusqu'au
+  bout** (voir ADR 0031) : `advanceAutomationRun` revient dès qu'il n'y a
+  plus rien à faire immédiatement, jamais de blocage sur un job/sous-run en
+  vol. Un nouveau code appelant doit interroger le run (`GET
+  /api/automations/runs/[runId]`) plutôt que supposer un résultat
+  disponible immédiatement après déclenchement.
+- **Ajouter un nouveau job/action = enregistrer un `AutomationJobHandler`**
+  (`src/lib/automation/actions/registry.ts`), jamais modifier le Job
+  Executor — voir `actions/builtin/*.ts` comme modèles, en particulier le
+  principe honnête des stubs "non encore implémentée"
+  (`not-yet-implemented-actions.ts`) plutôt qu'un faux succès. Même
+  principe pour un nouveau type de déclencheur (`triggers/registry.ts`) —
+  mais un déclencheur DÉCLARÉ n'est pas forcément CÂBLÉ à un point
+  d'émission réel : voir `trigger-engine.ts#REAL_EMISSION_EVENT_KEYS` (ADR
+  0037) avant de supposer qu'un évènement applicatif déclenche déjà une
+  automatisation.
+- **Le Queue Manager Postgres réclame par `SELECT ... FOR UPDATE SKIP
+  LOCKED` en deux instructions simples, jamais une CTE imbriquée** — un
+  bug de concurrence réel (dépassement de `LIMIT` sous forte charge) a été
+  corrigé ainsi et gardé sous test de charge dédié
+  (`tests/automation/queue.test.ts`) — voir ADR 0032. Ne jamais réintroduire
+  une CTE imbriquée dans `claim()` sans revalider sous charge concurrente.
+- **Une clé de disjoncteur (`jobType:<clé>`) est un état GLOBAL persisté,
+  partagé entre plusieurs suites de test parallèles** — tout nouveau test
+  qui a besoin d'un job systématiquement en échec doit utiliser un type de
+  job DÉDIÉ (jamais réutiliser `jobType:sms.send` d'un autre fichier de
+  test) ou réinitialiser explicitement le disjoncteur
+  (`recordCircuitSuccess`) à son démarrage — voir ADR 0033 et les
+  commentaires de `tests/automation/job-executor.test.ts`/
+  `dashboard-service.test.ts`.
+- **La Dead Letter Queue n'est jamais une table séparée** (vue sur
+  `AutomationJob.status = 'DEAD_LETTERED'`) et `replayDeadLetter` exige
+  toujours `{organizationId, workspaceId}`, jamais un id seul — voir ADR
+  0035.
+- **Le Condition Engine et l'Event Dispatcher sont réutilisés depuis le
+  Workflow Engine/`domain-events.ts`, jamais dupliqués** — voir ADR 0034.
+  Toute évolution du moteur d'expressions doit se faire dans
+  `workflows/expressions/`, jamais dans une copie locale à
+  `automation/conditions/`.
+- **Un run enfant (`subautomation`/`automation.call`) devenu terminal doit
+  notifier explicitement son run parent** (`notifyParentRun` dans
+  `job-executor.ts`) — sans quoi rien d'autre ne ferait progresser le
+  parent (il n'est ni `QUEUED` ni propriétaire du job qui vient de se
+  terminer). Toute nouvelle relation parent/enfant introduite dans le Job
+  Executor doit respecter ce même principe de notification explicite.
+- **Toute nouvelle fonctionnalité de ce périmètre doit être vérifiée au
+  moins une fois par une vraie requête HTTP contre un serveur en cours
+  d'exécution** — `/automations`, `/automations/[id]`,
+  `/automations/runs/[runId]` et `/automations/dlq` ont été vérifiés de
+  bout en bout (création, activation, déclenchement, avancée via le cron
+  applicatif, run `SUCCEEDED` visible) via
+  `tests/e2e/automation-golden-path.mjs` contre un serveur réellement
+  démarré, zéro erreur console.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)
@@ -470,11 +538,17 @@ Procédure déjà éprouvée par `AIProvider`/`EmailProvider`, à répliquer :
 
 - Prérequis identiques au MVP actuel : Node.js ≥ 20.19, PostgreSQL ≥ 14 (ou
   `docker compose up`).
-- `npm run dev`, `npm run test`, `npm run test:e2e`, `npm run db:migrate`,
-  `npm run db:seed` : commandes existantes, inchangées par cette roadmap
-  tant que `v0.8` (infrastructure asynchrone) n'introduit pas de nouveau
-  service (`worker`), auquel cas `docker-compose.yml` sera étendu avec un
-  service dédié et ce guide mis à jour en conséquence.
+- `npm run dev`, `npm run test`, `npm run test:e2e`, `npm run
+  test:e2e:tenants`, `npm run test:e2e:automation`, `npm run db:migrate`,
+  `npm run db:seed` : commandes existantes. Le noyau de jobs de
+  l'Automation Engine (v0.8, `MOD-27`) n'introduit PAS de nouveau service
+  `docker-compose.yml` : le worker (`processAutomationJobs`) est une
+  fonction appelée par le cron applicatif
+  (`POST /api/cron/process-automations`), pas un processus dédié. Un
+  service `worker` séparé resterait à envisager si `v0.8 bis` (migration de
+  `MOD-04`/`MOD-05`/`MOD-06`/`MOD-12`/`MOD-14` vers ce noyau, voir
+  `MILESTONES.md`) l'exigeait un jour, auquel cas ce guide serait mis à
+  jour en conséquence.
 - Toujours pouvoir démarrer l'application en mode démo (aucune clé API
   externe requise) à tout moment de la roadmap — c'est une contrainte
   permanente, pas seulement une caractéristique du MVP initial.

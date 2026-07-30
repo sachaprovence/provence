@@ -534,23 +534,106 @@ et de la facturation client (`v0.4`/`v0.5`).
   deviennent consultables en vue calendrier, avec option de
   synchronisation vers l'agenda personnel de l'utilisateur.
 
-## v0.8 — Infrastructure asynchrone
+## v0.8 — Automation Engine Enterprise (remplace le plan initial)
+
+> **Statut : ✅ livré** (2026-07-30). Comme pour `v0.2`/`v0.3`/`v0.4`/
+> `v0.5`/`v0.6`/`v0.7`, ce jalon a été **redéfini sur demande explicite** :
+> le contenu initialement prévu ici (infrastructure de jobs minimale au
+> service des séquences/imports — `MOD-15`) est reporté à une version
+> ultérieure sous une forme réduite (voir `v0.8 bis` ci-dessous) et
+> remplacé par un module jugé plus prioritaire et transversal : un
+> véritable moteur d'automatisation Enterprise, comparable aux meilleurs du
+> marché (Temporal, n8n, Zapier, Make, GitHub Actions). Ce module **délivre
+> entièrement** le périmètre technique de `MOD-15` (noyau de jobs durable
+> Postgres, retry, dead-letter, tableau de bord) et va largement au-delà.
+> Voir `ROADMAP.md` §1 octies et §MOD-27, ainsi que `docs/adr/0030` à
+> `0037`.
+
+- **Objectif du jalon** : Autorun ne se contente plus d'exécuter des
+  workflows en mémoire (`MOD-25`, v0.6) — un second moteur, coexistant sans
+  jamais le modifier, permet à n'importe quel agent/workflow/utilisateur/
+  module de construire des automatisations complexes sans écrire de code,
+  avec des garanties "enterprise" : chaque action s'exécute comme un job
+  durable, individuellement retryable/verrouillable/priorisé/dead-
+  letterable.
+- **Modules** : MOD-27 (coexiste avec le Workflow Engine, `MOD-25`, v0.6 ;
+  réutilise son Condition Engine sans le dupliquer ; délivre le périmètre
+  technique de `MOD-15`).
+- **Tâches** : voir `BACKLOG.md`, section v0.8 (schéma Prisma du noyau de
+  jobs, Queue/Lock/Concurrency/Retry/Priority Manager, Circuit Breaker,
+  Dead Letter Queue, Enterprise Scheduler, Trigger Engine + Event
+  Dispatcher, câblage de points d'émission réels, Condition Engine réutilisé,
+  Automation Registry, registre de jobs/actions, Job Executor, tableau de
+  bord, API REST, UI + navigation, bootstrap + cron, tests, ADR).
+- **Critères de sortie** :
+  - [x] `tests/e2e/two-organizations-isolation.mjs` et le nouveau
+    `tests/e2e/automation-golden-path.mjs` (création, activation,
+    déclenchement manuel, avancée via le cron applicatif, run `SUCCEEDED`
+    visible dans l'interface, tableau de bord et Dead Letter Queue
+    affichés) passent sans erreur console, contre une instance réellement
+    démarrée ;
+  - [x] les 198 tests de v0.1 à v0.7 passent toujours sans modification de
+    leur comportement ;
+  - [x] 90 nouveaux tests (288 au total) passent contre une vraie base
+    PostgreSQL : Queue Manager (dont un test de charge de concurrence,
+    voir ADR 0032), Lock Manager, Concurrency Manager, Retry Engine +
+    Circuit Breaker, Dead Letter Queue, Priority Manager, Scheduler,
+    Trigger Engine (types + câblage réel des évènements/cron/webhook),
+    Automation Registry, jobs/actions pluggables, Job Executor (graphe
+    linéaire, branchement conditionnel, `loop`/`map`, `wait`, sous-
+    automatisation, annulation, déclenchement/relance manuels), tableau de
+    bord, permissions ;
+  - [x] `npm run lint`, `npx tsc --noEmit` et `npm run build` passent sans
+    erreur ;
+  - [x] validé par une vraie requête HTTP contre le serveur (une
+    automatisation créée, activée et déclenchée via l'API atteint
+    `SUCCEEDED` après passage par le cron applicatif, visible sans erreur
+    console dans `/automations/runs/[runId]`, `/automations` et
+    `/automations/dlq`), pas seulement des tests automatisés.
+- **État fonctionnel de l'application** : Provence 360, le multi-tenant, le
+  Framework des Agents, l'Agent Director, l'Agent Commercial, le Workflow
+  Engine et l'intelligence documentaire restent **entièrement
+  fonctionnels** ; un nouvel espace `/automations` (liste + tableau de bord,
+  éditeur de version, détail de run, Dead Letter Queue) est accessible aux
+  rôles `OWNER`/`ADMIN`/`MANAGER` (permission `MANAGE_AUTOMATIONS`, même
+  distribution que `MANAGE_WORKFLOWS`) ; sept points d'émission réels de
+  Provence 360 (leads CRUD, inscription/connexion, création d'organisation/
+  workspace, import CSV) peuvent désormais déclencher une automatisation
+  active abonnée à l'évènement correspondant.
+- **Limite connue** : seul un sous-ensemble défensable des 26 types de
+  déclencheurs déclarés est réellement câblé à un point d'émission de la
+  plateforme (même honnêteté que le Workflow Engine v0.6, voir ADR 0037) —
+  les autres (paiement reçu, document signé, client créé...) restent
+  utilisables en manuel/API/webhook mais ne se déclenchent jamais tout
+  seuls, faute de module métier correspondant (facturation, signature
+  électronique) dans Provence 360 aujourd'hui. Le rate limiter du
+  Concurrency Manager est en mémoire, par processus (limite assumée en
+  déploiement multi-instance, voir ADR 0032). L'éditeur de graphe reste une
+  édition JSON (pas de canevas visuel glisser-déposer comme le Workflow
+  Engine, v0.6) — le brief v0.8 demandait avant tout le moteur et son
+  observabilité, pas un second éditeur graphique.
+
+## v0.8 bis — Infrastructure asynchrone minimale pour les traitements existants (plan initial, reporté)
 
 - **Objectif du jalon** : sortir les traitements potentiellement longs
-  (séquences, IA, imports, webhooks) du cycle requête/réponse HTTP, avant
-  que le volume ne le rende obligatoire dans l'urgence.
-- **Modules** : MOD-15.
+  (séquences, IA, imports, webhooks) du cycle requête/réponse HTTP.
+  Devient, une fois entrepris, une MIGRATION vers le noyau de jobs déjà
+  livré par `MOD-27` (v0.8) plutôt qu'une nouvelle infrastructure à
+  construire — voir `ROADMAP.md` §1 octies.
+- **Modules** : MOD-15 (périmètre technique déjà livré via `MOD-27`),
+  migration de `MOD-04`/`MOD-05`/`MOD-06`/`MOD-12`/`MOD-14` vers ce noyau.
 - **Tâches** : AR-0040 à AR-0046.
 - **Critères de sortie** :
-  - `pg-boss` en place, un job planifié s'exécute et un job en échec est
-    retenté puis mis en dead-letter après N tentatives ;
+  - les séquences/imports/webhooks existants passent par
+    `AutomationJob`/le Queue Manager Postgres au lieu d'un traitement
+    synchrone ou d'un mécanisme ad hoc ;
   - le comportement des séquences est strictement identique à avant
     migration (non-régression du golden path) ;
-  - un tableau de bord permet de consulter et relancer manuellement un job
-    en échec.
+  - le tableau de bord `/automations` (déjà livré) permet de consulter et
+    relancer manuellement un job en échec issu de ces modules.
 - **État fonctionnel de l'application** : identique du point de vue
-  utilisateur final, mais l'application encaisse désormais un import
-  volumineux ou un pic d'envoi sans dégrader le temps de réponse HTTP.
+  utilisateur final, mais l'application encaisse un import volumineux ou
+  un pic d'envoi sans dégrader le temps de réponse HTTP.
 
 ## v0.9 — Observabilité et connecteurs réels
 
@@ -636,7 +719,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.6 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.7 | Infrastructure (intelligence documentaire transversale) | Oui (tableau de bord Intelligence documentaire) | Oui (tout agent générant du texte, actuellement l'Agent Commercial) |
 | v0.7 bis | Fonctionnalité (reportée) | Oui | Non |
-| v0.8 | Infrastructure | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |
+| v0.8 | Infrastructure (moteur d'automatisation transversal) | Oui (éditeur + tableau de bord Automations) | Oui (fondation du noyau de jobs pour toute automatisation future) |
+| v0.8 bis | Infrastructure (migration, reportée) | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |
 | v0.9 | Fonctionnalité + ops | Oui (IA/email réels) | Oui (v0.10 en dépend partiellement) |
 | v0.10 | Sécurité | Non | **Oui, bloquant pour v1.0** |
 | v1.0 | Ouverture SaaS | Oui | — (fin de cycle) |

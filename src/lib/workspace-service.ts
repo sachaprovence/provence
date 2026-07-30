@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, type CurrentActor } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 import { NotFoundError, ConflictError, ValidationError } from "@/lib/errors";
 import { WORKSPACE_AUDIT_ACTIONS } from "@/lib/workspace-permissions";
 import { WorkspaceRole, MembershipRole } from "@/generated/prisma/enums";
@@ -89,6 +90,7 @@ export async function createWorkspace(
     entityId: workspace.id,
     metadata: { name: workspace.name, slug: workspace.slug },
   });
+  await publishAutomationEvent("workspace.created", { organizationId: actor.organization.id, workspaceId: workspace.id });
 
   return workspace;
 }

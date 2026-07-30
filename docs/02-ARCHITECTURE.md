@@ -1009,3 +1009,150 @@ retour utilisateur).
 `tests/context/context-engine.test.ts`,
 `tests/agents/context-engine-integration.test.ts`, et
 `tests/tenant-isolation/knowledge.test.ts`.
+
+## 15. Automation Engine — moteur d'automatisation Enterprise (v0.8 — `ROADMAP.md` MOD-27)
+
+Voir `docs/adr/0030` à `0037` pour la justification complète des choix
+ci-dessous. Second moteur d'automatisation (`src/lib/automation/`),
+entièrement nouveau et indépendant du Workflow Engine (§13, v0.6) : aucun
+fichier de `src/lib/workflows/` n'est modifié pour l'intégrer — coexistence,
+jamais remplacement (voir ADR 0030). Le différenciateur : chaque noeud
+`action` d'un `AutomationRun` s'exécute comme un `AutomationJob` PERSISTÉ —
+réclamé atomiquement, verrouillable, limité en concurrence, retryable,
+dead-letterable — là où le Workflow Engine exécute chaque noeud en mémoire
+dans le même appel.
+
+### Graphe versionné (`graph-types.ts`/`graph-validation.ts`)
+
+Même principe déclaratif que le Workflow Engine (§13) : `Automation`/
+`AutomationVersion` séparent identité et version immuable. Dix types de
+noeuds (`trigger`/`condition`/`switch`/`action`/`loop`/`map`/`wait`/`join`/
+`subautomation`/`end`) — trois au-delà du Workflow Engine : `switch`
+(branchement à N voies), `map` (itération PARALLÈLE — un `AutomationJob`
+enfant par élément, par opposition à `loop`, séquentielle), `join` explicite
+avec un mode `all`/`any` déclaré (referme le point laissé ouvert par l'ADR
+0019 pour le Workflow Engine, sans jamais le modifier).
+
+### Queue Manager, Lock Manager, Concurrency Manager (`queue/`, `lock/`, `concurrency/`)
+
+`QueueProvider` découple la découverte du travail du stockage durable
+(toujours `AutomationJob`) — fournisseur Postgres par défaut (`FOR UPDATE
+SKIP LOCKED`, réclamation atomique en deux instructions simples, jamais une
+CTE imbriquée — corrige un bug de concurrence réel découvert par test de
+charge, voir ADR 0032), fournisseur mémoire réel, BullMQ/Redis/RabbitMQ/
+SQS/Kafka honnêtement déclarés non implémentés (aucune infrastructure
+correspondante dans ce projet). `LockManager` : verrou par bail (jamais un
+verrou consultatif Postgres, incompatible avec le pool de connexions
+Prisma). `Concurrency Manager` : limite globale de jobs `RUNNING`, limite
+par `concurrencyKey`, rate limiter en mémoire par processus (limite
+assumée en multi-instance).
+
+### Retry Engine, Circuit Breaker, Dead Letter Queue (`retry/`, `dlq/`)
+
+Sept stratégies de retry (exponentiel, linéaire, immédiat, manuel,
+conditionnel — réutilise le Condition Engine —, infini borné en durée,
+limité). Disjoncteur à 3 états (`CLOSED`/`OPEN`/`HALF_OPEN`) persisté
+(`AutomationCircuitBreaker`), cohérent entre plusieurs instances de worker,
+par périmètre `jobType:<clé>` (protège une dépendance externe partagée, pas
+un tenant) — voir ADR 0033. La Dead Letter Queue n'est jamais une table
+séparée : une vue sur `AutomationJob.status = 'DEAD_LETTERED'`, relance
+strictement scopée organisation/workspace, jamais par id seul — voir ADR
+0035.
+
+### Enterprise Scheduler (`scheduler/`) et Priority Manager (`priority/`)
+
+Module de planification AUTONOME, pas une extension du cron minimal du
+Workflow Engine : évaluateur cron avec plages/listes/pas/alias
+(`cron-engine.ts`), extraction de champs "heure murale" par fuseau IANA via
+`Intl.DateTimeFormat` natif — aucune nouvelle dépendance (`timezone.ts`),
+combinaison cron + jours ouvrés + jours fériés + blackout + fenêtres
+d'exécution en une fonction sans état (`matchesSchedule`,
+`schedule-engine.ts`) — voir ADR 0036. Le Priority Manager ne fait que
+nommer des niveaux (`LOW`/`NORMAL`/`HIGH`/`CRITICAL`) au-dessus de l'entier
+de priorité déjà trié par le Queue Manager.
+
+### Condition Engine et Event Dispatcher (réutilisés, jamais dupliqués)
+
+`src/lib/automation/conditions/index.ts` ré-exporte directement le moteur
+d'expressions du Workflow Engine (`Rule`/`Expr`/`evaluateRule`, voir ADR
+0020) — aucune réimplémentation. `triggers/event-dispatcher.ts` réutilise
+le bus d'évènements générique (`domain-events.ts`, §13) sous les noms
+`publishAutomationEvent`/`subscribeAutomationEvent` — voir ADR 0034.
+
+### Trigger Engine (`trigger-engine.ts`) — 26 déclencheurs, câblage honnête et partiel
+
+Catalogue complet des 26 types de déclencheurs demandés par le brief (cron,
+date, heure, intervalle, webhook, API, event bus, workflow/agent terminé,
+email reçu, lead créé/modifié/supprimé, client créé, paiement reçu,
+document signé, utilisateur connecté/créé, organisation/workspace créé,
+import/export terminé, erreur détectée, webhook externe, déclencheur
+manuel/personnalisé). Seul un sous-ensemble défensable est réellement
+câblé à un point d'émission de la plateforme (`lead.created`/`updated`/
+`deleted`, `user.registered`/`logged_in`, `organization.created`/
+`workspace.created`, `import.completed`, `schedule.cron`,
+`webhook.received`, `manual.user_action`) — même honnêteté que le Workflow
+Engine (§13, v0.6, qui ne câble réellement que `agent.run.completed`) — voir
+ADR 0037. `fireAutomationsForEvent` filtre STRICTEMENT par organisation
+quand le payload en fournit une.
+
+### Job Executor (`executor/`) — le coeur du noyau de jobs
+
+`advanceAutomationRun` fait progresser le graphe d'un `AutomationRun` d'UNE
+génération et revient dès qu'il n'y a plus rien à faire immédiatement —
+jamais de blocage (voir ADR 0031). Noeuds de contrôle de flux exécutés en
+ligne (`trigger`/`condition`/`switch`/`join`/`end`/`wait`) ; noeuds `action`
+matérialisés en `AutomationJob` puis sondés à chaque génération ; `loop`
+(itération séquentielle) et `map` (itération parallèle, jusqu'à
+`concurrencyLimit`) réutilisent un même moteur de tick générique
+(`tick-graph.ts`) pour leur corps de noeuds ; `subautomation`/
+`automation.call` créent un run enfant de façon ASYNCHRONE (contrairement
+au `workflow.run_subworkflow` synchrone du Workflow Engine) — le run enfant
+devenu terminal NOTIFIE explicitement son run parent, sans quoi rien ne le
+ferait progresser. `processAutomationJobs` réclame un lot via le Queue
+Manager actif, applique le Concurrency Manager, puis exécute chaque job
+admis (verrou, disjoncteur, minuteur, Retry Engine, DLQ).
+
+### Automation Registry (`registry/automation-service.ts`)
+
+Même gabarit que `workflow-service.ts` (§13) : CRUD, versions, cycle de vie
+(DRAFT/ACTIVE/INACTIVE/ARCHIVED), clonage, export/import JSON, indexation
+des `AutomationTriggerBinding` à l'activation — séparation stricte d'avec
+l'exécution (voir ADR 0031).
+
+### Actions/jobs pluggables (`actions/`)
+
+Douze gestionnaires réels (HTTP, email, notification, variable, agent,
+workflow, automatisation imbriquée, indexation Knowledge Engine, écriture
+Memory Engine, CRUD Lead) et huit stubs honnêtes (SMS, fichier, document,
+client, tâche, devis, facture, rendez-vous) — même discipline que les
+actions du Workflow Engine (§13) : dupliquées délibérément entre les deux
+moteurs plutôt que partagées, pour garder des interfaces de contexte
+découplées (voir ADR 0031).
+
+### Tableau de bord, API et interface
+
+`getAutomationDashboard` (automatisations par statut, runs, jobs par
+statut/type avec durée moyenne/min/max, retries totaux, profondeur de
+file, workers actifs — heuristique honnête, DLQ) alimente
+`GET /api/automations/dashboard` et `/automations`. API REST typée
+complète (`src/app/api/automations/**`, plus cron applicatif
+`POST /api/cron/process-automations` et webhook entrant
+`POST /api/webhooks/automations/[workspaceId]/[automationKey]`). Interface
+(`/automations`, `/automations/[id]`, `/automations/runs/[runId]`,
+`/automations/dlq`) avec édition de graphe en JSON (pas de canevas visuel
+glisser-déposer pour cette phase), permission `MANAGE_AUTOMATIONS` dédiée
+(même distribution de rôles que `MANAGE_WORKFLOWS`).
+
+### Tests
+
+`tests/automation/queue.test.ts` (dont un test de charge de concurrence),
+`tests/automation/lock.test.ts`, `tests/automation/concurrency.test.ts`,
+`tests/automation/retry.test.ts`, `tests/automation/dlq.test.ts`,
+`tests/automation/priority.test.ts`, `tests/automation/scheduler.test.ts`,
+`tests/automation/triggers.test.ts`,
+`tests/automation/trigger-engine.test.ts`,
+`tests/automation/automation-service.test.ts`,
+`tests/automation/actions.test.ts`, `tests/automation/job-executor.test.ts`,
+`tests/automation/dashboard-service.test.ts`,
+`tests/automation/permissions.test.ts`, et
+`tests/e2e/automation-golden-path.mjs`.

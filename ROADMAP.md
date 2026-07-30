@@ -174,6 +174,40 @@ avec similarité cosinus calculée côté application (voir ADR 0025). Les
 décisions d'architecture prises pour `MOD-26` sont documentées dans
 `docs/adr/0023` à `0029`.
 
+## 1 octies. Changement de plan explicite : v0.8 devient l'Automation Engine Enterprise, pas la migration MOD-04/05/06/12/14 vers jobs
+
+La version `v0.8` initialement envisagée (`MOD-15`, infrastructure de jobs
+minimale, suivie d'une migration de `MOD-04`/`MOD-05`/`MOD-06`/`MOD-12`/
+`MOD-14` vers cette infrastructure) a été **remplacée, sur demande
+explicite**, par un nouveau module prioritaire et transversal : `MOD-27`
+(Automation Engine — moteur d'automatisation Enterprise complet :
+Scheduler, Trigger Engine, Queue Manager, Job Executor, Retry Engine, Delay/
+Timeout Manager, Event Dispatcher, Automation Registry, Condition Engine,
+Lock Manager, Concurrency Manager, Priority Manager, Dead Letter Queue,
+Persistence/Audit Layer). Raison : `MOD-15` visait une infrastructure de
+jobs minimale au service d'un usage interne (webhooks de facturation) ; le
+brief v0.8 demande un moteur comparable aux meilleurs du marché (Temporal,
+n8n, Zapier, Make, GitHub Actions), utilisable par n'importe quel agent,
+workflow, utilisateur ou module pour construire des automatisations
+complexes sans écrire de code — un périmètre bien plus large que la seule
+infrastructure technique de `MOD-15`.
+
+Conséquence sur l'ordre : `MOD-27` **délivre entièrement le périmètre
+technique de `MOD-15`** (noyau de jobs durable, Postgres par défaut,
+Queue Manager compatible BullMQ/Redis/RabbitMQ/SQS/Kafka en stubs honnêtes
+— voir ADR 0032) et va largement au-delà (graphe d'automatisation versionné,
+26 types de déclencheurs, jobs/actions pluggables, Retry Engine avancé,
+Circuit Breaker, Scheduler timezone/DST-aware, tableau de bord complet).
+`MOD-15` est donc considéré **livré via `MOD-27`**, pas reporté. La
+migration de `MOD-04`/`MOD-05`/`MOD-06`/`MOD-12`/`MOD-14` vers ce noyau de
+jobs reste, elle, à faire (aucune de ces migrations n'était réalisable sans
+le noyau lui-même) — elle est désormais possible et documentée comme travail
+futur (voir `BACKLOG.md`), mais hors périmètre de cette phase, qui construit
+le moteur lui-même, pas ses futurs consommateurs internes. `MOD-27` coexiste
+avec le Workflow Engine (`MOD-25`, v0.6) sans le modifier — voir ADR 0030.
+Les décisions d'architecture prises pour `MOD-27` sont documentées dans
+`docs/adr/0030` à `0037`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -194,7 +228,7 @@ décisions d'architecture prises pour `MOD-26` sont documentées dans
 | MOD-12 | Facturation client final | Reporté après v0.5 (voir §1 quater/§1 quinquies) | Haute |
 | MOD-13 | Gestion documentaire | Reporté après v0.6 (voir §1 sexies) | Moyenne |
 | MOD-14 | Calendrier | Reporté après v0.7 (voir §1 septies) | Moyenne |
-| MOD-15 | Infrastructure asynchrone (jobs) | À créer | Haute |
+| MOD-15 | Infrastructure asynchrone (jobs) | ✅ Livré via `MOD-27` (v0.8, voir §1 octies) | Haute |
 | MOD-16 | Observabilité | À créer | Haute |
 | MOD-17 | Sécurité avancée & conformité renforcée | À créer | Critique (avant SaaS public) |
 | MOD-18 | Intégrations tierces & API publique | À créer | Moyenne |
@@ -205,6 +239,7 @@ décisions d'architecture prises pour `MOD-26` sont documentées dans
 | MOD-24 | Agent Commercial (premier agent métier) | ✅ Livré (v0.5) | Critique |
 | MOD-25 | Workflow Engine (moteur d'automatisation + éditeur visuel) | ✅ Livré (v0.6) | Critique |
 | MOD-26 | Intelligence documentaire (Memory/Knowledge/Context/Prompt Engine) | ✅ Livré (v0.7) | Critique |
+| MOD-27 | Automation Engine (moteur d'automatisation Enterprise) | ✅ Livré (v0.8) | Critique |
 
 ## 3. Détail par module
 
@@ -1213,6 +1248,136 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   path, isolation multi-tenant) validées contre une instance réellement
   démarrée.
 
+### MOD-27 — Automation Engine, moteur d'automatisation Enterprise (v0.8, priorisé avant MOD-15)
+
+- **Objectif** : un véritable moteur d'automatisation Enterprise,
+  comparable aux meilleurs du marché (Temporal, n8n, Zapier, Make, GitHub
+  Actions), permettant à n'importe quel agent, workflow, utilisateur ou
+  module de créer des automatisations complexes sans écrire de code.
+  Coexiste avec le Workflow Engine (`MOD-25`, v0.6) sans le modifier — voir
+  ADR 0030 : le Workflow Engine reste le choix pour une orchestration
+  synchrone légère, l'Automation Engine pour tout ce qui doit survivre à un
+  redémarrage, être audité job par job, ou passer par des files/verrous/
+  limites de concurrence explicites.
+- **Fonctionnalités** :
+  - **Automation Registry** (`src/lib/automation/registry/`) : cycle de
+    vie complet (`Automation`/`AutomationVersion`, DRAFT → ACTIVE ⇄
+    INACTIVE → ARCHIVED), versionnement immuable, clonage, export/import
+    JSON, indexation automatique des liaisons de déclencheur à
+    l'activation.
+  - **Graphe versionné** (`graph-types.ts`/`graph-validation.ts`) : 10
+    types de noeuds (trigger, condition, switch, action, loop, map, wait,
+    join, subautomation, end) — `switch` (branchement à N voies), `map`
+    (itération PARALLÈLE, contrairement à `loop` séquentielle), `join`
+    explicite avec mode `all`/`any` (referme le point laissé ouvert par
+    l'ADR 0019 pour le Workflow Engine).
+  - **Trigger Engine** (`trigger-engine.ts`, `triggers/`) : 26 types de
+    déclencheurs déclarés (cron, date, heure, intervalle, webhook, API,
+    event bus, workflow/agent terminé, email reçu, lead créé/modifié/
+    supprimé, client créé, paiement reçu, document signé, utilisateur
+    connecté/créé, organisation/workspace créé, import/export terminé,
+    erreur détectée, webhook externe, déclencheur manuel/personnalisé) ;
+    câblage réel honnête à un sous-ensemble défensable de points d'émission
+    de Provence 360 (leads CRUD, auth, organisation/workspace, import CSV,
+    cron, webhook, manuel) — voir ADR 0037.
+  - **Job Executor** (`executor/`) : chaque noeud `action` s'exécute comme
+    un `AutomationJob` durable, individuellement retryable/verrouillable/
+    priorisé/dead-letterable — le différenciateur "enterprise" par rapport
+    au Workflow Engine (voir ADR 0030). Exécution asynchrone de bout en
+    bout : aucun point d'entrée n'attend un run jusqu'à sa fin (voir ADR
+    0031).
+  - **Queue Manager** (`queue/`) : abstraction multi-fournisseur
+    (Postgres par défaut — `FOR UPDATE SKIP LOCKED` atomique, corrigé d'un
+    bug de concurrence réel découvert par test de charge —, mémoire,
+    BullMQ/Redis/RabbitMQ/SQS/Kafka en stubs honnêtes) — voir ADR 0032.
+  - **Lock Manager** (`lock/`) : verrou par bail (lease), jamais un verrou
+    consultatif Postgres (incompatible avec le pool de connexions Prisma)
+    — voir ADR 0032.
+  - **Concurrency Manager** (`concurrency/`) : limite globale de jobs
+    `RUNNING`, limite par `concurrencyKey`, rate limiting en mémoire par
+    processus (limite assumée en multi-instance).
+  - **Retry Engine + Circuit Breaker** (`retry/`) : 7 stratégies de retry
+    (exponentiel, linéaire, immédiat, manuel, conditionnel — réutilise le
+    Condition Engine —, infini borné en durée, limité) ; disjoncteur à 3
+    états persisté, cohérent entre plusieurs instances de worker — voir
+    ADR 0033.
+  - **Dead Letter Queue** (`dlq/`) : jamais une table séparée (vue sur
+    `AutomationJob.status = 'DEAD_LETTERED'`), relance strictement scopée
+    organisation/workspace, jamais par id seul — voir ADR 0035.
+  - **Enterprise Scheduler** (`scheduler/`) : cron complexe (plages,
+    listes, pas, alias), fuseau horaire/heure d'été via `Intl.DateTimeFormat`
+    natif (aucune nouvelle dépendance), jours ouvrés, jours fériés,
+    périodes de blackout, fenêtres d'exécution — module autonome, pas une
+    extension du cron minimal du Workflow Engine — voir ADR 0036.
+  - **Priority Manager** (`priority/`) : niveaux nommés (LOW/NORMAL/HIGH/
+    CRITICAL) au-dessus de l'entier de priorité, simple normalisation (le
+    tri reste dans le Queue Manager) — voir ADR 0036.
+  - **Condition Engine** : réutilise directement le moteur d'expressions
+    du Workflow Engine (`Rule`/`Expr`/`evaluateRule`), jamais dupliqué —
+    voir ADR 0034.
+  - **Actions/jobs pluggables** (`actions/`) : 12 gestionnaires réels
+    (HTTP, email, notification, variable, agent, workflow, automation
+    imbriquée, indexation Knowledge Engine, écriture Memory Engine,
+    CRUD Lead) + 8 stubs honnêtes (SMS, fichier, document, client, tâche,
+    devis, facture, rendez-vous — nécessitent d'extraire la logique
+    métier de Provence 360 en services réutilisables).
+  - **Observabilité** : tableau de bord (`/automations`,
+    `GET /api/automations/dashboard`) — automatisations par statut, runs
+    (succès/échec/temps moyen/min/max), jobs par statut/type (temps moyen/
+    min/max, taux d'échec), retries totaux, profondeur de file, workers
+    actifs (heuristique honnête), Dead Letter Queue.
+  - **API REST typée** : CRUD/cycle de vie/versions d'automatisation, jobs
+    (liste/détail), DLQ (liste/relance), runs (détail/annulation/relance),
+    catalogue déclencheurs/actions, cron applicatif, webhook entrant —
+    `src/app/api/automations/**`.
+  - **UI** : liste + tableau de bord, éditeur de version (graphe en JSON),
+    détail de run (jobs + journal), Dead Letter Queue — `/automations/**`,
+    permission `MANAGE_AUTOMATIONS` dédiée (même distribution de rôles que
+    `MANAGE_WORKFLOWS`).
+- **Dépendances** : `MOD-25` (Workflow Engine, v0.6 — Condition Engine
+  réutilisé), `MOD-26` (aucune dépendance directe, mais actions
+  `knowledge.index`/`memory.set` réutilisent le Knowledge/Memory Engine).
+- **Priorité** : Critique — condition explicite de cette phase, et
+  fondation transversale pour tout l'écosystème Autorun.
+- **Risques techniques** :
+  - Bug de concurrence réel dans le claim atomique du Queue Manager
+    Postgres (CTE imbriquée dépassant la `LIMIT` sous forte charge) —
+    détecté par test de charge dédié avant livraison, corrigé, gardé sous
+    régression — voir ADR 0032.
+  - Disjoncteur avec clé globale partagée pouvant provoquer une fausse
+    ouverture cumulative entre suites de test parallèles utilisant le même
+    type de job — détecté et corrigé (clés de test dédiées par fichier) —
+    voir ADR 0033.
+  - Risque qu'un run enfant (`subautomation`/`automation.call`) reste
+    bloqué faute de notification à son parent — mitigé par une
+    notification explicite du parent à chaque transition terminale du run
+    enfant — voir ADR 0031.
+- **Choix d'architecture** : voir ADR 0030 (coexistence + noyau de jobs),
+  ADR 0031 (exécution asynchrone, registre vs exécuteur), ADR 0032 (Queue
+  Manager Postgres, Lock Manager par bail), ADR 0033 (Circuit Breaker
+  persisté), ADR 0034 (Condition Engine/Event Dispatcher réutilisés), ADR
+  0035 (DLQ scopée tenant), ADR 0036 (Scheduler autonome, Priority
+  Manager), ADR 0037 (honnêteté du câblage des déclencheurs).
+- **Tests à prévoir** (tous livrés) : Queue Manager (`tests/automation/
+  queue.test.ts`, incluant le test de charge de concurrence), Lock Manager
+  (`lock.test.ts`), Concurrency Manager (`concurrency.test.ts`), Retry
+  Engine + Circuit Breaker (`retry.test.ts`), DLQ (`dlq.test.ts`),
+  Priority Manager (`priority.test.ts`), Scheduler (`scheduler.test.ts`),
+  Trigger Engine (`triggers.test.ts`, `trigger-engine.test.ts`),
+  Automation Registry (`automation-service.test.ts`), actions/jobs
+  (`actions.test.ts`), Job Executor (`job-executor.test.ts` — linéaire,
+  branchement, loop, map, wait, subautomation, annulation, déclenchement/
+  relance manuels), tableau de bord (`dashboard-service.test.ts`),
+  permissions (`permissions.test.ts`) ; E2E dédié
+  (`tests/e2e/automation-golden-path.mjs`).
+- **Critères de fin** : golden path Provence 360, isolation multi-tenant,
+  Framework des Agents/Director/Agent Commercial/Workflow Engine/
+  intelligence documentaire inchangés après cette phase ; 100 % des tests
+  automatisés passent contre une vraie base PostgreSQL, zéro régression ;
+  lint, typecheck et build de production passent ; les trois suites E2E
+  (golden path, isolation multi-tenant, Automation Engine) validées contre
+  une instance réellement démarrée.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -1253,9 +1418,14 @@ livré `MOD-21` (multi-tenant) à la place de `MOD-02` (voir §1 bis),
 Commercial) à la place de `MOD-12` partie 2 (voir §1 quinquies), et
 `v0.6` a livré `MOD-25` (Workflow Engine) à la place de `MOD-13`
 (voir §1 sexies), et `v0.7` a livré `MOD-26` (intelligence documentaire)
-à la place de `MOD-14` (voir §1 septies) ; `MOD-02`, `MOD-12`, `MOD-13`,
-`MOD-14` et `MOD-20` restent à faire, désormais après `v0.7`. Voir
-`MILESTONES.md` pour l'état réel version par version.
+à la place de `MOD-14` (voir §1 septies), et `v0.8` a livré `MOD-27`
+(Automation Engine Enterprise) — qui délivre entièrement le périmètre
+technique de `MOD-15` (voir §1 octies) — à la place de la migration
+initialement prévue de `MOD-04`/`MOD-05`/`MOD-06`/`MOD-12`/`MOD-14` vers le
+noyau de jobs ; `MOD-02`, `MOD-12`, `MOD-13`, `MOD-14` et `MOD-20` restent à
+faire, désormais après `v0.8`, ainsi que la migration de ces modules vers le
+noyau de jobs de `MOD-27` (possible dès maintenant, non réalisée dans cette
+phase). Voir `MILESTONES.md` pour l'état réel version par version.
 
 ## 5. Éléments parallélisables
 

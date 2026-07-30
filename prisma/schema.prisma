@@ -56,41 +56,44 @@ model Organization {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
-  memberships          Membership[]
-  workspaces           Workspace[]
-  agentDefinitions     AgentDefinition[]
-  agentInstallations   AgentInstallation[]
-  commercialProspects  CommercialProspect[]
-  commercialActions    CommercialAction[]
-  workflowDefinitions  WorkflowDefinition[]
-  workflowRuns         WorkflowRun[]
-  memoryEntries        MemoryEntry[]
-  knowledgeDocuments   KnowledgeDocument[]
-  embeddingRequests    EmbeddingRequest[]
-  territories          Territory[]
-  icps               IdealCustomerProfile[]
-  leads              Lead[]
-  tags               Tag[]
-  campaigns          Campaign[]
-  sequences          Sequence[]
-  emailAccounts      EmailAccount[]
-  tasks              Task[]
-  appointments       Appointment[]
-  opportunities      Opportunity[]
-  quotes             Quote[]
-  customers          Customer[]
-  missions           Mission[]
-  services_          Service[]
-  providers          Provider[]
-  automationRules    AutomationRule[]
-  notifications      Notification[]
-  suppressionEntries SuppressionEntry[]
-  consentRecords     ConsentRecord[]
-  auditLogs          AuditLog[]
-  aiRequests         AIRequest[]
-  integrations       Integration[]
-  webhookEvents      WebhookEvent[]
-  loginEvents        LoginEvent[]
+  memberships         Membership[]
+  workspaces          Workspace[]
+  agentDefinitions    AgentDefinition[]
+  agentInstallations  AgentInstallation[]
+  commercialProspects CommercialProspect[]
+  commercialActions   CommercialAction[]
+  workflowDefinitions WorkflowDefinition[]
+  workflowRuns        WorkflowRun[]
+  memoryEntries       MemoryEntry[]
+  knowledgeDocuments  KnowledgeDocument[]
+  embeddingRequests   EmbeddingRequest[]
+  automations         Automation[]
+  automationRuns      AutomationRun[]
+  automationJobs      AutomationJob[]
+  territories         Territory[]
+  icps                IdealCustomerProfile[]
+  leads               Lead[]
+  tags                Tag[]
+  campaigns           Campaign[]
+  sequences           Sequence[]
+  emailAccounts       EmailAccount[]
+  tasks               Task[]
+  appointments        Appointment[]
+  opportunities       Opportunity[]
+  quotes              Quote[]
+  customers           Customer[]
+  missions            Mission[]
+  services_           Service[]
+  providers           Provider[]
+  automationRules     AutomationRule[]
+  notifications       Notification[]
+  suppressionEntries  SuppressionEntry[]
+  consentRecords      ConsentRecord[]
+  auditLogs           AuditLog[]
+  aiRequests          AIRequest[]
+  integrations        Integration[]
+  webhookEvents       WebhookEvent[]
+  loginEvents         LoginEvent[]
 
   @@index([name])
 }
@@ -121,6 +124,9 @@ model User {
   workflowRunsCreated         WorkflowRun[]              @relation("WorkflowRunCreatedBy")
   memoryEntriesCreated        MemoryEntry[]              @relation("MemoryEntryCreatedBy")
   knowledgeDocumentsCreated   KnowledgeDocument[]        @relation("KnowledgeDocumentCreatedBy")
+  automationsCreated          Automation[]               @relation("AutomationCreatedBy")
+  automationVersionsCreated   AutomationVersion[]        @relation("AutomationVersionCreatedBy")
+  automationRunsCreated       AutomationRun[]            @relation("AutomationRunCreatedBy")
   sessions                    Session[]
   passwordResets              PasswordResetToken[]
   loginEvents                 LoginEvent[]
@@ -169,6 +175,10 @@ model Workspace {
   memoryEntries             MemoryEntry[]
   knowledgeDocuments        KnowledgeDocument[]
   embeddingRequests         EmbeddingRequest[]
+  automations               Automation[]
+  automationRuns            AutomationRun[]
+  automationJobs            AutomationJob[]
+  automationTriggerBindings AutomationTriggerBinding[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1864,9 +1874,9 @@ model WorkflowVersion {
   createdById          String?
   createdAt            DateTime @default(now())
 
-  workflowDefinition WorkflowDefinition  @relation("WorkflowVersionOwner", fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
-  createdBy          User?               @relation("WorkflowVersionCreatedBy", fields: [createdById], references: [id])
-  activeFor          WorkflowDefinition? @relation("WorkflowDefinitionActiveVersion")
+  workflowDefinition WorkflowDefinition       @relation("WorkflowVersionOwner", fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  createdBy          User?                    @relation("WorkflowVersionCreatedBy", fields: [createdById], references: [id])
+  activeFor          WorkflowDefinition?      @relation("WorkflowDefinitionActiveVersion")
   runs               WorkflowRun[]
   triggerBindings    WorkflowTriggerBinding[]
 
@@ -2237,4 +2247,315 @@ model EmbeddingRequest {
   workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, provider])
+}
+
+// ---------------------------------------------------------------------------
+// Automation Engine Enterprise (v0.8) — voir docs/adr/0030 à 0037 et
+// docs/02-ARCHITECTURE.md §15. Coexiste avec le Workflow Engine (v0.6, non
+// modifié) : voir ADR 0030 pour la justification de la frontière entre les
+// deux. `Automation`/`AutomationVersion`/`AutomationTriggerBinding`
+// reprennent volontairement la même forme que `WorkflowDefinition`/
+// `WorkflowVersion`/`WorkflowTriggerBinding` (identité/version séparées,
+// registres déclaratifs) — un graphe déclaratif de plus, mais dont
+// l'exécution de chaque noeud passe par un vrai noyau de jobs durable
+// (`AutomationJob`), pas un simple tick en mémoire : c'est la différence
+// entre les deux moteurs (voir ADR 0031). `AutomationJob` sert aussi de
+// point d'entrée générique pour n'importe quel module (agents, workflows,
+// Knowledge Engine...) qui veut une exécution avec retry/verrou/
+// concurrence/priorité/DLQ sans jamais passer par un graphe.
+// ---------------------------------------------------------------------------
+
+enum AutomationDefinitionStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+/// Identité stable d'une automatisation — voir `WorkflowDefinition` pour la
+/// justification de la séparation identité/version, reprise ici à
+/// l'identique.
+model Automation {
+  id                String                     @id @default(cuid())
+  organizationId    String?
+  workspaceId       String?
+  key               String
+  name              String
+  description       String?
+  category          String
+  status            AutomationDefinitionStatus @default(DRAFT)
+  isTemplate        Boolean                    @default(false)
+  sourceTemplateKey String?
+  activeVersionId   String?                    @unique
+  createdById       String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  archivedAt        DateTime?
+
+  organization  Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User?              @relation("AutomationCreatedBy", fields: [createdById], references: [id])
+  activeVersion AutomationVersion? @relation("AutomationActiveVersion", fields: [activeVersionId], references: [id])
+
+  versions        AutomationVersion[]        @relation("AutomationVersionOwner")
+  runs            AutomationRun[]
+  jobs            AutomationJob[]
+  triggerBindings AutomationTriggerBinding[]
+  circuitBreakers AutomationCircuitBreaker[]
+
+  @@unique([workspaceId, key])
+  @@index([organizationId])
+  @@index([workspaceId, status])
+  @@index([isTemplate])
+}
+
+/// Graphe versionné et immuable une fois créé (voir `src/lib/automation/graph-types.ts`)
+/// — mêmes principes que `WorkflowVersion` : jamais modifié en place, une
+/// nouvelle version est toujours créée.
+model AutomationVersion {
+  id           String   @id @default(cuid())
+  automationId String
+  version      Int
+  graph        Json
+  changelog    String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  automation      Automation                 @relation("AutomationVersionOwner", fields: [automationId], references: [id], onDelete: Cascade)
+  createdBy       User?                      @relation("AutomationVersionCreatedBy", fields: [createdById], references: [id])
+  activeFor       Automation?                @relation("AutomationActiveVersion")
+  runs            AutomationRun[]
+  triggerBindings AutomationTriggerBinding[]
+
+  @@unique([automationId, version])
+}
+
+/// Index des noeuds "déclencheur" extraits du graphe à l'activation d'une
+/// version — même rôle que `WorkflowTriggerBinding`.
+model AutomationTriggerBinding {
+  id                  String   @id @default(cuid())
+  automationId        String
+  automationVersionId String
+  workspaceId         String
+  nodeId              String
+  triggerKey          String
+  config              Json?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  automation        Automation        @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationVersion AutomationVersion @relation(fields: [automationVersionId], references: [id], onDelete: Cascade)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, triggerKey, isActive])
+  @@index([automationId])
+}
+
+enum AutomationRunStatus {
+  QUEUED
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
+
+enum AutomationRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT
+  WEBHOOK
+  API
+  /// Créée par une autre automatisation (noeud "fork"/"sous-automatisation").
+  AUTOMATION
+}
+
+/// Une exécution d'automatisation : orchestre le graphe noeud par noeud,
+/// exactement comme `WorkflowRun` — la différence tient à l'exécution de
+/// CHAQUE noeud, qui passe par un `AutomationJob` durable (voir plus bas)
+/// plutôt que par un simple appel en mémoire (voir ADR 0031).
+model AutomationRun {
+  id                  String               @id @default(cuid())
+  organizationId      String
+  workspaceId         String
+  automationId        String
+  automationVersionId String
+  status              AutomationRunStatus  @default(QUEUED)
+  trigger             AutomationRunTrigger @default(MANUAL)
+  triggerKey          String?
+  priority            Int                  @default(0)
+  input               Json?
+  context             Json?
+  output              Json?
+  error               Json?
+  attempt             Int                  @default(0)
+  maxAttempts         Int                  @default(1)
+  scheduledAt         DateTime             @default(now())
+  resumeAt            DateTime?
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  cancelledAt         DateTime?
+  parentRunId         String?
+  createdById         String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automation        Automation        @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationVersion AutomationVersion @relation(fields: [automationVersionId], references: [id], onDelete: Cascade)
+  parentRun         AutomationRun?    @relation("AutomationRunRetry", fields: [parentRunId], references: [id])
+  retries           AutomationRun[]   @relation("AutomationRunRetry")
+  createdBy         User?             @relation("AutomationRunCreatedBy", fields: [createdById], references: [id])
+
+  jobs AutomationJob[]
+  logs AutomationRunLog[]
+
+  @@index([automationId, status])
+  @@index([workspaceId, status])
+  @@index([status, scheduledAt])
+  @@index([status, resumeAt])
+}
+
+model AutomationRunLog {
+  id        String   @id @default(cuid())
+  runId     String
+  nodeId    String?
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  run AutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+}
+
+enum AutomationJobStatus {
+  QUEUED
+  CLAIMED
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+  /// Épuisement des tentatives, ou politique de retry "manual" : le job est
+  /// posé dans la Dead Letter Queue (une requête sur ce statut, pas une
+  /// table séparée — voir `src/lib/automation/dlq/`) en attendant une
+  /// décision explicite (relance manuelle ou abandon).
+  DEAD_LETTERED
+}
+
+/// Le cœur du noyau de jobs (voir ADR 0031/0032) : chaque exécution d'un
+/// noeud d'`AutomationRun` devient une ligne durable ici — individuellement
+/// journalisée, retryable, verrouillable, priorisée, et in fine
+/// dead-letterable. Un `AutomationJob` peut aussi exister SANS
+/// `automationRunId` (job "ad hoc" enfilé directement par n'importe quel
+/// module — agents, Workflow Engine, Knowledge Engine — voulant les
+/// garanties du noyau sans jamais construire de graphe). C'est la table
+/// que le Queue Manager Postgres (défaut) réclame atomiquement via
+/// `FOR UPDATE SKIP LOCKED` (voir `src/lib/automation/queue/`).
+model AutomationJob {
+  id               String              @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  automationId     String?
+  automationRunId  String?
+  nodeId           String?
+  jobType          String
+  status           AutomationJobStatus @default(QUEUED)
+  priority         Int                 @default(0)
+  input            Json?
+  output           Json?
+  error            Json?
+  attempt          Int                 @default(0)
+  maxAttempts      Int                 @default(1)
+  retryPolicy      Json?
+  lockKey          String?
+  concurrencyKey   String?
+  concurrencyLimit Int?
+  rateLimitKey     String?
+  timeoutMs        Int?
+  scheduledAt      DateTime            @default(now())
+  claimedAt        DateTime?
+  claimedBy        String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  resumeAt         DateTime?
+  cancelledAt      DateTime?
+  durationMs       Int?
+  createdById      String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automation    Automation?    @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationRun AutomationRun? @relation(fields: [automationRunId], references: [id], onDelete: Cascade)
+
+  logs AutomationJobLog[]
+
+  @@index([status, scheduledAt])
+  @@index([status, resumeAt])
+  @@index([organizationId, workspaceId, status])
+  @@index([concurrencyKey, status])
+  @@index([lockKey])
+  @@index([automationRunId])
+  @@index([automationId])
+}
+
+model AutomationJobLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  job AutomationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+}
+
+/// Verrou par bail (lease) sur une clé arbitraire — voir ADR 0032 : un
+/// verrou consultatif Postgres (`pg_advisory_lock`) est écarté à cause de
+/// son affinité de connexion incompatible avec le pool de Prisma ; une
+/// ligne avec contrainte unique + expiration est correcte quel que soit le
+/// nombre de processus/connexions.
+model AutomationLock {
+  id         String   @id @default(cuid())
+  lockKey    String   @unique
+  holderId   String
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime
+  metadata   Json?
+
+  @@index([expiresAt])
+}
+
+enum AutomationCircuitState {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
+/// État du disjoncteur (circuit breaker) par périmètre (`key` — par exemple
+/// `automation:<id>` ou `jobType:<clé>`), persisté pour rester cohérent
+/// entre plusieurs processus/instances (voir ADR 0033).
+model AutomationCircuitBreaker {
+  id            String                 @id @default(cuid())
+  key           String                 @unique
+  automationId  String?
+  state         AutomationCircuitState @default(CLOSED)
+  failureCount  Int                    @default(0)
+  lastFailureAt DateTime?
+  openedAt      DateTime?
+  resetAt       DateTime?
+  updatedAt     DateTime               @updatedAt
+
+  automation Automation? @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
 }

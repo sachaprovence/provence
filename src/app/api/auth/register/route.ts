@@ -4,6 +4,7 @@ import { createSession, hashPassword, recordLoginEvent } from "@/lib/auth";
 import { registerSchema } from "@/lib/validations/auth";
 import { bootstrapOrganization } from "@/lib/bootstrap";
 import { writeAuditLog } from "@/lib/audit";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 import { MembershipRole, WorkspaceRole } from "@/generated/prisma/enums";
 import { WORKSPACE_AUDIT_ACTIONS } from "@/lib/workspace-permissions";
 
@@ -59,6 +60,9 @@ export async function POST(request: Request) {
     entityId: workspace.id,
     metadata: { name: workspace.name, slug: workspace.slug, isDefault: true },
   });
+  await publishAutomationEvent("organization.created", { organizationId: organization.id });
+  await publishAutomationEvent("workspace.created", { organizationId: organization.id, workspaceId: workspace.id });
+  await publishAutomationEvent("user.registered", { organizationId: organization.id, userId: user.id });
 
   return NextResponse.json({ organizationId: organization.id, userId: user.id }, { status: 201 });
 }
