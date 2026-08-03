@@ -35,101 +35,116 @@ enum WorkspaceRole {
 }
 
 model Organization {
-  id                       String   @id @default(cuid())
+  id                       String             @id @default(cuid())
   name                     String
   description              String?
   website                  String?
   logoUrl                  String?
-  services                 String[] @default([])
-  zones                    String[] @default([])
+  services                 String[]           @default([])
+  zones                    String[]           @default([])
   pricingNote              String?
   pitch                    String?
-  testimonials             Json[]   @default([])
-  portfolioLinks           String[] @default([])
+  testimonials             Json[]             @default([])
+  portfolioLinks           String[]           @default([])
   availabilityNote         String?
-  tone                     String   @default("professionnel")
+  tone                     String             @default("professionnel")
   emailSignature           String?
-  dailySendLimit           Int      @default(50)
-  rampUpEnabled            Boolean  @default(true)
+  dailySendLimit           Int                @default(50)
+  rampUpEnabled            Boolean            @default(true)
   scoringRules             Json?
-  requireMessageValidation Boolean  @default(true)
+  requireMessageValidation Boolean            @default(true)
   /// Coordonnées légales/facturation (v0.9) — utilisées par les PDF de devis/factures et les paramètres.
   vatNumber                String?
   siret                    String?
   legalAddress             String?
   phone                    String?
-  invoicePrefix            String?  @default("FA")
-  quotePrefix              String?  @default("DEV")
+  invoicePrefix            String?            @default("FA")
+  quotePrefix              String?            @default("DEV")
   /// Quota IA mensuel dur en USD (v0.9 bis, AR-0051) — `null` = pas de quota (illimité, comportement inchangé pour les organisations existantes). Vérifié avant chaque appel IA réel (couche `src/lib/ai/` ET Framework des Agents), voir `src/lib/ai/quota.ts`.
   aiMonthlyBudgetUsd       Float?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  /// Plan d'abonnement actif (v1.0, AR-0062) — `null` = aucun plan (organisations créées avant v1.0, ou en cours d'onboarding). Appliquer un plan copie ses quotas (`dailySendLimit`/`aiMonthlyBudgetUsd`) sur l'organisation — voir `src/lib/billing/plan-service.ts#applyPlanToOrganization`, jamais une deuxième source de vérité pour les quotas déjà existants.
+  planId                   String?
+  /// Fournisseur de facturation actif au moment de la souscription ("demo" | "stripe") — voir `src/lib/billing/index.ts#getBillingProvider`, même convention que `AI_PROVIDER`/`EMAIL_PROVIDER`.
+  billingProvider          String?
+  /// Identifiant client chez le fournisseur de facturation (ex. Stripe Customer id, ou `demo-...` en mode démo).
+  billingCustomerId        String?
+  /// Identifiant d'abonnement chez le fournisseur de facturation.
+  billingSubscriptionId    String?
+  subscriptionStatus       SubscriptionStatus @default(TRIALING)
+  subscriptionCanceledAt   DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
 
-  memberships         Membership[]
-  workspaces          Workspace[]
-  agentDefinitions    AgentDefinition[]
-  agentInstallations  AgentInstallation[]
-  commercialProspects CommercialProspect[]
-  commercialActions   CommercialAction[]
-  workflowDefinitions WorkflowDefinition[]
-  workflowRuns        WorkflowRun[]
-  memoryEntries       MemoryEntry[]
-  knowledgeDocuments  KnowledgeDocument[]
-  embeddingRequests   EmbeddingRequest[]
-  automations         Automation[]
-  automationRuns      AutomationRun[]
-  automationJobs      AutomationJob[]
-  territories         Territory[]
-  icps                IdealCustomerProfile[]
-  leads               Lead[]
-  tags                Tag[]
-  campaigns           Campaign[]
-  sequences           Sequence[]
-  emailAccounts       EmailAccount[]
-  tasks               Task[]
-  appointments        Appointment[]
-  opportunities       Opportunity[]
-  quotes              Quote[]
-  quoteVersions       QuoteVersion[]
-  invoices            Invoice[]
-  customers           Customer[]
-  missions            Mission[]
-  services_           Service[]
-  providers           Provider[]
-  automationRules     AutomationRule[]
-  notifications       Notification[]
-  suppressionEntries  SuppressionEntry[]
-  consentRecords      ConsentRecord[]
-  auditLogs           AuditLog[]
-  aiRequests          AIRequest[]
-  integrations        Integration[]
-  webhookEvents       WebhookEvent[]
-  loginEvents         LoginEvent[]
-  pipelineStages      PipelineStage[]
-  companies           Company[]
-  properties          Property[]
-  attachments         Attachment[]
-  virtualTours        VirtualTour[]
-  apiRequestMetrics   ApiRequestMetric[]
+  memberships          Membership[]
+  workspaces           Workspace[]
+  agentDefinitions     AgentDefinition[]
+  agentInstallations   AgentInstallation[]
+  commercialProspects  CommercialProspect[]
+  commercialActions    CommercialAction[]
+  workflowDefinitions  WorkflowDefinition[]
+  workflowRuns         WorkflowRun[]
+  memoryEntries        MemoryEntry[]
+  knowledgeDocuments   KnowledgeDocument[]
+  embeddingRequests    EmbeddingRequest[]
+  automations          Automation[]
+  automationRuns       AutomationRun[]
+  automationJobs       AutomationJob[]
+  territories          Territory[]
+  icps                 IdealCustomerProfile[]
+  leads                Lead[]
+  tags                 Tag[]
+  campaigns            Campaign[]
+  sequences            Sequence[]
+  emailAccounts        EmailAccount[]
+  tasks                Task[]
+  appointments         Appointment[]
+  opportunities        Opportunity[]
+  quotes               Quote[]
+  quoteVersions        QuoteVersion[]
+  invoices             Invoice[]
+  customers            Customer[]
+  missions             Mission[]
+  services_            Service[]
+  providers            Provider[]
+  automationRules      AutomationRule[]
+  notifications        Notification[]
+  suppressionEntries   SuppressionEntry[]
+  consentRecords       ConsentRecord[]
+  auditLogs            AuditLog[]
+  aiRequests           AIRequest[]
+  integrations         Integration[]
+  webhookEvents        WebhookEvent[]
+  loginEvents          LoginEvent[]
+  pipelineStages       PipelineStage[]
+  companies            Company[]
+  properties           Property[]
+  attachments          Attachment[]
+  virtualTours         VirtualTour[]
+  apiRequestMetrics    ApiRequestMetric[]
+  plan                 Plan?                  @relation(fields: [planId], references: [id])
+  apiKeys              ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
+  webhookDeliveries    WebhookDelivery[]
 
   @@index([name])
+  @@index([planId])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  firstName    String
-  lastName     String
-  phone        String?
-  avatarUrl    String?
-  isActive     Boolean  @default(true)
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String?
+  avatarUrl        String?
+  isActive         Boolean  @default(true)
   /// Secret TOTP (base32) — non `null` uniquement pendant/après l'inscription 2FA (v0.10, AR-0058). Jamais exposé via l'API.
   twoFactorSecret  String?
   /// `true` seulement après confirmation du code lors de l'inscription — voir `src/lib/two-factor.ts`. Non appliqué à la connexion (préparation, pas encore obligatoire).
   twoFactorEnabled Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   memberships                 Membership[]
   workspaceMemberships        WorkspaceMembership[]
@@ -159,6 +174,8 @@ model User {
   messagesValidated           Message[]                  @relation("MessageValidatedBy")
   notesAuthored               LeadNote[]
   attachmentsUploaded         Attachment[]
+  apiKeysCreated              ApiKey[]                   @relation("ApiKeyCreatedBy")
+  webhookSubscriptionsCreated WebhookSubscription[]      @relation("WebhookSubscriptionCreatedBy")
 }
 
 // ---------------------------------------------------------------------------
@@ -1582,10 +1599,128 @@ model WebhookEvent {
   signatureValid Boolean   @default(false)
   processedAt    DateTime?
   createdAt      DateTime  @default(now())
+  /// Identifiant de l'évènement chez l'émetteur (ex. `event.id` Stripe) — v1.0, AR-0063. Nullable pour ne rien casser des lignes existantes (aucun webhook entrant réel avant v1.0) ; combiné à `source` pour dédupliquer un évènement livré plusieurs fois par le même émetteur (idempotence).
+  externalId     String?
 
   organization Organization? @relation(fields: [organizationId], references: [id])
 
+  @@unique([source, externalId])
   @@index([organizationId, eventType])
+}
+
+// ---------------------------------------------------------------------------
+// v1.0 — API publique, webhooks sortants, abonnements SaaS (MOD-18/MOD-19)
+// ---------------------------------------------------------------------------
+
+/// Clé API publique par organisation (AR-0059) — le secret complet n'est
+/// montré qu'une seule fois à la création ; seul son hash (SHA-256) est
+/// conservé, jamais la valeur en clair (même principe que `passwordHash`).
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  /// Préfixe affichable sans risque dans l'UI (ex. "ak_live_3f9a") — jamais le secret complet.
+  keyPrefix      String
+  hashedKey      String    @unique
+  scopes         String[]  @default(["read"])
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+/// Abonnement d'une organisation à des évènements sortants (AR-0061) — le
+/// secret HMAC est TOUJOURS généré automatiquement, jamais optionnel (même
+/// principe que `ensureWebhookTriggerConfig`, v0.10 AR-0156).
+model WebhookSubscription {
+  id             String   @id @default(cuid())
+  organizationId String
+  url            String
+  secret         String
+  /// Clés d'évènement du bus applicatif existant (`src/lib/events/domain-events.ts`) auxquelles cette souscription est abonnée — ex. `["lead.created", "quote.signed", "invoice.paid"]`.
+  eventTypes     String[]
+  isActive       Boolean  @default(true)
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?             @relation("WebhookSubscriptionCreatedBy", fields: [createdById], references: [id])
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId])
+}
+
+/// Une tentative de livraison d'un évènement à une souscription — `idempotencyKey`
+/// est envoyé au récepteur (en-tête `X-Autorun-Delivery-Id`) pour lui permettre
+/// de dédupliquer un évènement livré plusieurs fois (ex. après un retry).
+model WebhookDelivery {
+  id             String                @id @default(cuid())
+  subscriptionId String
+  organizationId String
+  eventType      String
+  payload        Json
+  idempotencyKey String                @unique
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  responseStatus Int?
+  lastError      String?
+  nextRetryAt    DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([status, nextRetryAt])
+}
+
+enum PlanKey {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+/// Plan d'abonnement SaaS Autorun (AR-0062) — ses quotas sont copiés sur
+/// `Organization` quand le plan est (ré)appliqué (`applyPlanToOrganization`),
+/// pour réutiliser tel quel tout le code d'application des quotas déjà
+/// existant (`sequence-engine.ts`, `src/lib/ai/quota.ts`, `src/lib/email/quota.ts`)
+/// sans lui faire connaître la notion de plan.
+model Plan {
+  id                 String   @id @default(cuid())
+  key                PlanKey  @unique
+  name               String
+  maxUsers           Int
+  dailySendLimit     Int
+  aiMonthlyBudgetUsd Float?
+  /// Prix mensuel en centimes (informatif, affichage UI).
+  priceMonthlyUsd    Int
+  /// Identifiant du Price Stripe correspondant — requis seulement en mode `BILLING_PROVIDER=stripe`.
+  stripePriceId      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organizations Organization[]
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  /// Écriture bloquée, lecture toujours possible — jamais de perte de données (voir `MILESTONES.md` §v1.0).
+  RESTRICTED
 }
 
 // ---------------------------------------------------------------------------
