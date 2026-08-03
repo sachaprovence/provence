@@ -2050,15 +2050,37 @@ SMTP réelle, configuration par organisation. Rien à faire ici.
   bout en bout contre un vrai compte Gmail n'est pas possible dans cet
   environnement (aucun identifiant OAuth disponible), voir ADR 0038.
 
-### AR-0054 — `OutlookApiProvider`
-- **Description** : équivalent AR-0053 pour Microsoft Graph/Outlook
-  (OAuth2 + REST `fetch()` direct).
-- **Fichiers concernés** : `src/lib/email/providers/outlook.ts` (nouveau),
-  `src/lib/email/index.ts`, routes OAuth
-  `src/app/api/email/outlook/{connect,callback}/route.ts`.
+### AR-0054 — `OutlookApiProvider` — livrée
+- **Description** : implémentation réelle de `EmailProvider` via Microsoft
+  Graph (`POST /me/sendMail`), OAuth2 (Azure AD / Entra ID — endpoint
+  `login.microsoftonline.com`, `tenant` configurable par organisation,
+  `common` par défaut = comptes personnels ET professionnels/scolaires),
+  configuration par organisation (`Integration.config`, kind EMAIL :
+  `clientId`/`clientSecret`/`refreshToken`/`tenantId`, émis par le flux
+  `/api/email/outlook/connect` → `/callback`), sélectionnable par
+  `EMAIL_PROVIDER=outlook`. Échoue explicitement sans connexion OAuth ou
+  en cas d'erreur réseau/HTTP — jamais un succès simulé. Un module OAuth2
+  Microsoft générique (`src/lib/microsoft/oauth.ts`) a été créé en miroir
+  de `src/lib/google/oauth.ts` (AR-0053) plutôt que de dupliquer sa
+  logique dans le fournisseur Outlook lui-même.
+- **Fichiers concernés** : `src/lib/microsoft/oauth.ts` (nouveau, partagé),
+  `src/lib/email/providers/outlook.ts` (nouveau),
+  `src/lib/email/providers/outlook-oauth-flow.ts` (nouveau),
+  `src/lib/email/config.ts` (champ `tenantId`), `src/lib/email/index.ts`,
+  routes OAuth `src/app/api/email/outlook/{connect,callback}/route.ts`,
+  Paramètres → Intégrations (bouton « Connecter Outlook », déjà préparé
+  par AR-0053).
 - **Complexité** : Élevée.
 - **Prérequis** : AR-0052.
-- **Tests nécessaires** : idem AR-0053.
+- **Tests** : `tests/email/outlook.test.ts` — mêmes scénarios qu'AR-0053
+  (échec explicite sans configuration ; envoi réel — refresh de jeton +
+  `sendMail` — vérifié contre un vrai serveur HTTP local, corps de
+  requête Microsoft Graph vérifié ; échec explicite sur erreur HTTP
+  d'envoi et sur échec de renouvellement du jeton ; flux OAuth complet
+  avec le scope `Mail.Send`/`offline_access` et l'hôte
+  `login.microsoftonline.com`) — la vérification de bout en bout contre
+  un vrai compte Microsoft 365 n'est pas possible dans cet environnement
+  (aucun identifiant OAuth disponible), voir ADR 0038.
 
 **Total estimé v0.9 bis : ~14 jours de travail restant** (AR-0047/AR-0052 déjà livrées ; AR-0053/AR-0054 parallélisables).
 

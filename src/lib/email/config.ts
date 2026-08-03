@@ -25,6 +25,8 @@ export interface EmailIntegrationConfig {
   clientId?: string;
   clientSecret?: string;
   refreshToken?: string;
+  /** Outlook (AR-0054) uniquement — "common" par défaut (comptes personnels ET professionnels/scolaires), sinon l'identifiant du tenant Azure AD de l'organisation. */
+  tenantId?: string;
   /** Surcharges pour les tests (jamais utilisées en production) — endpoint d'échange/renouvellement de jeton. */
   oauthBaseUrl?: string;
   /** Surcharge pour les tests — endpoint de l'API d'envoi (Gmail/Microsoft Graph). */
