@@ -17,6 +17,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/quotes", label: "Devis", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/invoices", label: "Factures", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/missions", label: "Missions" },
+  { href: "/visits", label: "Visites 3D" },
   { href: "/map", label: "Carte", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/stats", label: "Statistiques", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/settings", label: "Paramètres", roles: ["OWNER_ADMIN"] },

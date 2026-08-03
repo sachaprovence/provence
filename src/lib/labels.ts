@@ -71,6 +71,26 @@ export const MESSAGE_TYPE_LABEL: Record<string, string> = {
   APPOINTMENT_BRIEF: "Résumé avant rendez-vous",
 };
 
+export const VIRTUAL_TOUR_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Brouillon",
+  SCHEDULED: "Planifiée",
+  SHOOTING_DONE: "Prise de vue terminée",
+  PROCESSING: "En traitement",
+  PUBLISHED: "Publiée",
+  ARCHIVED: "Archivée",
+};
+
+export const PROPERTY_TYPE_LABEL: Record<string, string> = {
+  APARTMENT: "Appartement",
+  HOUSE: "Maison",
+  VILLA: "Villa",
+  COMMERCIAL_PREMISES: "Local commercial",
+  HOTEL_ROOM: "Chambre d'hôtel",
+  OFFICE: "Bureau",
+  LAND: "Terrain",
+  OTHER: "Autre",
+};
+
 export const INTENT_LABEL: Record<string, string> = {
   INTERESTED: "Intéressé",
   INFO_REQUEST: "Demande d'informations",
