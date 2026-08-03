@@ -27,5 +27,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/settings/director", label: "Agent Director", roles: ["OWNER_ADMIN"] },
   { href: "/settings/knowledge", label: "Intelligence documentaire", roles: ["OWNER_ADMIN"] },
   { href: "/settings/metrics", label: "Métriques", roles: ["OWNER_ADMIN"] },
+  { href: "/settings/api-keys", label: "Clés API", roles: ["OWNER_ADMIN"] },
+  { href: "/settings/webhooks", label: "Webhooks sortants", roles: ["OWNER_ADMIN"] },
+  { href: "/settings/billing", label: "Facturation", roles: ["OWNER_ADMIN"] },
   { href: "/users", label: "Utilisateurs", roles: ["OWNER_ADMIN"] },
 ];
