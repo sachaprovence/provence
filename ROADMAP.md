@@ -239,6 +239,36 @@ uniquement de façon additive, jamais en les restructurant — voir ADR
 0038. Les décisions d'architecture prises pour `MOD-28` sont documentées
 dans `docs/adr/0038` et `0039`.
 
+## 1 decies. v0.9 bis : le reste de MOD-16/MOD-04/MOD-06 (reporté après v0.9) est livré
+
+Comme annoncé en §1 novies, `MOD-16` (observabilité transversale dédiée)
+et l'IA réellement branchée par organisation (`MOD-04`) restaient
+reportés après v0.9, sans date fixée. `v0.9 bis` (`AR-0047` à `AR-0054`,
+voir `BACKLOG.md` et `docs/adr/0040`) les traite intégralement :
+
+- **`MOD-16`** : logs structurés (déjà en place, un test de
+  non-régression manquait), capture d'erreurs réelle (API d'ingestion
+  Sentry via `fetch()` direct, pas de SDK — réglage de déploiement,
+  `SENTRY_DSN`), métriques de base (coût IA, taux d'échec email, latence
+  API sur quelques routes représentatives, extensible route par route).
+  L'observabilité de bas niveau est désormais livrée ; un futur système
+  d'alerting proactif (notifications automatiques sur seuil dépassé)
+  resterait un chantier distinct si le besoin émerge.
+- **`MOD-04`** : `AnthropicAIProvider` réel pour la couche IA historique
+  `src/lib/ai/` (bascule par `AI_PROVIDER=anthropic`, sans changement de
+  code), et un quota IA mensuel dur par organisation
+  (`Organization.aiMonthlyBudgetUsd`) — partagé entre cette couche ET le
+  Framework des Agents (qui ne journalisait jusque-là AUCUN coût réel,
+  un manque préexistant comblé au passage, voir ADR 0040).
+- **`MOD-06`** : deux connecteurs email réels supplémentaires, Gmail (API
+  Gmail v1) et Outlook (Microsoft Graph), en plus de SMTP/Resend/
+  Postmark/Brevo déjà livrés via `MOD-28` — portant le total à 6
+  fournisseurs email réels sélectionnables par `EMAIL_PROVIDER`.
+
+`MOD-16`/`MOD-04`/`MOD-06` sont donc désormais considérés **entièrement
+livrés** (v0.9 + v0.9 bis combinés). Les décisions d'architecture prises
+pour `v0.9 bis` sont documentées dans `docs/adr/0040`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -248,9 +278,9 @@ dans `docs/adr/0038` et `0039`.
 | MOD-02 | Configuration métier / Vertical Pack | Reporté à v0.3 (voir §0 bis) | Critique |
 | MOD-21 | Multi-tenant Organization/Workspace | ✅ Livré (v0.2) | Critique |
 | MOD-03 | CRM Prospects | Étendu (v0.9 via `MOD-28` : Company/Property/Attachment/pipeline personnalisable/chronologie, voir §1 novies) | Haute (généralisation) |
-| MOD-04 | Analyse & Scoring IA | Existant (Phase 0) ; Agent Analyse (v0.9, `MOD-28`) réutilise les vraies statistiques, pas un recalcul séparé | Haute (généralisation + réel) |
+| MOD-04 | Analyse & Scoring IA | Existant (Phase 0) ; Agent Analyse (v0.9, `MOD-28`) réutilise les vraies statistiques ; ✅ `AnthropicAIProvider` réel + quota IA mensuel dur livrés (v0.9 bis, voir §1 decies) | Haute (généralisation + réel) |
 | MOD-05 | Campagnes & Séquences | Existant (Phase 0) | Moyenne (généralisation) |
-| MOD-06 | Communication (email) | ✅ Connecteurs réels (SMTP/Resend/Postmark/Brevo) livrés via `MOD-28` (v0.9, voir §1 novies) | Haute (connecteurs réels) |
+| MOD-06 | Communication (email) | ✅ 6 connecteurs réels (SMTP/Resend/Postmark/Brevo via `MOD-28` v0.9 ; Gmail/Outlook via v0.9 bis, voir §1 novies/§1 decies) | Haute (connecteurs réels) |
 | MOD-07 | Suivi commercial | Étendu (v0.9 via `MOD-28` : devis remise/TVA/PDF/signature, factures) | Basse (déjà générique) |
 | MOD-08 | Exécution / Production | Étendu (v0.9 via `MOD-28` : module Visites 3D `VirtualTour`) | Basse (déjà générique) |
 | MOD-09 | Automatisation | Existant (Phase 0) ; 10 automatisations métier prêtes à l'emploi ajoutées à l'Automation Engine (v0.9, `MOD-28`) | Moyenne (généralisation) |
@@ -260,7 +290,7 @@ dans `docs/adr/0038` et `0039`.
 | MOD-13 | Gestion documentaire | Reporté après v0.6 (voir §1 sexies) | Moyenne |
 | MOD-14 | Calendrier | ✅ Google Calendar réel livré via `MOD-28` (v0.9, voir §1 novies) | Moyenne |
 | MOD-15 | Infrastructure asynchrone (jobs) | ✅ Livré via `MOD-27` (v0.8, voir §1 octies) | Haute |
-| MOD-16 | Observabilité | Reporté à nouveau après v0.9 (voir §1 novies) | Haute |
+| MOD-16 | Observabilité | ✅ Livré (v0.9 bis : logs déjà en place + capture d'erreurs réelle + métriques de base, voir §1 decies) | Haute |
 | MOD-17 | Sécurité avancée & conformité renforcée | À créer | Critique (avant SaaS public) |
 | MOD-18 | Intégrations tierces & API publique | À créer | Moyenne |
 | MOD-19 | Facturation SaaS Autorun (abonnements) | À créer | Haute (condition de v1.0) |
@@ -1567,11 +1597,12 @@ noyau de jobs ; et `v0.9` a livré `MOD-28` (Provence 360 Operating System)
 — qui délivre une partie substantielle du périmètre de `MOD-06` (email
 réel) et `MOD-14` (Google Calendar réel) — à la place de la combinaison
 initialement prévue `MOD-16` + `MOD-06` réel + `MOD-04` réel (voir
-§1 novies) ; `MOD-02`, `MOD-12` (paiement en ligne), `MOD-13`, `MOD-16` et
-`MOD-20` restent à faire, désormais après `v0.9`, ainsi que la migration
-des modules v0.1–v0.9 vers le noyau de jobs de `MOD-27` (possible dès
-maintenant, non réalisée dans cette phase). Voir `MILESTONES.md` pour
-l'état réel version par version.
+§1 novies) ; `v0.9 bis` a ensuite livré le reste de `MOD-16`/`MOD-04`/
+`MOD-06` (voir §1 decies), les complétant entièrement. `MOD-02`, `MOD-12`
+(paiement en ligne), `MOD-13` et `MOD-20` restent à faire, désormais
+après `v0.9 bis`, ainsi que la migration des modules v0.1–v0.9 vers le
+noyau de jobs de `MOD-27` (possible dès maintenant, non réalisée dans
+cette phase). Voir `MILESTONES.md` pour l'état réel version par version.
 
 ## 5. Éléments parallélisables
 

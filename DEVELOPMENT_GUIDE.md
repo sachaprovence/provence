@@ -427,6 +427,51 @@ touchant ce périmètre :
   non-fuite des secrets) contre un serveur de développement réellement
   démarré, zéro erreur console.
 
+## 0 decies. État de v0.9 bis (observabilité, quota IA dur, Gmail/Outlook)
+
+Voir `docs/adr/0040` pour le détail complet des décisions. Points à
+connaître pour tout nouveau code touchant ce périmètre :
+
+- **Toujours passer par `getAIProviderForOrganization(organizationId)`
+  (`src/lib/ai/index.ts`), jamais `getAIProvider()` directement, à un
+  nouveau point d'appel réel de la couche IA historique** — la première
+  vérifie le quota mensuel avant de retourner le fournisseur
+  (`QuotaExceededError`, HTTP 429, si dépassé), la seconde ne fait aucune
+  vérification. Les 4 points d'appel existants
+  (`sequence-engine.ts`, `POST /api/messages/generate`,
+  `POST /api/leads/[id]/analyze`, `POST /api/leads/[id]/simulate-reply`)
+  suivent déjà ce patron — le reproduire pour tout nouveau point d'appel.
+- **`generateAgentNarrative` (point d'entrée unique des 8 agents) vérifie
+  déjà le quota et journalise le coût** — un nouvel agent ou outil qui
+  appelle un LLM DOIT passer par cette fonction (déjà une règle non
+  négociable depuis l'ADR 0029), jamais un appel direct à
+  `getActiveLlmProvider().complete(...)`, sous peine de contourner
+  silencieusement le quota IA.
+- **`src/lib/ai/` (données structurées) et `src/lib/agents/llm/` (texte
+  brut) restent deux abstractions séparées** — ne pas essayer de les
+  fusionner ni de faire implémenter les deux interfaces par un même
+  fournisseur ; voir ADR 0040 pour le raisonnement complet.
+- **Un module OAuth2 générique par fournisseur d'identité**
+  (`src/lib/google/oauth.ts`, `src/lib/microsoft/oauth.ts`) — toute
+  nouvelle intégration Google (ex. futur Google Sheets) ou Microsoft
+  (ex. futur Teams) doit réutiliser le module existant en lui passant son
+  propre `scope`, jamais dupliquer la logique d'échange/renouvellement de
+  jeton dans le nouveau fournisseur.
+- **`EMAIL_PROVIDER` accepte désormais 6 valeurs** (`smtp`/`resend`/
+  `postmark`/`brevo`/`gmail`/`outlook`) — Gmail/Outlook nécessitent en
+  plus un flux de connexion OAuth (`/api/email/{gmail,outlook}/connect`
+  puis `/callback`), contrairement aux 4 premiers qui ne nécessitent
+  qu'une clé API/des identifiants SMTP saisis directement.
+- **`Organization.aiMonthlyBudgetUsd` est `null` par défaut (illimité)**
+  — ne jamais supposer qu'une organisation a un quota configuré ; toujours
+  vérifier via `assertAiQuotaAvailable`/`getAIProviderForOrganization`,
+  jamais lire le champ directement pour décider d'un comportement.
+- **Toute nouvelle fonctionnalité de ce périmètre a été vérifiée au moins
+  une fois par une vraie requête HTTP contre un serveur de production
+  réellement démarré** (`/settings`, `/settings/metrics`,
+  `GET /api/settings/metrics`) — voir §"Validation finale" de
+  `BACKLOG.md` pour le détail des commandes exécutées.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)
@@ -498,9 +543,10 @@ référence rapide pendant le développement :
 - Jamais de préfixe `NEXT_PUBLIC_` sur une variable contenant un secret.
 - Pas de `console.log` brut dans `src/` (règle de lint, voir AR-0006) —
   utiliser `src/lib/logger.ts` (pino, déjà en place depuis plusieurs
-  phases) ; l'observabilité transversale dédiée (`MOD-16`, logs
-  structurés/capture d'erreurs/métriques centralisées) reste reportée
-  après v0.9 — voir `ROADMAP.md` §1 novies et `MILESTONES.md` §v0.9 bis.
+  phases). L'observabilité transversale (`MOD-16` : logs structurés,
+  capture d'erreurs réelle via `src/lib/observability/error-tracking.ts`,
+  métriques de base) est livrée depuis v0.9 bis — voir `ROADMAP.md`
+  §1 decies et `MILESTONES.md` §v0.9 bis.
 
 ## 5. Stratégie de tests
 

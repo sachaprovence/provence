@@ -695,30 +695,66 @@ et de la facturation client (`v0.4`/`v0.5`).
   honnêtes (aucun fournisseur tiers disponible dans cet environnement) ;
   le paiement en ligne (Stripe réel, `MOD-12`) reste hors périmètre.
 
-## v0.9 bis — Observabilité et connecteurs réels (plan initial, reporté)
+## v0.9 bis — Observabilité, quota IA dur, connecteurs Gmail/Outlook réels
 
-- **Objectif du jalon** : donner de la visibilité opérationnelle et
-  remplacer les fournisseurs démo par des fournisseurs réels pour l'IA et
-  l'email. Le volet email réel est livré via `MOD-28` (v0.9, connecteurs
-  SMTP/Resend/Postmark/Brevo par organisation) — voir `ROADMAP.md`
-  §1 novies. L'observabilité transversale dédiée et l'IA réellement
-  configurable par organisation restent reportées.
-- **Modules** : MOD-16, MOD-04 (IA réelle), MOD-06 (email réel — partie
-  livrée via `MOD-28`).
-- **Tâches** : AR-0047 à AR-0054.
+> **Statut : ✅ livré** (2026-08-03). État des lieux réalisé avant
+> exécution (relecture du code, pas seulement de la roadmap) : `AR-0047`
+> (logs structurés) était déjà satisfaite depuis une phase antérieure —
+> seul un test de non-régression manquait ; `AR-0052` (`SmtpEmailProvider`)
+> était déjà livrée via `MOD-28` (v0.9). Le reste (`AR-0048` à `AR-0051`,
+> `AR-0053`, `AR-0054`) est le travail réel de cette version. Voir
+> `docs/adr/0040`.
+
+- **Objectif du jalon** : donner de la visibilité opérationnelle réelle
+  (logs déjà en place vérifiés, capture d'erreurs, métriques de base),
+  un vrai fournisseur Anthropic pour la couche IA historique avec un
+  quota mensuel dur partagé entre les deux couches IA de l'application,
+  et deux connecteurs email supplémentaires (Gmail, Outlook) réels.
+- **Modules** : MOD-16 (observabilité — capture d'erreurs et métriques ;
+  les logs structurés existaient déjà), MOD-04 (IA réelle — fournisseur
+  Anthropic + quota dur), MOD-06 (email réel — Gmail/Outlook, en plus de
+  SMTP/Resend/Postmark/Brevo déjà livrés via `MOD-28`).
+- **Tâches** : AR-0047 à AR-0054 (voir `BACKLOG.md` §Version 0.9 bis pour
+  le détail complet de chacune, y compris les décisions d'architecture).
 - **Critères de sortie** :
-  - logs structurés sans donnée sensible détectée par test automatisé ;
-  - une exception simulée est capturée avec contexte suffisant pour être
-    diagnostiquée ;
-  - bascule `AI_PROVIDER=demo` → `AI_PROVIDER=anthropic` sans changement de
-    code, avec quota dur vérifié par test ;
-  - au moins un connecteur email réel (SMTP) fonctionnel de bout en bout
-    sur un compte de test — ✅ livré via `MOD-28` (v0.9), vérifié contre un
-    vrai serveur SMTP local.
-- **État fonctionnel de l'application** : Autorun peut désormais tourner en
-  conditions réelles (email non simulé, par organisation) pour une
-  organisation pilote ; l'observabilité transversale dédiée et le
-  diagnostic IA restent à construire.
+  - [x] logs structurés sans donnée sensible détectée par test automatisé
+    (`tests/observability/logger.test.ts`) ;
+  - [x] une exception simulée est capturée avec contexte suffisant pour
+    être diagnostiquée, via l'API d'ingestion Sentry (`fetch()` direct,
+    pas de SDK), vérifiée contre un vrai serveur HTTP local ;
+  - [x] métriques de base (coût IA, taux d'échec email, latence API sur
+    les routes instrumentées) exposées dans Paramètres → Métriques ;
+  - [x] bascule `AI_PROVIDER=demo` → `AI_PROVIDER=anthropic` sans
+    changement de code, avec quota mensuel dur par organisation
+    (`Organization.aiMonthlyBudgetUsd`) vérifié par test — partagé entre
+    la couche IA historique ET le Framework des Agents (les deux
+    journalisent désormais un coût réel dans `AIRequest`) ;
+  - [x] connecteurs email réels Gmail (API Gmail v1) et Outlook
+    (Microsoft Graph) fonctionnels de bout en bout (OAuth2 + envoi),
+    vérifiés contre de vrais serveurs HTTP locaux simulant les endpoints
+    Google/Microsoft — la vérification contre un vrai compte n'a pas été
+    possible dans cet environnement (aucun identifiant OAuth disponible) ;
+  - [x] les 434 tests passent contre une vraie base PostgreSQL fraîchement
+    migrée (384 de v0.9 + 50 nouveaux : logger, capture d'erreurs,
+    métriques, fournisseur Anthropic IA, quota IA — y compris un run
+    d'agent réel bloqué en bout en bout —, Gmail, Outlook) ;
+  - [x] `npm run lint`, `npx tsc --noEmit`, `npm run build` et les 3
+    suites E2E (parcours principal, isolation multi-tenant,
+    Automation Engine) passent sans erreur contre un serveur de
+    production réellement démarré.
+- **État fonctionnel de l'application** : Autorun tourne désormais avec
+  une observabilité réelle (erreurs capturées, métriques visibles), un
+  budget IA mensuel configurable et réellement bloquant, et le choix
+  entre 6 fournisseurs email réels (SMTP/Resend/Postmark/Brevo/Gmail/
+  Outlook) selon `EMAIL_PROVIDER`.
+- **Explicitement hors périmètre (v1.0 ou au-delà)** : quota email dur
+  (prévu `v0.10`, même standard que le quota IA) ; middleware de latence
+  API global sur toutes les routes (extension incrémentale actuelle,
+  route par route) ; vérification de bout en bout contre de vrais
+  comptes Anthropic/Gmail/Microsoft 365 (aucun identifiant disponible
+  dans cet environnement) ; fusion des deux abstractions IA
+  (`src/lib/ai/` et `src/lib/agents/llm/`) — restent volontairement
+  distinctes (voir ADR 0040).
 
 ## v0.10 — Sécurité avancée (porte obligatoire avant v1.0)
 
@@ -787,7 +823,7 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.8 | Infrastructure (moteur d'automatisation transversal) | Oui (éditeur + tableau de bord Automations) | Oui (fondation du noyau de jobs pour toute automatisation future) |
 | v0.8 bis | Infrastructure (migration, reportée) | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |
 | v0.9 | Fonctionnalité (système d'exploitation Provence 360) | Oui (CRM étendu, devis/factures, visites 3D, tableaux de bord, 7 agents métier, automatisations, réglages) | Non (chaque extension reste additive) |
-| v0.9 bis | Fonctionnalité + ops (partiellement livrée, reportée pour le reste) | Oui (email réel) | Non |
+| v0.9 bis | Fonctionnalité + ops (observabilité, quota IA dur, Gmail/Outlook réels) | Oui (métriques, quota IA, email Gmail/Outlook) | Non |
 | v0.10 | Sécurité | Non | **Oui, bloquant pour v1.0** |
 | v1.0 | Ouverture SaaS | Oui | — (fin de cycle) |
 

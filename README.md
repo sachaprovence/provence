@@ -166,14 +166,21 @@ npm run test:e2e                  # dans un autre terminal
 Le projet est conçu pour remplacer les fournisseurs simulés sans changer le
 reste du code :
 
-1. **Email** : implémenter `EmailProvider` (`src/lib/email/types.ts`) dans un
-   nouveau fichier (ex. `smtp-provider.ts`), l'enregistrer dans
-   `src/lib/email/index.ts`, définir `EMAIL_PROVIDER=smtp` (ou autre) et les
-   variables nécessaires (hôte SMTP, identifiants…) dans `.env`.
-2. **IA** : implémenter `AIProvider` (`src/lib/ai/types.ts`) dans un nouveau
-   fichier, l'enregistrer dans `src/lib/ai/index.ts`, définir
-   `AI_PROVIDER=<nom>` et la clé API côté serveur uniquement (jamais
-   `NEXT_PUBLIC_*`).
+1. **Email** : 6 fournisseurs réels déjà implémentés — `EMAIL_PROVIDER=smtp`
+   (identifiants SMTP), `resend`/`postmark`/`brevo` (clé API), ou
+   `gmail`/`outlook` (OAuth2 — connecter depuis Paramètres → Intégrations
+   une fois `GMAIL_OAUTH_*`/`MICROSOFT_OAUTH_*` configurées, voir
+   `.env.example`). Pour un nouveau fournisseur : implémenter
+   `EmailProvider` (`src/lib/email/types.ts`) et l'enregistrer dans
+   `src/lib/email/index.ts`.
+2. **IA** : `AI_PROVIDER=anthropic` (clé `ANTHROPIC_API_KEY`) est déjà
+   implémenté pour la couche IA historique (analyse/scoring/génération de
+   message). Un quota mensuel dur optionnel par organisation est
+   disponible (`Organization.aiMonthlyBudgetUsd`, réglable dans
+   Paramètres → Entreprise). Pour un nouveau fournisseur : implémenter
+   `AIProvider` (`src/lib/ai/types.ts`) et l'enregistrer dans
+   `src/lib/ai/index.ts`. La clé API reste toujours côté serveur
+   uniquement (jamais `NEXT_PUBLIC_*`).
 3. **Carte interactive réelle** : les champs `Lead.latitude`/`longitude`
    existent déjà ; brancher Mapbox/Leaflet dans `src/app/(app)/map/page.tsx`
    à la place de la vue liste actuelle.
@@ -199,7 +206,10 @@ séparément dans le MVP).
 ## Fonctionnalités restant à développer
 
 Voir [`docs/01-SPECIFICATION.md`](docs/01-SPECIFICATION.md#5-reporté-après-le-mvp-hors-périmètre-v1) :
-connecteurs email réels (Gmail/Outlook/SMTP), fournisseurs de données
-payants, vraie carte interactive, file de traitement distribuée
-(BullMQ/Redis), notifications push/Slack, facturation SaaS multi-plan,
-i18n complète de l'interface, application mobile, SSO/2FA.
+fournisseurs de données payants, vraie carte interactive, file de
+traitement distribuée (BullMQ/Redis), notifications push/Slack,
+facturation SaaS multi-plan, i18n complète de l'interface, application
+mobile, SSO/2FA, quota email dur (prévu `v0.10`, voir `MILESTONES.md`).
+Les connecteurs email réels (SMTP/Resend/Postmark/Brevo/Gmail/Outlook) et
+un fournisseur IA réel (Anthropic) sont déjà livrés — voir `MILESTONES.md`
+§v0.9 et §v0.9 bis.

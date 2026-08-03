@@ -1319,3 +1319,82 @@ analyse}-agent.test.ts` (effets de bord réels vérifiés dans chaque
 table concernée), `tests/automation/business-automation-templates.test.ts`
 (scénario complet déclencheur→job→agent→effet réel), et
 `tests/settings/organization-settings.test.ts`.
+
+## 17. v0.9 bis — Observabilité, quota IA dur, connecteurs Gmail/Outlook (`ROADMAP.md` §1 decies)
+
+Voir `docs/adr/0040` pour la justification complète. Contrairement à v0.9
+(extension du CRM/nouveaux agents métier), v0.9 bis complète des briques
+transversales laissées de côté (`MOD-16`/`MOD-04`/`MOD-06`) — aucune
+nouvelle table CRM, uniquement de l'observabilité, un garde-fou de coût,
+et deux connecteurs email supplémentaires.
+
+### Capture d'erreurs (`src/lib/observability/error-tracking.ts`)
+
+API d'ingestion Sentry (protocole "envelope") via `fetch()` direct, pas le
+SDK `@sentry/node` — même convention que les fournisseurs LLM/email/
+Calendar. `captureException`/`captureExceptionBestEffort` échouent
+explicitement (`{captured: false, reason}`) sans `SENTRY_DSN` — jamais un
+faux succès. Branché dans `toApiErrorResponse` (incidents 5xx uniquement,
+jamais les 4xx métier) et `POST /api/client-errors` (erreurs React
+navigateur). Réglage de DÉPLOIEMENT, jamais par organisation.
+
+### Métriques de base (`src/lib/observability/metrics-service.ts`, `api-metrics.ts`)
+
+Coût IA et taux d'échec email réagrègent des données déjà journalisées
+(`AIRequest.estimatedCostUsd` depuis v0.3, `EmailEvent` depuis v0.1). La
+latence API est mesurée par `withApiMetrics()`, un assistant appliqué
+route par route (3 routes représentatives aujourd'hui) — jamais un
+middleware global, pour limiter le risque de régression. Exposées dans
+`/settings/metrics` (page) et `GET /api/settings/metrics` (admin
+uniquement).
+
+### `AnthropicAIProvider` et quota IA dur (`src/lib/ai/providers/anthropic.ts`, `src/lib/ai/quota.ts`)
+
+Fournisseur réel pour la couche IA HISTORIQUE (`src/lib/ai/`, données
+structurées — analyse/scoring/génération de message/classification),
+distinct de l'abstraction LLM du Framework des Agents
+(`src/lib/agents/llm/`, texte brut) qui a déjà son propre fournisseur
+Anthropic réel depuis une phase antérieure. Prompte Claude pour un objet
+JSON strict par méthode, normalise les champs optionnels manquants,
+échoue explicitement sur réponse non exploitable.
+
+`Organization.aiMonthlyBudgetUsd` (`null` = illimité) est vérifié par
+`assertAiQuotaAvailable`/`getAIProviderForOrganization` AVANT tout appel
+IA réel — `QuotaExceededError` (429) si dépassé. Le Framework des Agents
+(`generateAgentNarrative`, point d'entrée unique des 8 agents) vérifie
+désormais le même quota et journalise un coût réel
+(`AIRequestKind.AGENT_NARRATIVE`) — il n'en journalisait AUCUN
+auparavant, malgré un champ `AIRequest.agentRunId` conçu pour ça depuis
+une phase antérieure mais jamais renseigné. Les deux couches IA
+partagent donc désormais le même budget mensuel par organisation.
+
+### Gmail et Outlook réels (`src/lib/email/providers/{gmail,outlook}.ts`)
+
+Complètent SMTP/Resend/Postmark/Brevo (v0.9) — 6 fournisseurs email
+réels au total, sélectionnables par `EMAIL_PROVIDER`. OAuth2 via deux
+modules génériques PAR fournisseur d'identité, réutilisables par de
+futures intégrations : `src/lib/google/oauth.ts` (extrait de
+`calendar/google/oauth.ts`, qui délègue désormais à ce module en
+conservant ses signatures d'origine — zéro régression sur Google
+Calendar) et `src/lib/microsoft/oauth.ts` (nouveau, tenant Azure AD
+configurable par organisation, `common` par défaut). Même convention que
+les autres fournisseurs email : échec explicite sans configuration ou
+sur erreur réseau/HTTP, jamais un succès simulé ; vérifiés contre de
+vrais serveurs HTTP locaux simulant les endpoints Google/Microsoft.
+
+### Réglages (`/settings`)
+
+Nouveau champ « Quota IA mensuel dur » dans le formulaire Entreprise
+(`OrganizationForm`), et statut de consommation du mois en cours dans la
+section Intelligence artificielle. Boutons « Connecter Gmail »/
+« Connecter Outlook » dans la liste des intégrations (visibles selon
+`EMAIL_PROVIDER`), même patron que « Connecter Google Calendar » (v0.9).
+
+### Tests
+
+`tests/observability/{logger,error-tracking,metrics-service,api-metrics}.test.ts`,
+`tests/ai/{anthropic-provider,quota}.test.ts` (dont un run d'agent réel
+bloqué de bout en bout par le quota), `tests/email/{gmail,outlook}.test.ts`
+(vrais serveurs HTTP locaux simulant Google/Microsoft), et l'extension de
+`tests/settings/organization-settings.test.ts` pour le nouveau champ de
+quota.

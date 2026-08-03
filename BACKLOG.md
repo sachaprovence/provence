@@ -1864,21 +1864,22 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 > La tâche `AR-0052` (`SmtpEmailProvider`) ci-dessous est livrée (sous une
 > forme étendue à Resend/Postmark/Brevo et à la configuration par
 > organisation) via `AR-0145` ci-dessus. `AR-0047` à `AR-0051`, `AR-0053`
-> et `AR-0054` sont traitées dans la section "Version 0.9 bis"
-> ci-dessous — voir `ROADMAP.md` §1 novies.
+> et `AR-0054` ont été traitées et livrées dans la section "Version 0.9 bis"
+> ci-dessous — voir `ROADMAP.md` §1 decies.
 
-## Version 0.9 bis — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06)
+## Version 0.9 bis — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06) — livrée
 
-> **Statut : en cours d'implémentation.** État des lieux réalisé avant
+> **Statut : ✅ livré** (2026-08-03). État des lieux réalisé avant
 > exécution (relecture du code, pas seulement de la roadmap) : `AR-0047`
-> est déjà satisfaite depuis une phase antérieure (`src/lib/logger.ts`,
+> était déjà satisfaite depuis une phase antérieure (`src/lib/logger.ts`,
 > pino, redaction, aucun `console.log` brut dans `src/` — règle de lint
-> active) — seul un test de non-régression manquait. `AR-0052` est déjà
+> active) — seul un test de non-régression manquait. `AR-0052` était déjà
 > livrée via `AR-0145` (v0.9). Le reste (`AR-0048`/`0049`/`0050`/`0051`/
-> `0053`/`0054`) est implémenté dans cette version, en réutilisant les
+> `0053`/`0054`) a été implémenté dans cette version, en réutilisant les
 > conventions déjà établies (fournisseur réel + repli honnête sans
 > identifiants, jamais un faux succès ; appel HTTP direct plutôt qu'un
-> SDK tiers lourd).
+> SDK tiers lourd). Voir `docs/adr/0040` pour le détail des décisions
+> d'architecture, et §"Validation finale de v0.9 bis" ci-dessous.
 
 ### AR-0047 — Logs structurés (pino) — déjà livrée, test de non-régression ajouté
 - **Description** : `src/lib/logger.ts` (pino, `redact` sur
@@ -2082,7 +2083,47 @@ SMTP réelle, configuration par organisation. Rien à faire ici.
   un vrai compte Microsoft 365 n'est pas possible dans cet environnement
   (aucun identifiant OAuth disponible), voir ADR 0038.
 
-**Total estimé v0.9 bis : ~14 jours de travail restant** (AR-0047/AR-0052 déjà livrées ; AR-0053/AR-0054 parallélisables).
+**Total v0.9 bis : livré intégralement** (AR-0047/AR-0052 déjà satisfaites avant le début de cette version ; AR-0048/AR-0049/AR-0050/AR-0051/AR-0053/AR-0054 implémentées, testées, validées).
+
+### Validation finale de v0.9 bis (2026-08-03)
+
+- **Dépendances** : installation propre vérifiée (`node_modules` déjà en
+  place, `npx prisma generate` réexécuté après chaque changement de
+  schéma).
+- **Migrations** : les 17 migrations (v0.1 à v0.9 bis) s'appliquent sans
+  erreur sur une base PostgreSQL fraîchement créée (`npx prisma migrate
+  deploy`), puis `npm run db:seed` réussit sur cette base vide.
+- **Suite de tests complète** : 434/434 tests passent (`npx vitest run`)
+  contre cette même base fraîche — 384 hérités de v0.9 (inchangés,
+  aucune régression) + 50 nouveaux (logger, capture d'erreurs, métriques,
+  fournisseur Anthropic IA, quota IA — y compris un run d'agent réel
+  bloqué de bout en bout —, Gmail, Outlook).
+- **Qualité statique** : `npx tsc --noEmit` (0 erreur) et `npx eslint .`
+  (0 erreur, 3 avertissements préexistants sans rapport avec v0.9 bis)
+  passent sur l'ensemble du dépôt.
+- **Build de production** : `npm run build` réussit.
+- **Serveur de production réellement démarré** (`npm run start`) contre
+  la base fraîchement migrée/seedée : connexion admin démo, page
+  `/settings` (nouveau champ quota IA, statut IA avec consommation du
+  mois), `/settings/metrics` et `GET /api/settings/metrics` (métriques
+  réelles renvoyées), aucune erreur serveur inattendue dans les journaux
+  (seuls les échecs explicites ATTENDUS : Gmail/Outlook/Google Calendar
+  non connectés dans cet environnement, Sentry sans DSN).
+- **Tests de bout en bout (E2E, Playwright, contre le serveur de
+  production)** : les 3 suites existantes passent sans modification —
+  `tests/e2e/golden-path.mjs` (parcours principal), 
+  `tests/e2e/two-organizations-isolation.mjs` (isolation multi-tenant),
+  `tests/e2e/automation-golden-path.mjs` (Automation Engine) — zéro
+  erreur console dans les trois cas.
+- **Isolation multi-tenant** : vérifiée par les tests d'isolation dédiés
+  de v0.9 bis (`tests/ai/quota.test.ts` : quota d'une organisation ne
+  bloque jamais une autre ; `tests/observability/metrics-service.test.ts`
+  : métriques d'une organisation ne fuient jamais vers une autre) en plus
+  du test E2E d'isolation existant.
+- **Stubs/mocks actifs dans le périmètre v0.9 bis** : aucun — tous les
+  fournisseurs (Anthropic, Sentry, Gmail, Outlook) sont des
+  implémentations réelles qui échouent explicitement sans configuration,
+  jamais un succès simulé.
 
 ---
 
