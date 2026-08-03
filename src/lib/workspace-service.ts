@@ -6,6 +6,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 import { NotFoundError, ConflictError, ValidationError } from "@/lib/errors";
 import { WORKSPACE_AUDIT_ACTIONS } from "@/lib/workspace-permissions";
+import { assertMemberLimitAvailable } from "@/lib/billing/plan-service";
 import { WorkspaceRole, MembershipRole } from "@/generated/prisma/enums";
 
 const INVITATION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 jours
@@ -279,6 +280,13 @@ export async function acceptWorkspaceInvitation(
     });
   }
   const acceptedUser = user;
+
+  const existingOrgMembership = await prisma.membership.findFirst({
+    where: { organizationId: workspace.organizationId, userId: acceptedUser.id },
+  });
+  if (!existingOrgMembership) {
+    await assertMemberLimitAvailable(workspace.organizationId);
+  }
 
   await prisma.$transaction(async (tx) => {
     const orgMembership = await tx.membership.findFirst({
