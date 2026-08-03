@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 import { getCurrentActor } from "@/lib/auth";
+import { captureExceptionBestEffort } from "@/lib/observability/error-tracking";
 
 const payloadSchema = z.object({
   message: z.string().max(2000),
@@ -24,16 +25,15 @@ export async function POST(request: NextRequest) {
   }
 
   const actor = await getCurrentActor().catch(() => null);
-  logger.error(
-    {
-      source: "client",
-      digest: parsed.data.digest,
-      path: parsed.data.path,
-      organizationId: actor?.organization.id,
-      userId: actor?.user.id,
-    },
-    parsed.data.message
-  );
+  const context = {
+    source: "client",
+    digest: parsed.data.digest,
+    path: parsed.data.path,
+    organizationId: actor?.organization.id,
+    userId: actor?.user.id,
+  };
+  logger.error(context, parsed.data.message);
+  captureExceptionBestEffort(new Error(parsed.data.message), context);
 
   return new NextResponse(null, { status: 204 });
 }

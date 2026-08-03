@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { captureExceptionBestEffort } from "@/lib/observability/error-tracking";
 
 /**
  * Erreur applicative "attendue" : le message est écrit pour être affiché
@@ -76,6 +77,10 @@ export function toApiErrorResponse(error: unknown, context?: Record<string, unkn
   if (error instanceof AppError) {
     const log = error.statusCode >= 500 ? logger.error.bind(logger) : logger.warn.bind(logger);
     log({ err: error, statusCode: error.statusCode, ...context }, error.message);
+    // Capture externe (AR-0048) réservée aux incidents (5xx) — un 4xx est une erreur métier attendue, pas un incident.
+    if (error.statusCode >= 500) {
+      captureExceptionBestEffort(error, { statusCode: error.statusCode, ...context });
+    }
     return NextResponse.json(
       { error: error.expose ? error.message : "Une erreur est survenue.", details: error.details },
       { status: error.statusCode }
@@ -84,6 +89,7 @@ export function toApiErrorResponse(error: unknown, context?: Record<string, unkn
 
   const incidentId = crypto.randomUUID();
   logger.error({ err: error, incidentId, ...context }, "Erreur inattendue.");
+  captureExceptionBestEffort(error, { incidentId, statusCode: 500, ...context });
   return NextResponse.json(
     {
       error: "Une erreur inattendue est survenue. Contactez le support si le problème persiste.",
