@@ -22,6 +22,16 @@ const eslintConfig = defineConfig([
       "no-console": ["warn", { allow: ["warn", "error"] }],
     },
   },
+  {
+    // Patch CommonJS de `Module._resolveFilename` pour `prisma/seed.ts` sous
+    // `tsx` (voir `seed-server-only-cjs-hook.cjs`) — `require()` y est
+    // nécessaire (interception du chargeur CJS lui-même), jamais du code
+    // applicatif de `src/`.
+    files: ["prisma/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   // Doit rester en dernier : désactive les règles de style ESLint qui
   // entreraient en conflit avec le formatage automatique de Prettier.
   prettierConfig,

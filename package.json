@@ -17,7 +17,7 @@
     "test:e2e:automation": "node tests/e2e/automation-golden-path.mjs",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "NODE_OPTIONS=--require=./prisma/seed-server-only-cjs-hook.cjs tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force"
   },
   "dependencies": {
