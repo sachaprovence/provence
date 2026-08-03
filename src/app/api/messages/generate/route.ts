@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
-import { getAIProvider } from "@/lib/ai";
+import { getAIProviderForOrganization } from "@/lib/ai";
+import { QuotaExceededError } from "@/lib/errors";
 import { generateMessageSchema } from "@/lib/validations/message";
 import { unsubscribeUrl } from "@/lib/unsubscribe-token";
 import { writeAuditLog } from "@/lib/audit";
@@ -25,7 +26,13 @@ async function handlePost(request: Request) {
 
   const analysis = await prisma.leadAnalysis.findFirst({ where: { leadId }, orderBy: { createdAt: "desc" } });
 
-  const ai = getAIProvider();
+  let ai;
+  try {
+    ai = await getAIProviderForOrganization(actor.organization.id);
+  } catch (error) {
+    if (error instanceof QuotaExceededError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    throw error;
+  }
   const facts = {
     establishmentName: lead.establishmentName,
     category: lead.category,

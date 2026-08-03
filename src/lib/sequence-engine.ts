@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getAIProvider } from "@/lib/ai";
+import { getAIProviderForOrganization } from "@/lib/ai";
 import { getEmailProvider } from "@/lib/email";
 import { unsubscribeUrl } from "@/lib/unsubscribe-token";
 import { isSuppressed } from "@/lib/suppression";
@@ -114,8 +114,6 @@ export async function stopEnrollmentsForLead(leadId: string, reason: EnrollmentS
  * soit le met en attente de validation humaine, soit l'envoie immédiatement.
  */
 async function runDueEnrollment(enrollmentId: string) {
-  const ai = getAIProvider();
-
   const enrollment = await prisma.enrollment.findUniqueOrThrow({
     where: { id: enrollmentId },
     include: {
@@ -150,6 +148,7 @@ async function runDueEnrollment(enrollmentId: string) {
     return;
   }
 
+  const ai = await getAIProviderForOrganization(lead.organizationId);
   const org = lead.organization;
   const facts = leadToFacts(lead);
   const analysis = await prisma.leadAnalysis.findFirst({ where: { leadId: lead.id }, orderBy: { createdAt: "desc" } });

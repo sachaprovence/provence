@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
-import { getAIProvider } from "@/lib/ai";
+import { getAIProviderForOrganization } from "@/lib/ai";
+import { QuotaExceededError } from "@/lib/errors";
 import { stopEnrollmentsForLead } from "@/lib/sequence-engine";
 import { addSuppression } from "@/lib/suppression";
 import { onPositiveReply } from "@/lib/automation-engine";
@@ -37,7 +38,13 @@ export async function POST(request: Request, { params }: Params) {
   const parsed = schema.safeParse({ body: preset ?? rawBody?.body, subject: rawBody?.subject });
   if (!parsed.success) return NextResponse.json({ error: "Message invalide." }, { status: 400 });
 
-  const ai = getAIProvider();
+  let ai;
+  try {
+    ai = await getAIProviderForOrganization(actor.organization.id);
+  } catch (error) {
+    if (error instanceof QuotaExceededError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    throw error;
+  }
   const classification = await ai.classifyReply({ body: parsed.data.body, subject: parsed.data.subject });
 
   const aiRequest = await prisma.aIRequest.create({

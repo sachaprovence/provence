@@ -1965,18 +1965,51 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
   normalisation d'une intention hors énumération vers `UNKNOWN` ; échec
   explicite sur erreur HTTP (401) et sur réponse texte non structurée.
 
-### AR-0051 — Quota IA dur par organisation
+### AR-0051 — Quota IA dur par organisation — livrée
 - **Description** : transforme `AIRequest.estimatedCostUsd` (simple
-  journalisation) en quota bloquant mensuel, configurable par
-  organisation (`Organization.aiMonthlyBudgetUsd`, additif), avec message
-  d'erreur explicite au dépassement — vérifié avant tout nouvel appel
-  IA réel (couche `src/lib/ai/` ET Framework des Agents).
+  journalisation depuis v0.3) en quota bloquant mensuel, configurable par
+  organisation (`Organization.aiMonthlyBudgetUsd`, additif, `null` = pas de
+  quota — comportement inchangé pour toutes les organisations existantes),
+  avec message d'erreur explicite (`QuotaExceededError`, HTTP 429) au
+  dépassement — jamais un simple avertissement.
+  - Couche historique `src/lib/ai/` : `getAIProviderForOrganization(organizationId)`
+    (nouvelle fonction, vérifie le quota puis délègue à `getAIProvider()`)
+    utilisée aux 4 points d'appel réel (`sequence-engine.ts`,
+    `POST /api/messages/generate`, `POST /api/leads/[id]/analyze`,
+    `POST /api/leads/[id]/simulate-reply`) — chacun renvoie désormais une
+    réponse 429 explicite au lieu de laisser l'exception remonter en 500.
+  - Framework des Agents : `generateAgentNarrative` (point d'entrée UNIQUE
+    partagé par les 7 agents métier + Commercial, voir tâche #25) vérifie le
+    quota AVANT tout appel LLM et journalise désormais une ligne `AIRequest`
+    (nouveau `AIRequestKind.AGENT_NARRATIVE`, coût estimé génériquement —
+    `estimateGenericAiCostUsd` — le fournisseur actif pouvant être
+    n'importe lequel des 8 enregistrés) — comble un manque préexistant
+    (le champ `AIRequest.agentRunId`, conçu pour ça depuis une phase
+    antérieure, n'était jusque-là jamais renseigné : le Framework des
+    Agents n'écrivait AUCUNE ligne de coût). Les deux couches partagent
+    donc désormais le même budget mensuel par organisation.
+  - Réglage exposé dans Paramètres → Entreprise (`OrganizationForm`,
+    champ "Quota IA mensuel dur") et affiché (consommation du mois en
+    cours) dans Paramètres → Intelligence artificielle.
 - **Fichiers concernés** : `src/lib/ai/quota.ts` (nouveau), `src/lib/ai/index.ts`,
-  `src/lib/agents/llm/index.ts`, migration Prisma (`Organization.aiMonthlyBudgetUsd`).
+  `src/lib/agents/shared/generation.ts`, `src/lib/errors.ts` (nouvelle
+  `QuotaExceededError`, 429), `src/lib/sequence-engine.ts`,
+  `src/app/api/messages/generate/route.ts`,
+  `src/app/api/leads/[id]/analyze/route.ts`,
+  `src/app/api/leads/[id]/simulate-reply/route.ts`,
+  `src/lib/validations/organization.ts`, `src/components/organization-form.tsx`,
+  `src/app/(app)/settings/page.tsx`, migration Prisma
+  (`Organization.aiMonthlyBudgetUsd`, `AIRequestKind.AGENT_NARRATIVE`).
 - **Complexité** : Moyenne.
 - **Prérequis** : AR-0050.
-- **Tests nécessaires** : une organisation au quota atteint est bloquée
-  (jamais seulement avertie) ; isolation multi-tenant du quota.
+- **Tests** : `tests/ai/quota.test.ts` — pas de quota = illimité ; blocage
+  explicite au dépassement ; isolation multi-tenant ; fenêtre glissante
+  limitée au mois civil en cours ; `getAIProviderForOrganization` refuse
+  de retourner un fournisseur au-delà du quota ; un run d'agent RÉEL de
+  bout en bout (Agent Relance) réussit normalement sous le quota et
+  échoue explicitement (`AgentRun.status = FAILED`, aucun message créé)
+  une fois dépassé ; `tests/settings/organization-settings.test.ts` pour
+  la validation du nouveau champ.
 
 ### AR-0052 — `SmtpEmailProvider` — déjà livrée via AR-0145 (v0.9)
 Voir `src/lib/email/providers/smtp.ts` (task #86, v0.9) — implémentation

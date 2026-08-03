@@ -60,6 +60,8 @@ model Organization {
   phone                    String?
   invoicePrefix            String?  @default("FA")
   quotePrefix              String?  @default("DEV")
+  /// Quota IA mensuel dur en USD (v0.9 bis, AR-0051) — `null` = pas de quota (illimité, comportement inchangé pour les organisations existantes). Vérifié avant chaque appel IA réel (couche `src/lib/ai/` ET Framework des Agents), voir `src/lib/ai/quota.ts`.
+  aiMonthlyBudgetUsd       Float?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -1489,6 +1491,8 @@ enum AIRequestKind {
   RECOMMEND_NEXT_ACTION
   TRANSLATE
   GENERATE_REPORT
+  /// Génération narrative du Framework des Agents (`generateAgentNarrative`, v0.9 bis AR-0051) — distincte des types ci-dessus, propres à la couche IA historique `src/lib/ai/`.
+  AGENT_NARRATIVE
 }
 
 enum AIRequestStatus {

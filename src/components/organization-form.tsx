@@ -25,6 +25,8 @@ export type OrganizationFormData = {
   phone: string;
   invoicePrefix: string;
   quotePrefix: string;
+  /** Quota IA mensuel dur en USD (v0.9 bis, AR-0051). `null` = pas de quota (illimité). */
+  aiMonthlyBudgetUsd: number | null;
 };
 
 const DEFAULT_SERVICES = [
@@ -65,6 +67,7 @@ export function OrganizationForm({
     phone: initial.phone ?? "",
     invoicePrefix: initial.invoicePrefix ?? "FA",
     quotePrefix: initial.quotePrefix ?? "DEV",
+    aiMonthlyBudgetUsd: initial.aiMonthlyBudgetUsd ?? null,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -216,6 +219,21 @@ export function OrganizationForm({
         <label htmlFor="requireValidation" className="text-sm text-p360-ink">
           Validation humaine obligatoire avant l&apos;envoi des messages générés
         </label>
+      </div>
+      <div>
+        <label className="label">Quota IA mensuel dur (USD)</label>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          className="input"
+          value={form.aiMonthlyBudgetUsd ?? ""}
+          onChange={(e) => update("aiMonthlyBudgetUsd", e.target.value === "" ? null : Number(e.target.value))}
+          placeholder="Laisser vide = pas de quota (illimité)"
+        />
+        <p className="text-xs text-p360-muted mt-1">
+          Une fois ce budget mensuel atteint (analyse/scoring/messages/agents IA confondus), tout nouvel appel IA réel est bloqué explicitement jusqu&apos;au mois suivant. Voir la page Métriques pour la consommation actuelle.
+        </p>
       </div>
       {error && <p className="text-sm text-p360-danger">{error}</p>}
       {saved && <p className="text-sm text-p360-success">Enregistré.</p>}

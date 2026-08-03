@@ -34,6 +34,23 @@ describe("organizationSettingsSchema — coordonnées légales/TVA/logo", () => 
   });
 });
 
+/**
+ * Quota IA mensuel dur (v0.9 bis, AR-0051) — champ optionnel, `null` =
+ * illimité (comportement inchangé sans configuration), doit rester positif.
+ */
+describe("organizationSettingsSchema — aiMonthlyBudgetUsd (AR-0051)", () => {
+  it("accepte un quota positif, null (illimité), ou l'absence du champ", () => {
+    expect(organizationSettingsSchema.safeParse({ name: "Provence 360", aiMonthlyBudgetUsd: 250 }).success).toBe(true);
+    expect(organizationSettingsSchema.safeParse({ name: "Provence 360", aiMonthlyBudgetUsd: null }).success).toBe(true);
+    expect(organizationSettingsSchema.safeParse({ name: "Provence 360" }).success).toBe(true);
+  });
+
+  it("rejette un quota négatif ou nul", () => {
+    expect(organizationSettingsSchema.safeParse({ name: "Provence 360", aiMonthlyBudgetUsd: 0 }).success).toBe(false);
+    expect(organizationSettingsSchema.safeParse({ name: "Provence 360", aiMonthlyBudgetUsd: -10 }).success).toBe(false);
+  });
+});
+
 const runIfDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
 runIfDatabase("Persistance des coordonnées légales/TVA/logo sur Organization", () => {

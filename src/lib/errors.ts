@@ -62,6 +62,14 @@ export class ConflictError extends AppError {
   }
 }
 
+/** Quota dépassé (ex. quota IA mensuel par organisation, AR-0051) — erreur métier attendue, jamais un incident (voir `toApiErrorResponse`). */
+export class QuotaExceededError extends AppError {
+  constructor(message = "Quota dépassé.", details?: unknown) {
+    super(message, { statusCode: 429, expose: true, details });
+    this.name = "QuotaExceededError";
+  }
+}
+
 /**
  * Convertit n'importe quelle erreur (`AppError` ou exception inattendue) en
  * `NextResponse` JSON, en journalisant systématiquement côté serveur.

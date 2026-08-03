@@ -11,6 +11,7 @@ import { EmailSettingsForm } from "@/components/email-settings-form";
 import { DEFAULT_SCORING_RULES, type ScoringRule } from "@/lib/scoring";
 import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { listRegisteredLlmProviderKeys, registerBuiltInLlmProviders } from "@/lib/agents/llm";
+import { getAiSpendThisMonthUsd } from "@/lib/ai/quota";
 import { MembershipRole } from "@/generated/prisma/enums";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ calendar?: string; reason?: string }> }) {
@@ -66,6 +67,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             phone: org.phone ?? "",
             invoicePrefix: org.invoicePrefix ?? "FA",
             quotePrefix: org.quotePrefix ?? "DEV",
+            aiMonthlyBudgetUsd: org.aiMonthlyBudgetUsd,
           }}
         />
       </section>
@@ -80,7 +82,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       <section className="card p-6">
         <h2 className="text-lg font-semibold text-p360-ink mb-2">Intelligence artificielle</h2>
-        <AiSettingsStatus />
+        <AiSettingsStatus organizationId={org.id} aiMonthlyBudgetUsd={org.aiMonthlyBudgetUsd} />
       </section>
 
       <section className="card p-6">
@@ -153,10 +155,11 @@ async function IntegrationsList({ organizationId }: { organizationId: string }) 
  * aux identifiants email (task #92). Cette section affiche donc un statut
  * honnête plutôt qu'un formulaire qui n'agirait sur rien.
  */
-async function AiSettingsStatus() {
+async function AiSettingsStatus({ organizationId, aiMonthlyBudgetUsd }: { organizationId: string; aiMonthlyBudgetUsd: number | null }) {
   registerBuiltInLlmProviders();
   const llmProvider = process.env.LLM_PROVIDER ?? "demo";
   const legacyAiProvider = process.env.AI_PROVIDER ?? "demo";
+  const spentThisMonth = await getAiSpendThisMonthUsd(organizationId);
   return (
     <div className="text-sm text-p360-ink space-y-2">
       <p>
@@ -170,6 +173,13 @@ async function AiSettingsStatus() {
       </p>
       <p className="text-xs text-p360-muted">
         Le choix du fournisseur se fait via les variables d&apos;environnement <code>LLM_PROVIDER</code>/<code>AI_PROVIDER</code> au déploiement (clé API requise pour un fournisseur réel) — voir README.
+      </p>
+      <p>
+        Quota IA mensuel (voir champ &laquo;&nbsp;Entreprise&nbsp;&raquo; ci-dessus) :{" "}
+        <span className="badge bg-p360-lavender-light">
+          {spentThisMonth.toFixed(2)} $ {aiMonthlyBudgetUsd ? `/ ${aiMonthlyBudgetUsd.toFixed(2)} $` : "(pas de quota configuré)"}
+        </span>
+        .
       </p>
     </div>
   );

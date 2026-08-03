@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
-import { getAIProvider } from "@/lib/ai";
+import { getAIProviderForOrganization } from "@/lib/ai";
+import { QuotaExceededError } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
 import { LeadStage } from "@/generated/prisma/enums";
 
@@ -18,7 +19,13 @@ export async function POST(_request: Request, { params }: Params) {
   });
   if (!lead) return NextResponse.json({ error: "Prospect introuvable." }, { status: 404 });
 
-  const ai = getAIProvider();
+  let ai;
+  try {
+    ai = await getAIProviderForOrganization(actor.organization.id);
+  } catch (error) {
+    if (error instanceof QuotaExceededError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    throw error;
+  }
   const facts = {
     establishmentName: lead.establishmentName,
     category: lead.category,
