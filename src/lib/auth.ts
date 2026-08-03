@@ -5,9 +5,12 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { MembershipRole } from "@/generated/prisma/enums";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
+import { TooManyRequestsError } from "@/lib/errors";
 
 export { SESSION_COOKIE };
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 jours
+const LOGIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCKOUT_MAX_FAILURES = 8;
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 10);
@@ -115,6 +118,26 @@ export async function requireRole(roles: MembershipRole[]): Promise<CurrentActor
     redirect("/dashboard?error=forbidden");
   }
   return actor;
+}
+
+/**
+ * Verrouillage de compte durable (v0.10, AR-0155) — repose sur `LoginEvent`
+ * (Postgres, déjà journalisé depuis v0.1, partagé entre toutes les
+ * instances de l'application), pas un compteur en mémoire par processus.
+ * Corrige un manque réel : chaque tentative échouée était déjà
+ * journalisée mais rien ne la relisait jamais pour bloquer un compte —
+ * la connexion était intégralement force-brutable. Bloque explicitement
+ * après `LOGIN_LOCKOUT_MAX_FAILURES` échecs dans la fenêtre glissante,
+ * jamais un simple avertissement.
+ */
+export async function assertLoginNotLocked(email: string): Promise<void> {
+  const since = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS);
+  const recentFailures = await prisma.loginEvent.count({
+    where: { email, success: false, createdAt: { gte: since } },
+  });
+  if (recentFailures >= LOGIN_LOCKOUT_MAX_FAILURES) {
+    throw new TooManyRequestsError("Trop de tentatives de connexion. Réessayez dans quelques minutes.");
+  }
 }
 
 export async function recordLoginEvent(params: {

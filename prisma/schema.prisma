@@ -317,6 +317,8 @@ model LoginEvent {
 
   @@index([userId])
   @@index([organizationId])
+  /// Verrouillage de compte (v0.10, AR-0155) — compte les échecs récents par email dans une fenêtre glissante.
+  @@index([email, createdAt])
 }
 
 // ---------------------------------------------------------------------------

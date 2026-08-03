@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createSession, recordLoginEvent, verifyPassword } from "@/lib/auth";
+import { assertLoginNotLocked, createSession, recordLoginEvent, verifyPassword } from "@/lib/auth";
 import { loginSchema } from "@/lib/validations/auth";
 import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
+import { TooManyRequestsError } from "@/lib/errors";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -11,6 +12,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Données invalides." }, { status: 400 });
   }
   const { email, password } = parsed.data;
+
+  try {
+    await assertLoginNotLocked(email);
+  } catch (error) {
+    if (error instanceof TooManyRequestsError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
+  }
 
   const user = await prisma.user.findUnique({
     where: { email },
