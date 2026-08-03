@@ -6,6 +6,7 @@ import { getGoogleCalendarBusySlots, trySyncAppointmentToGoogle } from "@/lib/ca
 import { onAppointmentBooked } from "@/lib/automation-engine";
 import { stopEnrollmentsForLead } from "@/lib/sequence-engine";
 import { writeAuditLog } from "@/lib/audit";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 import { EnrollmentStopReason } from "@/generated/prisma/enums";
 import type { ToolHandler } from "@/lib/agents/types";
 
@@ -72,6 +73,7 @@ export const bookAppointmentTool: ToolHandler<
     await onAppointmentBooked(lead.id, installation.organizationId);
     await stopEnrollmentsForLead(lead.id, EnrollmentStopReason.APPOINTMENT_BOOKED);
     await trySyncAppointmentToGoogle(installation.organizationId, appointment);
+    await publishAutomationEvent("appointment.created", { organizationId: installation.organizationId, leadId: lead.id, appointmentId: appointment.id });
     await writeAuditLog({
       organizationId: installation.organizationId,
       leadId: lead.id,

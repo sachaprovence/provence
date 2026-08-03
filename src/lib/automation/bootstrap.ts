@@ -4,6 +4,7 @@ import { registerBuiltInAutomationActions } from "./actions";
 import { registerBuiltInQueueProviders } from "./queue";
 import { registerBuiltInLockManagers } from "./lock";
 import { subscribeAutomationTriggerEvents } from "./trigger-engine";
+import { ensureAutomationTemplates } from "./templates/seed-templates";
 
 let registered = false;
 
@@ -26,4 +27,10 @@ export function registerBuiltInAutomationComponents(): void {
   registerBuiltInQueueProviders();
   registerBuiltInLockManagers();
   subscribeAutomationTriggerEvents();
+}
+
+/** Seed des templates (accède à la base, donc séparé de l'enregistrement en mémoire ci-dessus) — voir `instrumentation.ts`. */
+export async function syncAutomationCatalog(): Promise<void> {
+  registerBuiltInAutomationComponents();
+  await ensureAutomationTemplates();
 }

@@ -48,5 +48,16 @@ export async function register() {
     } catch (error) {
       logger.error({ err: error }, "Échec de l'initialisation du Workflow Engine.");
     }
+
+    // Enregistre les registres de l'Automation Engine (déclencheurs, jobs) et
+    // seed les automatisations métier prêtes à l'emploi (idempotent) — voir
+    // src/lib/automation/bootstrap.ts.
+    try {
+      const { syncAutomationCatalog } = await import("@/lib/automation/bootstrap");
+      await syncAutomationCatalog();
+      logger.info("Catalogue de l'Automation Engine synchronisé.");
+    } catch (error) {
+      logger.error({ err: error }, "Échec de l'initialisation de l'Automation Engine.");
+    }
   }
 }

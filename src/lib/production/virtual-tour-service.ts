@@ -88,7 +88,7 @@ export async function createVirtualTour(organizationId: string, data: VirtualTou
     entityType: "VirtualTour",
     entityId: tour.id,
   });
-  await publishAutomationEvent("virtual_tour.created", { organizationId, leadId });
+  await publishAutomationEvent("virtual_tour.created", { organizationId, leadId, virtualTourId: tour.id });
 
   return tour;
 }
@@ -121,8 +121,11 @@ export async function updateVirtualTour(
     },
   });
 
+  if (data.status === VirtualTourStatus.SHOOTING_DONE) {
+    await publishAutomationEvent("virtual_tour.shooting_done", { organizationId, leadId: existing.leadId, virtualTourId: tour.id });
+  }
   if (data.status === VirtualTourStatus.PUBLISHED) {
-    await publishAutomationEvent("virtual_tour.published", { organizationId, leadId: existing.leadId });
+    await publishAutomationEvent("virtual_tour.published", { organizationId, leadId: existing.leadId, virtualTourId: tour.id });
   }
 
   return tour;

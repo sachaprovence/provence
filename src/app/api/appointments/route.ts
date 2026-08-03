@@ -7,6 +7,7 @@ import { stopEnrollmentsForLead } from "@/lib/sequence-engine";
 import { writeAuditLog } from "@/lib/audit";
 import { EnrollmentStopReason } from "@/generated/prisma/enums";
 import { trySyncAppointmentToGoogle } from "@/lib/calendar/google";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 
 export async function GET(request: Request) {
   const actor = await requireActorApi();
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
   await onAppointmentBooked(lead.id, actor.organization.id);
   await stopEnrollmentsForLead(lead.id, EnrollmentStopReason.APPOINTMENT_BOOKED);
   await trySyncAppointmentToGoogle(actor.organization.id, appointment);
+  await publishAutomationEvent("appointment.created", { organizationId: actor.organization.id, leadId: lead.id, appointmentId: appointment.id });
 
   await writeAuditLog({
     organizationId: actor.organization.id,

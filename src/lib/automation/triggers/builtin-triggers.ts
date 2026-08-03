@@ -41,6 +41,18 @@ const BUILT_IN_AUTOMATION_TRIGGER_TYPES = [
   { key: "webhook.external", name: "Webhook externe", description: "Rappel HTTP entrant d'un service tiers (ex. paiement, signature électronique).", category: "intégration", kind: "webhook" },
   { key: "manual.user_action", name: "Déclencheur manuel", description: "Déclenchement manuel depuis l'interface ou l'API.", category: "manuel", kind: "manual" },
   { key: "custom", name: "Déclencheur personnalisé", description: "Clé d'évènement libre, pour tout besoin non couvert par le catalogue.", category: "extensibilité", kind: "event" },
+  // Évènements métier Provence 360 (v0.9, task #91) — RÉELLEMENT câblés, voir `trigger-engine.ts#REAL_EMISSION_EVENT_KEYS` (ADR 0037).
+  { key: "appointment.created", name: "Rendez-vous confirmé", description: "Un rendez-vous vient d'être créé.", category: "crm", kind: "event" },
+  { key: "quote.sent", name: "Devis envoyé", description: "Un devis vient d'être envoyé à un prospect/client.", category: "commercial", kind: "event" },
+  { key: "quote.signed", name: "Devis signé", description: "Un devis vient d'être signé.", category: "commercial", kind: "event" },
+  { key: "quote.signature_declined", name: "Signature de devis refusée", description: "Une demande de signature de devis vient d'être refusée.", category: "commercial", kind: "event" },
+  { key: "invoice.created", name: "Facture créée", description: "Une facture vient d'être créée à partir d'un devis accepté.", category: "finance", kind: "event" },
+  { key: "invoice.sent", name: "Facture envoyée", description: "Une facture vient d'être envoyée.", category: "finance", kind: "event" },
+  { key: "invoice.paid", name: "Paiement reçu", description: "Une facture vient d'être marquée payée.", category: "finance", kind: "event" },
+  { key: "virtual_tour.created", name: "Visite 3D créée", description: "Une visite 3D vient d'être créée.", category: "production", kind: "event" },
+  { key: "virtual_tour.shooting_done", name: "Visite terminée", description: "La prise de vue d'une visite 3D vient d'être marquée terminée.", category: "production", kind: "event" },
+  { key: "virtual_tour.published", name: "Visite 3D publiée", description: "Une visite 3D vient d'être publiée.", category: "production", kind: "event" },
+  { key: "property.created", name: "Bien immobilier créé", description: "Un bien immobilier vient d'être créé.", category: "crm", kind: "event" },
 ] as const;
 
 export function registerBuiltInAutomationTriggerTypes(): void {

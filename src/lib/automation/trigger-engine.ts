@@ -126,7 +126,16 @@ export async function processDueAutomationSchedules(now: Date = new Date()): Pro
   return { triggered };
 }
 
-/** Clés d'évènement RÉELLEMENT publiées par une route Provence 360 (voir ADR 0037) — abonnement explicite une fois au bootstrap, jamais un abonnement générique "à tout". */
+/**
+ * Clés d'évènement RÉELLEMENT publiées par une route/un service Provence 360
+ * (voir ADR 0037) — abonnement explicite une fois au bootstrap, jamais un
+ * abonnement générique "à tout". Étendue en v0.9 (task #91, automatisations
+ * métier prêtes à l'emploi) avec les évènements commerciaux/finance/
+ * production déjà publiés par les services v0.9 (`quote-service.ts`,
+ * `invoice-service.ts`, `virtual-tour-service.ts`, `appointments`) mais
+ * jusque-là sans abonné — exactement le cas anticipé par l'ADR 0037
+ * ("étendre le câblage réel se limite à ajouter une clé ici").
+ */
 const REAL_EMISSION_EVENT_KEYS = [
   "organization.created",
   "workspace.created",
@@ -136,6 +145,17 @@ const REAL_EMISSION_EVENT_KEYS = [
   "lead.updated",
   "lead.deleted",
   "import.completed",
+  "appointment.created",
+  "quote.sent",
+  "quote.signed",
+  "quote.signature_declined",
+  "invoice.created",
+  "invoice.sent",
+  "invoice.paid",
+  "virtual_tour.created",
+  "virtual_tour.shooting_done",
+  "virtual_tour.published",
+  "property.created",
 ] as const;
 
 let subscribed = false;
