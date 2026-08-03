@@ -2127,57 +2127,257 @@ SMTP réelle, configuration par organisation. Rien à faire ici.
 
 ---
 
-## Version 0.10 — Sécurité avancée (MOD-17, porte obligatoire avant v1.0)
+## Version 0.10 — Stabilisation production (MOD-17, porte obligatoire avant v1.0)
+
+> **Contexte** : avant de lancer cette version, un audit exhaustif du code
+> (pas seulement des ADR/BACKLOG existants) a été mené par 3 revues
+> indépendantes ciblées (sécurité/isolation multi-tenant ; dette technique/
+> code mort/duplication/performance ; couverture de tests/migrations/
+> observabilité/documentation/CI), plus une vérification manuelle
+> ciblée du parcours de réinitialisation de mot de passe. Les tâches
+> ci-dessous sont les constats classés **P0** (indispensables avant v1.0)
+> transformés en tâches atomiques. Les constats **P1** (fortement
+> recommandés mais non bloquants) et **P2** (peuvent attendre après v1.0)
+> sont listés dans le rapport OWASP (`AR-0056`) plutôt que transformés en
+> tâches — voir aussi le rapport final « Go / No Go v1.0 ».
+
+### AR-0153 — Correction critique : lien de réinitialisation de mot de passe jamais envoyé par email réel
+- **Constat (P0, Critique)** : `POST /api/auth/reset-password/request`
+  renvoie **toujours** `demoResetLink` en clair dans la réponse JSON,
+  quel que soit l'environnement — même quand un vrai fournisseur email
+  est configuré (`EMAIL_PROVIDER=smtp/resend/postmark/brevo/gmail/
+  outlook`). Aucun email réel n'est jamais envoyé. Conséquence concrète :
+  n'importe qui connaissant l'adresse email d'un compte peut appeler cette
+  route et récupérer directement un lien de réinitialisation valide dans
+  la réponse HTTP — prise de contrôle de compte triviale en production.
+  Cette route date de la Phase 0 (avant l'existence d'un fournisseur email
+  réel, v0.9) et n'a jamais été mise à jour depuis.
+- **Description** : envoyer réellement l'email de réinitialisation via
+  `getEmailProvider().send(...)` quand un fournisseur réel est actif ;
+  ne renvoyer `demoResetLink` dans la réponse QUE si `getEmailProvider().name
+  === "demo"`. Ne jamais réveler si l'email existe ou non (comportement
+  déjà correct, conservé). Mettre à jour l'écran de demande de
+  réinitialisation pour afficher un message de confirmation générique
+  quand aucun lien démo n'est renvoyé.
+- **Fichiers concernés** : `src/app/api/auth/reset-password/request/route.ts`,
+  `src/app/(auth)/reset-password/page.tsx`.
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : en mode démo, comportement inchangé (lien
+  renvoyé) ; avec un fournisseur réel configuré (vrai serveur HTTP/SMTP
+  local), l'email est réellement envoyé et **aucun** lien n'apparaît dans
+  la réponse JSON ; l'énumération d'email (email inexistant) reste
+  indétectable dans les deux modes.
+
+### AR-0154 — Masquage des secrets dans les réponses API du Communication Hub
+- **Constat (P0, Critique)** : `PUT /api/communications/config/[channel]`
+  (`updateChannelConfig`) renvoie l'objet `Integration` complet, y compris
+  le `config` JSON brut — tout secret qu'un admin y a saisi (clé API
+  Twilio, jeton WhatsApp, secret de signature webhook...) est donc renvoyé
+  en clair dans la réponse HTTP (visible dans les devtools navigateur, un
+  éventuel proxy/APM, ou tout journal HTTP). Le fournisseur email a déjà
+  résolu ce problème (`getEmailConfigPreview`) — le Communication Hub ne
+  suit pas encore le même patron.
+- **Description** : ajouter un aperçu masqué (même patron que
+  `getEmailConfigPreview` : ne renvoyer que la présence d'un secret via un
+  booléen, jamais sa valeur) et l'utiliser dans la réponse de la route au
+  lieu de l'intégration brute.
+- **Fichiers concernés** : `src/lib/communication/hub-service.ts`,
+  `src/app/api/communications/config/[channel]/route.ts`.
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : la réponse de `PUT` ne contient jamais la valeur
+  d'un secret soumis, seulement sa présence.
+
+### AR-0155 — Rate limiting et verrouillage de compte sur l'authentification
+- **Constat (P0, Critique/Élevé)** : aucune limitation de débit n'existe
+  nulle part dans l'application pour les requêtes HTTP entrantes (le seul
+  "rate limiter" existant, `src/lib/automation/concurrency/rate-limiter.ts`,
+  protège des appels sortants vers des API tierces, pas les requêtes
+  entrantes). `POST /api/auth/login`, `/api/auth/register` et
+  `/api/auth/reset-password/request` peuvent donc être appelés sans
+  aucune limite — `LoginEvent` journalise chaque tentative échouée mais
+  rien ne le relit jamais pour bloquer un compte ou ralentir les essais :
+  la connexion est intégralement force-brutable.
+- **Description** : (a) verrouillage de compte durable, cohérent
+  multi-instance : `assertLoginNotAtLocked(email)` interroge `LoginEvent`
+  (déjà en base depuis v0.1) pour compter les échecs récents et bloque
+  explicitement au-delà d'un seuil, appelé en tout début de
+  `POST /api/auth/login` ; (b) limitation de débit best-effort par IP
+  (fenêtre glissante en mémoire, même honnêteté documentée que le
+  rate-limiter existant — jamais partagée entre instances, limite
+  assumée) dans `src/proxy.ts` (Next.js 16 : le Proxy tourne par défaut
+  sur le runtime Node.js, confirmé dans la documentation embarquée —
+  utilisable directement, contrairement à l'ancien `middleware.ts` limité
+  à l'Edge Runtime) pour `POST /api/auth/{login,register}` et
+  `POST /api/auth/reset-password/request`.
+- **Fichiers concernés** : `src/lib/auth.ts` (nouvelle fonction de
+  verrouillage), `src/app/api/auth/login/route.ts`, `src/lib/security/
+  rate-limiter.ts` (nouveau), `src/proxy.ts`, migration Prisma (index
+  `LoginEvent(email, createdAt)` pour la performance de la requête de
+  verrouillage).
+- **Complexité** : Moyenne.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : un compte avec N échecs récents est bloqué
+  (jamais seulement averti) ; un compte avec des échecs anciens (hors
+  fenêtre) n'est pas bloqué ; une IP dépassant le débit configuré reçoit
+  un 429 explicite ; un utilisateur légitime sous le seuil n'est jamais
+  affecté.
+
+### AR-0156 — Secret de webhook obligatoire (Workflow Engine + Automation Engine)
+- **Constat (P0, Moyen/Élevé)** : les déclencheurs webhook du Workflow
+  Engine (v0.6) et de l'Automation Engine (v0.8) ne vérifient le secret
+  `X-Webhook-Secret` QUE s'il a été explicitement configuré
+  (`if (configuredSecret) { ... }`) — documenté comme limite connue de
+  conception (ADR 0019), mais laisse en pratique n'importe quel
+  déclencheur webhook créé sans secret ouvert à quiconque devine
+  `workspaceId` + `workflowKey`/`automationKey` (pas de force brute
+  nécessaire, ce sont des identifiants prévisibles/observables).
+- **Description** : générer automatiquement un secret (réutilise
+  `generateToken()` déjà existant dans `src/lib/auth.ts`, aucune nouvelle
+  logique cryptographique) à chaque (ré)indexation d'un déclencheur
+  webhook (`reindexTriggerBindings`/`reindexAutomationTriggerBindings`)
+  si le noeud n'en fournit pas un explicitement. Migration de rattrapage
+  pour les liaisons existantes sans secret. Les deux routes webhook
+  exigent désormais TOUJOURS une correspondance de secret (plus de
+  branche conditionnelle qui l'ignore).
+- **Fichiers concernés** : `src/lib/workflows/workflow-service.ts`,
+  `src/lib/automation/registry/automation-service.ts`,
+  `src/app/api/webhooks/workflows/[workspaceId]/[workflowKey]/route.ts`,
+  `src/app/api/webhooks/automations/[workspaceId]/[automationKey]/route.ts`,
+  migration Prisma (backfill `config.secret`).
+- **Complexité** : Moyenne.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : un nouveau déclencheur webhook a toujours un
+  secret dès sa création ; une liaison existante sans secret (avant
+  migration) en obtient un après ; une requête sans en-tête ou avec un
+  secret incorrect est rejetée explicitement, quelle que soit la
+  configuration.
 
 ### AR-0055 — Suite exhaustive de tests d'isolation multi-tenant
-- **Description** : généraliser le gabarit AR-0004 à *toutes* les routes de
-  `src/app/api/**` (une entrée de test par route), pas seulement `leads`.
-- **Fichiers concernés** : `tests/tenant-isolation/**` (extension
-  complète).
+- **Constat (P0, Élevé)** : l'implémentation elle-même est bien scopée
+  par organisation (vérifié par l'audit — aucune fuite IDOR confirmée
+  dans les routes échantillonnées), mais `tests/tenant-isolation/` ne
+  couvre que 8 domaines (agents, commercial, director, knowledge, leads,
+  workflows, workspace-lifecycle, workspaces) sur la trentaine de domaines
+  API réels. Aucun filet de sécurité automatisé n'existe pour les
+  domaines financiers (factures, devis) et porteurs de secrets
+  (communications, email, calendrier) — précisément les zones où un futur
+  refactor risquerait le plus de réintroduire une fuite silencieuse.
+- **Description** : ajouter un test d'isolation multi-tenant (gabarit
+  `expectNoCrossTenantLeak`, AR-0004) pour chacun des domaines non
+  couverts : factures, devis, rendez-vous, automatisations, Communication
+  Hub, email (config Gmail/Outlook), calendrier (config Google Calendar).
+- **Fichiers concernés** : `tests/tenant-isolation/{invoices,quotes,
+  appointments,automations,communications,email,calendar}.test.ts`
+  (nouveaux).
 - **Complexité** : Élevée.
-- **Estimation** : 4 jours.
-- **Prérequis** : AR-0004, l'ensemble des modules précédents livrés.
-- **Tests nécessaires** : c'est la tâche de test elle-même ; critère de
-  réussite = 100 % des routes couvertes.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : c'est la tâche de test elle-même — chaque
+  nouveau fichier vérifie qu'une organisation A ne peut jamais lire/
+  écrire/deviner une ressource de l'organisation B pour ce domaine.
 
-### AR-0056 — Revue de sécurité OWASP Top 10
-- **Description** : revue manuelle structurée (injection, auth cassée,
-  exposition de données sensibles, contrôle d'accès, mauvaise
-  configuration, etc.) sur l'ensemble de l'application, avec rapport écrit
-  et plan de correction des constats.
-- **Fichiers concernés** : `docs/security/owasp-review-<date>.md`
-  (nouveau), correctifs variables selon constats.
-- **Complexité** : Élevée.
-- **Estimation** : 3 jours (revue) + variable (correctifs).
-- **Prérequis** : AR-0055.
-- **Tests nécessaires** : chaque constat corrigé doit avoir un test de
-  non-régression associé.
+### AR-0158 — Tests manquants critiques (moteur de séquences, suppression, jetons de désinscription)
+- **Constat (P0, Élevé)** : trois modules exposés à un trafic non
+  authentifié ou porteurs d'obligations de conformité n'ont **aucun**
+  test : `src/lib/sequence-engine.ts` (moteur de relance email central,
+  consommé par 9 routes), `src/lib/suppression.ts` (liste de suppression
+  RGPD/CAN-SPAM), `src/lib/unsubscribe-token.ts` (génération/validation
+  de jeton pour le lien public de désinscription).
+- **Description** : ajouter des tests unitaires/d'intégration réels pour
+  chacun (pas de mock du comportement métier).
+- **Fichiers concernés** : `tests/crm/sequence-engine.test.ts`,
+  `tests/crm/suppression.test.ts`, `tests/crm/unsubscribe-token.test.ts`
+  (nouveaux).
+- **Complexité** : Moyenne.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : c'est la tâche elle-même — voir description.
+
+### AR-0157 — Intégration des 3 suites E2E dans la CI, sur chaque PR
+- **Constat (P0, Élevé)** : `.github/workflows/e2e.yml` ne s'exécute
+  qu'après un merge sur `main` (`push: branches: [main]`), jamais sur une
+  PR — une régression du parcours principal n'est détectée qu'APRÈS avoir
+  atteint `main`. Pire : seul `golden-path.mjs` y est exécuté ;
+  `two-organizations-isolation.mjs` (isolation multi-tenant) et
+  `automation-golden-path.mjs` (Automation Engine) ne tournent **jamais**
+  en CI, seulement manuellement — pour un SaaS multi-tenant, l'absence de
+  vérification E2E continue de l'isolation est un risque de régression
+  significatif.
+- **Description** : exécuter les 3 scripts E2E sur chaque pull request
+  (pas seulement après merge), contre un serveur de production
+  réellement démarré et seedé dans le job CI.
+- **Fichiers concernés** : `.github/workflows/e2e.yml` (déclencheur
+  étendu à `pull_request`, exécution des 3 scripts).
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : le workflow lui-même ; vérifier qu'un des 3
+  scripts délibérément cassé fait échouer la CI.
+
+### AR-0056 — Revue de sécurité OWASP Top 10 (rapport + plan de correction)
+- **Description** : revue structurée deja menée (3 audits ciblés :
+  sécurité/isolation, dette technique/performance, tests/migrations/
+  observabilité/documentation/CI) — cette tâche formalise les résultats
+  en un rapport écrit référençant chaque constat P0 (avec la tâche qui le
+  corrige), chaque constat P1/P2 (avec justification du report), et l'état
+  de correction à la date de clôture de v0.10.
+- **Fichiers concernés** : `docs/security/owasp-review-2026-08-03.md`
+  (nouveau).
+- **Complexité** : Faible (revue déjà faite, reste la rédaction).
+- **Prérequis** : AR-0153 à AR-0158.
+- **Tests nécessaires** : aucun (document).
 
 ### AR-0057 — Quota email dur par organisation
 - **Description** : généraliser le principe du quota IA (AR-0051) à
   l'envoi d'email (au-delà du `dailySendLimit` déjà existant, le rendre
   strictement bloquant et testé).
-- **Fichiers concernés** : `src/lib/email/index.ts`, `src/lib/quota.ts`.
+- **Fichiers concernés** : `src/lib/email/index.ts`, `src/lib/email/quota.ts` (nouveau).
 - **Complexité** : Faible.
-- **Estimation** : 1 jour.
 - **Prérequis** : AR-0051.
-- **Tests nécessaires** : test de dépassement bloquant.
+- **Tests nécessaires** : test de dépassement bloquant, isolation
+  multi-tenant du quota.
 
 ### AR-0058 — Préparation 2FA (schéma + interface, sans activation forcée)
 - **Description** : ajouter le modèle de données et l'interface
   nécessaires à une future activation 2FA (TOTP) par utilisateur, sans
   encore la rendre obligatoire — pose les fondations pour `MOD-17`
   post-v1.0.
-- **Fichiers concernés** : `prisma/schema.prisma` (champ `twoFactorSecret`
-  optionnel sur `User`), `src/lib/auth.ts`.
+- **Fichiers concernés** : `prisma/schema.prisma` (champs `twoFactorSecret`/
+  `twoFactorEnabled` optionnels sur `User`), `src/lib/auth.ts`,
+  `src/lib/two-factor.ts` (nouveau).
 - **Complexité** : Moyenne.
-- **Estimation** : 2 jours.
-- **Prérequis** : AR-0055.
+- **Prérequis** : aucun.
 - **Tests nécessaires** : test d'activation/désactivation du 2FA par un
   utilisateur de test, sans impact sur les utilisateurs qui ne l'activent
   pas.
 
-**Total estimé v0.10 : ~10 jours (hors correctifs variables AR-0056).**
+### AR-0159 — Mise à jour de `README.md` (périmètre fonctionnel réel)
+- **Constat (P0, Moyen — impact Élevé)** : `README.md` ne décrit encore
+  que le parcours CRM v0.1 d'origine et liste dans « Fonctionnalités
+  restant à développer » des éléments déjà livrés. Il ne mentionne nulle
+  part le Framework des Agents, le Workflow Engine, l'Automation Engine,
+  l'intelligence documentaire (Memory/Knowledge/Context Engine), les
+  workspaces multi-tenant, le tableau de bord de métriques, la
+  facturation, ou la synchronisation calendrier — environ la moitié du
+  produit réel est invisible pour quiconque ne lit que ce fichier.
+- **Description** : réécrire la section de présentation des
+  fonctionnalités pour refléter fidèlement le produit actuel.
+- **Fichiers concernés** : `README.md`.
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : aucun (document).
+
+**Total v0.10 : 11 tâches (AR-0153 à AR-0159 nouvelles + AR-0055/0056/
+0057/0058 concrétisées).** Constats P1 (recommandés, non bloquants —
+N+1 sur `getPerformanceDashboard`/`checkStaleQuotes`, index manquants sur
+`Quote`/`Task`, duplication de la formule de remise
+(`commercial-document-pdf.ts` vs `quote-pricing.ts`), duplication du
+patron HTTP entre fournisseurs email, `daysAgo()` dupliqué ~8 fois,
+`--max-warnings=0` en CI, scan de secrets en CI, comparaison à temps
+constant pour `CRON_SECRET`) et P2 (peuvent attendre après v1.0 —
+alerting sur seuil, tests HTTP dédiés par fournisseur vector-store/
+embedding, UI de signature électronique de devis, cache Redis, runbook de
+rollback de migration) sont détaillés dans `docs/security/
+owasp-review-2026-08-03.md` (AR-0056) plutôt que transformés en tâches.
 
 ---
 
