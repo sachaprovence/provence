@@ -124,6 +124,10 @@ model User {
   phone        String?
   avatarUrl    String?
   isActive     Boolean  @default(true)
+  /// Secret TOTP (base32) — non `null` uniquement pendant/après l'inscription 2FA (v0.10, AR-0058). Jamais exposé via l'API.
+  twoFactorSecret  String?
+  /// `true` seulement après confirmation du code lors de l'inscription — voir `src/lib/two-factor.ts`. Non appliqué à la connexion (préparation, pas encore obligatoire).
+  twoFactorEnabled Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
