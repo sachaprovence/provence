@@ -48,6 +48,14 @@ export async function bootstrapOrganization(organizationId: string) {
       data: [
         { organizationId, kind: "EMAIL", name: "Fournisseur email démo", status: "DEMO" },
         { organizationId, kind: "AI", name: "Fournisseur IA démo", status: "DEMO" },
+        // Communication Hub (v0.9, ADR 0038) — canaux additionnels. SMS/WhatsApp/Téléphone
+        // nécessitent un vrai fournisseur externe (identifiants absents ici) : mode démo.
+        // Webhooks sortants sont réellement fonctionnels (simple POST HTTP) mais nécessitent
+        // une URL cible non configurée par défaut : DISCONNECTED, pas DEMO.
+        { organizationId, kind: "SMS", name: "SMS", status: "DEMO" },
+        { organizationId, kind: "WHATSAPP", name: "WhatsApp", status: "DEMO" },
+        { organizationId, kind: "PHONE", name: "Téléphone", status: "DEMO" },
+        { organizationId, kind: "WEBHOOK", name: "Webhooks sortants", status: "DISCONNECTED" },
       ],
     }),
     prisma.pipelineStage.createMany({ data: buildDefaultPipelineStages(organizationId) }),
