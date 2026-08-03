@@ -30,6 +30,45 @@ export async function resolveEmailConfig(organizationId: string): Promise<EmailI
 }
 
 /**
+ * Réglages (task #92) : fusionne les champs fournis dans la configuration
+ * existante — un champ secret (`smtpPassword`/`apiKey`) laissé vide dans le
+ * formulaire ne doit jamais effacer un identifiant déjà enregistré. Marque
+ * l'intégration `CONNECTED` (visible dans la liste des intégrations), même
+ * principe que `communication/hub-service.ts#updateChannelConfig`.
+ */
+export async function updateEmailIntegrationConfig(
+  organizationId: string,
+  data: Partial<EmailIntegrationConfig>
+): Promise<void> {
+  const existing = await prisma.integration.findFirst({ where: { organizationId, kind: "EMAIL" } });
+  const previous = (existing?.config as EmailIntegrationConfig | null) ?? {};
+  const merged: EmailIntegrationConfig = { ...previous };
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined || value === "") continue;
+    merged[key] = value;
+  }
+
+  if (existing) {
+    await prisma.integration.update({ where: { id: existing.id }, data: { config: merged as never, status: "CONNECTED" } });
+    return;
+  }
+  await prisma.integration.create({ data: { organizationId, kind: "EMAIL", name: "Email", status: "CONNECTED", config: merged as never } });
+}
+
+/** Aperçu SANS secrets pour l'UI (jamais renvoyer `smtpPassword`/`apiKey` en clair au navigateur) — indique seulement si un secret est déjà enregistré. */
+export async function getEmailConfigPreview(organizationId: string) {
+  const config = await resolveEmailConfig(organizationId);
+  return {
+    smtpHost: typeof config.smtpHost === "string" ? config.smtpHost : "",
+    smtpPort: typeof config.smtpPort === "number" ? config.smtpPort : undefined,
+    smtpUser: typeof config.smtpUser === "string" ? config.smtpUser : "",
+    smtpSecure: Boolean(config.smtpSecure),
+    hasSmtpPassword: Boolean(config.smtpPassword),
+    hasApiKey: Boolean(config.apiKey),
+  };
+}
+
+/**
  * Valeur de config par-organisation si présente, sinon variable
  * d'environnement, sinon `undefined`. Accepte les valeurs non-string du
  * JSON (`smtpPort` est un nombre, `smtpSecure` un booléen) — toujours

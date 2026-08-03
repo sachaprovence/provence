@@ -7,8 +7,10 @@ import { TerritoriesManager } from "@/components/territories-manager";
 import { ServicesManager } from "@/components/services-manager";
 import { IcpManager } from "@/components/icp-manager";
 import { PipelineStagesManager } from "@/components/pipeline-stages-manager";
+import { EmailSettingsForm } from "@/components/email-settings-form";
 import { DEFAULT_SCORING_RULES, type ScoringRule } from "@/lib/scoring";
 import { getPipelineStages } from "@/lib/crm/pipeline-service";
+import { listRegisteredLlmProviderKeys, registerBuiltInLlmProviders } from "@/lib/agents/llm";
 import { MembershipRole } from "@/generated/prisma/enums";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ calendar?: string; reason?: string }> }) {
@@ -57,8 +59,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             dailySendLimit: org.dailySendLimit,
             rampUpEnabled: org.rampUpEnabled,
             requireMessageValidation: org.requireMessageValidation,
+            logoUrl: org.logoUrl ?? "",
+            vatNumber: org.vatNumber ?? "",
+            siret: org.siret ?? "",
+            legalAddress: org.legalAddress ?? "",
+            phone: org.phone ?? "",
+            invoicePrefix: org.invoicePrefix ?? "FA",
+            quotePrefix: org.quotePrefix ?? "DEV",
           }}
         />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Email</h2>
+        <p className="text-sm text-p360-muted mb-4">
+          Identifiants du fournisseur d&apos;envoi réel actif (choisi par la variable de déploiement <code>EMAIL_PROVIDER</code> : smtp/resend/postmark/brevo). Sans identifiant renseigné ici ni en variable d&apos;environnement, l&apos;envoi échoue explicitement (aucune simulation).
+        </p>
+        <EmailSettingsForm />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Intelligence artificielle</h2>
+        <AiSettingsStatus />
       </section>
 
       <section className="card p-6">
@@ -119,8 +141,36 @@ async function IntegrationsList({ organizationId }: { organizationId: string }) 
         </li>
       ))}
       <li className="pt-3 text-xs text-p360-muted">
-        Variables d&apos;environnement <code>EMAIL_PROVIDER</code>, <code>AI_PROVIDER</code>, <code>GOOGLE_OAUTH_CLIENT_ID</code>/<code>GOOGLE_OAUTH_CLIENT_SECRET</code>/<code>GOOGLE_OAUTH_REDIRECT_URI</code> — voir README pour brancher un fournisseur réel.
+        Variable d&apos;environnement <code>EMAIL_PROVIDER</code> (choix du fournisseur — identifiants ci-dessus), <code>GOOGLE_OAUTH_CLIENT_ID</code>/<code>GOOGLE_OAUTH_CLIENT_SECRET</code>/<code>GOOGLE_OAUTH_REDIRECT_URI</code> pour Google Calendar.
       </li>
     </ul>
+  );
+}
+
+/**
+ * Le CHOIX du fournisseur IA est un réglage de déploiement (variable
+ * d'environnement, voir ADR 0015) — jamais par organisation, contrairement
+ * aux identifiants email (task #92). Cette section affiche donc un statut
+ * honnête plutôt qu'un formulaire qui n'agirait sur rien.
+ */
+async function AiSettingsStatus() {
+  registerBuiltInLlmProviders();
+  const llmProvider = process.env.LLM_PROVIDER ?? "demo";
+  const legacyAiProvider = process.env.AI_PROVIDER ?? "demo";
+  return (
+    <div className="text-sm text-p360-ink space-y-2">
+      <p>
+        Framework des Agents (7 agents métier, Commercial, Director) : fournisseur actif{" "}
+        <span className="badge bg-p360-lavender-light">{llmProvider}</span>. Fournisseurs disponibles :{" "}
+        {listRegisteredLlmProviderKeys().join(", ")}.
+      </p>
+      <p>
+        Analyse/scoring historique (<code>src/lib/ai/</code>) : fournisseur actif{" "}
+        <span className="badge bg-p360-lavender-light">{legacyAiProvider}</span>.
+      </p>
+      <p className="text-xs text-p360-muted">
+        Le choix du fournisseur se fait via les variables d&apos;environnement <code>LLM_PROVIDER</code>/<code>AI_PROVIDER</code> au déploiement (clé API requise pour un fournisseur réel) — voir README.
+      </p>
+    </div>
   );
 }

@@ -18,6 +18,13 @@ export type OrganizationFormData = {
   dailySendLimit: number;
   rampUpEnabled: boolean;
   requireMessageValidation: boolean;
+  logoUrl: string;
+  vatNumber: string;
+  siret: string;
+  legalAddress: string;
+  phone: string;
+  invoicePrefix: string;
+  quotePrefix: string;
 };
 
 const DEFAULT_SERVICES = [
@@ -51,6 +58,13 @@ export function OrganizationForm({
     dailySendLimit: initial.dailySendLimit ?? 50,
     rampUpEnabled: initial.rampUpEnabled ?? true,
     requireMessageValidation: initial.requireMessageValidation ?? true,
+    logoUrl: initial.logoUrl ?? "",
+    vatNumber: initial.vatNumber ?? "",
+    siret: initial.siret ?? "",
+    legalAddress: initial.legalAddress ?? "",
+    phone: initial.phone ?? "",
+    invoicePrefix: initial.invoicePrefix ?? "FA",
+    quotePrefix: initial.quotePrefix ?? "DEV",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +156,46 @@ export function OrganizationForm({
         <label className="label">Signature email</label>
         <textarea className="input" rows={2} value={form.emailSignature} onChange={(e) => update("emailSignature", e.target.value)} placeholder="Jean Dupont — Provence 360" />
       </div>
+
+      <div className="border-t border-p360-lavender-light pt-5">
+        <h3 className="text-sm font-semibold text-p360-ink mb-3">Coordonnées légales, TVA et logo</h3>
+        <p className="text-xs text-p360-muted mb-4">Utilisées sur les PDF de devis et de factures.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Logo (URL de l&apos;image)</label>
+            <input className="input" value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} placeholder="https://…/logo.png" />
+          </div>
+          <div>
+            <label className="label">Téléphone</label>
+            <input className="input" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+          </div>
+          <div>
+            <label className="label">N° TVA intracommunautaire</label>
+            <input className="input" value={form.vatNumber} onChange={(e) => update("vatNumber", e.target.value)} placeholder="FR00000000000" />
+          </div>
+          <div>
+            <label className="label">SIRET</label>
+            <input className="input" value={form.siret} onChange={(e) => update("siret", e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Préfixe des devis</label>
+            <input className="input" value={form.quotePrefix} onChange={(e) => update("quotePrefix", e.target.value)} placeholder="DEV" />
+          </div>
+          <div>
+            <label className="label">Préfixe des factures</label>
+            <input className="input" value={form.invoicePrefix} onChange={(e) => update("invoicePrefix", e.target.value)} placeholder="FA" />
+          </div>
+        </div>
+        <div className="mt-4">
+          <label className="label">Adresse légale</label>
+          <textarea className="input" rows={2} value={form.legalAddress} onChange={(e) => update("legalAddress", e.target.value)} placeholder="12 rue Exemple, 84000 Avignon" />
+        </div>
+        {form.logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- aperçu d'une URL arbitraire fournie par l'organisation, non optimisable par next/image
+          <img src={form.logoUrl} alt="Aperçu du logo" className="mt-3 h-12 object-contain" />
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="label">Limite d&apos;envoi quotidienne</label>
