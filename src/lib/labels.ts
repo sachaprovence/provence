@@ -48,6 +48,18 @@ export const STAGE_BADGE_CLASS: Record<string, string> = {
   UNSUBSCRIBED: "bg-red-50 text-p360-danger",
 };
 
+/**
+ * Classe de badge selon la CATÉGORIE de reporting d'une étape de pipeline
+ * personnalisée (`PipelineStage.category`, v0.9, ADR 0038) — contrairement à
+ * `STAGE_BADGE_CLASS` (indexé par `LeadStage`, figé), celle-ci reste valable
+ * même quand une organisation renomme ses étapes.
+ */
+export const CATEGORY_BADGE_CLASS: Record<string, string> = {
+  OPEN: "bg-p360-lavender-light text-p360-blue",
+  WON: "bg-green-100 text-p360-success",
+  LOST: "bg-red-50 text-p360-danger",
+};
+
 export const MESSAGE_TYPE_LABEL: Record<string, string> = {
   FIRST_CONTACT_EMAIL: "Email de premier contact",
   FOLLOW_UP_SHORT: "Relance courte",
@@ -57,6 +69,26 @@ export const MESSAGE_TYPE_LABEL: Record<string, string> = {
   SMS: "SMS",
   PROPOSAL: "Proposition commerciale",
   APPOINTMENT_BRIEF: "Résumé avant rendez-vous",
+};
+
+export const VIRTUAL_TOUR_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Brouillon",
+  SCHEDULED: "Planifiée",
+  SHOOTING_DONE: "Prise de vue terminée",
+  PROCESSING: "En traitement",
+  PUBLISHED: "Publiée",
+  ARCHIVED: "Archivée",
+};
+
+export const PROPERTY_TYPE_LABEL: Record<string, string> = {
+  APARTMENT: "Appartement",
+  HOUSE: "Maison",
+  VILLA: "Villa",
+  COMMERCIAL_PREMISES: "Local commercial",
+  HOTEL_ROOM: "Chambre d'hôtel",
+  OFFICE: "Bureau",
+  LAND: "Terrain",
+  OTHER: "Autre",
 };
 
 export const INTENT_LABEL: Record<string, string> = {

@@ -20,53 +20,94 @@ enum MembershipRole {
   PROVIDER
 }
 
-model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  website     String?
-  logoUrl     String?
-  services    String[] @default([])
-  zones       String[] @default([])
-  pricingNote String?
-  pitch       String?
-  testimonials Json[]  @default([])
-  portfolioLinks String[] @default([])
-  availabilityNote String?
-  tone        String   @default("professionnel")
-  emailSignature String?
-  dailySendLimit Int   @default(50)
-  rampUpEnabled  Boolean @default(true)
-  scoringRules   Json?
-  requireMessageValidation Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// Rôle au niveau *workspace* (voir ADR 0005/0006) — distinct et additif par
+// rapport à `MembershipRole` (rôle d'organisation, inchangé). N'est consommé
+// que par `WorkspaceMembership` et `src/lib/workspace-permissions.ts`.
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MANAGER
+  COMMERCIAL
+  OPERATOR
+  ACCOUNTANT
+  SUPPORT
+  VIEWER
+}
 
-  memberships       Membership[]
-  territories       Territory[]
-  icps              IdealCustomerProfile[]
-  leads             Lead[]
-  tags              Tag[]
-  campaigns         Campaign[]
-  sequences         Sequence[]
-  emailAccounts     EmailAccount[]
-  tasks             Task[]
-  appointments      Appointment[]
-  opportunities     Opportunity[]
-  quotes            Quote[]
-  customers         Customer[]
-  missions          Mission[]
-  services_         Service[]
-  providers         Provider[]
-  automationRules   AutomationRule[]
-  notifications     Notification[]
-  suppressionEntries SuppressionEntry[]
-  consentRecords    ConsentRecord[]
-  auditLogs         AuditLog[]
-  aiRequests        AIRequest[]
-  integrations      Integration[]
-  webhookEvents     WebhookEvent[]
-  loginEvents       LoginEvent[]
+model Organization {
+  id                       String   @id @default(cuid())
+  name                     String
+  description              String?
+  website                  String?
+  logoUrl                  String?
+  services                 String[] @default([])
+  zones                    String[] @default([])
+  pricingNote              String?
+  pitch                    String?
+  testimonials             Json[]   @default([])
+  portfolioLinks           String[] @default([])
+  availabilityNote         String?
+  tone                     String   @default("professionnel")
+  emailSignature           String?
+  dailySendLimit           Int      @default(50)
+  rampUpEnabled            Boolean  @default(true)
+  scoringRules             Json?
+  requireMessageValidation Boolean  @default(true)
+  /// Coordonnées légales/facturation (v0.9) — utilisées par les PDF de devis/factures et les paramètres.
+  vatNumber                String?
+  siret                    String?
+  legalAddress             String?
+  phone                    String?
+  invoicePrefix            String?  @default("FA")
+  quotePrefix              String?  @default("DEV")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  memberships         Membership[]
+  workspaces          Workspace[]
+  agentDefinitions    AgentDefinition[]
+  agentInstallations  AgentInstallation[]
+  commercialProspects CommercialProspect[]
+  commercialActions   CommercialAction[]
+  workflowDefinitions WorkflowDefinition[]
+  workflowRuns        WorkflowRun[]
+  memoryEntries       MemoryEntry[]
+  knowledgeDocuments  KnowledgeDocument[]
+  embeddingRequests   EmbeddingRequest[]
+  automations         Automation[]
+  automationRuns      AutomationRun[]
+  automationJobs      AutomationJob[]
+  territories         Territory[]
+  icps                IdealCustomerProfile[]
+  leads               Lead[]
+  tags                Tag[]
+  campaigns           Campaign[]
+  sequences           Sequence[]
+  emailAccounts       EmailAccount[]
+  tasks               Task[]
+  appointments        Appointment[]
+  opportunities       Opportunity[]
+  quotes              Quote[]
+  quoteVersions       QuoteVersion[]
+  invoices            Invoice[]
+  customers           Customer[]
+  missions            Mission[]
+  services_           Service[]
+  providers           Provider[]
+  automationRules     AutomationRule[]
+  notifications       Notification[]
+  suppressionEntries  SuppressionEntry[]
+  consentRecords      ConsentRecord[]
+  auditLogs           AuditLog[]
+  aiRequests          AIRequest[]
+  integrations        Integration[]
+  webhookEvents       WebhookEvent[]
+  loginEvents         LoginEvent[]
+  pipelineStages      PipelineStage[]
+  companies           Company[]
+  properties          Property[]
+  attachments         Attachment[]
+  virtualTours        VirtualTour[]
 
   @@index([name])
 }
@@ -83,17 +124,128 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships    Membership[]
-  sessions       Session[]
-  passwordResets PasswordResetToken[]
-  loginEvents    LoginEvent[]
-  auditLogs      AuditLog[]
-  aiRequests     AIRequest[]
-  tasksAssigned  Task[]              @relation("TaskAssignee")
-  appointments   Appointment[]       @relation("AppointmentOwner")
-  notifications  Notification[]
-  messagesValidated Message[]        @relation("MessageValidatedBy")
-  notesAuthored  LeadNote[]
+  memberships                 Membership[]
+  workspaceMemberships        WorkspaceMembership[]
+  workspaceInvitationsSent    WorkspaceInvitation[]      @relation("WorkspaceInvitationInvitedBy")
+  agentInstallationsInstalled AgentInstallation[]        @relation("AgentInstalledBy")
+  agentRunsCreated            AgentRun[]                 @relation("AgentRunCreatedBy")
+  agentInterventionsAssigned  AgentInterventionRequest[] @relation("AgentInterventionAssignedTo")
+  agentInterventionsResolved  AgentInterventionRequest[] @relation("AgentInterventionResolvedBy")
+  commercialActionsDecided    CommercialAction[]         @relation("CommercialActionDecidedBy")
+  promptTemplatesCreated      PromptTemplate[]           @relation("PromptTemplateCreatedBy")
+  workflowDefinitionsCreated  WorkflowDefinition[]       @relation("WorkflowDefinitionCreatedBy")
+  workflowVersionsCreated     WorkflowVersion[]          @relation("WorkflowVersionCreatedBy")
+  workflowRunsCreated         WorkflowRun[]              @relation("WorkflowRunCreatedBy")
+  memoryEntriesCreated        MemoryEntry[]              @relation("MemoryEntryCreatedBy")
+  knowledgeDocumentsCreated   KnowledgeDocument[]        @relation("KnowledgeDocumentCreatedBy")
+  automationsCreated          Automation[]               @relation("AutomationCreatedBy")
+  automationVersionsCreated   AutomationVersion[]        @relation("AutomationVersionCreatedBy")
+  automationRunsCreated       AutomationRun[]            @relation("AutomationRunCreatedBy")
+  sessions                    Session[]
+  passwordResets              PasswordResetToken[]
+  loginEvents                 LoginEvent[]
+  auditLogs                   AuditLog[]
+  aiRequests                  AIRequest[]
+  tasksAssigned               Task[]                     @relation("TaskAssignee")
+  appointments                Appointment[]              @relation("AppointmentOwner")
+  notifications               Notification[]
+  messagesValidated           Message[]                  @relation("MessageValidatedBy")
+  notesAuthored               LeadNote[]
+  attachmentsUploaded         Attachment[]
+}
+
+// ---------------------------------------------------------------------------
+// Workspaces (sous-espaces au sein d'une organisation — voir ADR 0005)
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  isDefault      Boolean   @default(false)
+  settings       Json?
+  archivedAt     DateTime?
+  archivedById   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  WorkspaceMembership[]
+  invitations  WorkspaceInvitation[]
+  sessions     Session[]
+  leads        Lead[]
+
+  agentInstallations        AgentInstallation[]
+  agentMemoryEntries        AgentMemoryEntry[]
+  agentMessages             AgentMessage[]
+  agentInterventionRequests AgentInterventionRequest[]
+  agentPlans                AgentPlan[]
+  commercialProspects       CommercialProspect[]
+  commercialActions         CommercialAction[]
+  workflowDefinitions       WorkflowDefinition[]
+  workflowRuns              WorkflowRun[]
+  workflowTriggerBindings   WorkflowTriggerBinding[]
+  memoryEntries             MemoryEntry[]
+  knowledgeDocuments        KnowledgeDocument[]
+  embeddingRequests         EmbeddingRequest[]
+  automations               Automation[]
+  automationRuns            AutomationRun[]
+  automationJobs            AutomationJob[]
+  automationTriggerBindings AutomationTriggerBinding[]
+  companies                 Company[]
+  properties                Property[]
+  attachments               Attachment[]
+  virtualTours              VirtualTour[]
+  quoteVersions             QuoteVersion[]
+  invoices                  Invoice[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+model WorkspaceMembership {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  invitedById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+enum WorkspaceInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+model WorkspaceInvitation {
+  id          String                    @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  token       String                    @unique
+  status      WorkspaceInvitationStatus @default(PENDING)
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime                  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("WorkspaceInvitationInvitedBy", fields: [invitedById], references: [id])
+
+  @@index([workspaceId])
+  @@index([email])
 }
 
 model Membership {
@@ -114,26 +266,32 @@ model Membership {
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique
-  userAgent String?
-  ipAddress String?
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String
+  token             String   @unique
+  userAgent         String?
+  ipAddress         String?
+  // Workspace actif de cette session — jamais fourni tel quel par le client :
+  // toute mise à jour passe par une route serveur qui revérifie
+  // `WorkspaceMembership` avant d'écrire ce champ (voir ADR 0005,
+  // src/lib/workspace-context.ts).
+  activeWorkspaceId String?
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeWorkspace Workspace? @relation(fields: [activeWorkspaceId], references: [id])
 
   @@index([userId])
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  token     String   @unique
+  token     String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -211,29 +369,39 @@ enum LeadCategory {
   RESTAURANT
   EVENT_VENUE
   RETAIL
+  /// Commerce de proximité (hors restaurant/hôtel) — v0.9.
+  COMMERCE
+  /// Architecte — souvent prescripteur plutôt que client final — v0.9.
+  ARCHITECT
+  /// Notaire — souvent prescripteur (transactions immobilières) — v0.9.
+  NOTARY
+  /// Promoteur/constructeur immobilier — v0.9.
+  CONSTRUCTOR
+  /// Collectivité territoriale (mairie, office de tourisme...) — v0.9.
+  MUNICIPALITY
   OTHER
 }
 
 model IdealCustomerProfile {
-  id                String       @id @default(cuid())
-  organizationId    String
-  name              String
-  category          LeadCategory
-  zones             String[]     @default([])
-  sizeNote          String?
-  priceRange        String?
-  estimatedUnits    String?
-  hasVirtualTourExpected Boolean @default(false)
-  websiteQualityNote String?
-  socialPresenceNote String?
-  minRating         Float?
-  minReviewCount    Int?
-  priority          Int          @default(3)
-  positiveKeywords  String[]     @default([])
-  exclusionCriteria String[]     @default([])
-  isActive          Boolean      @default(true)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  id                     String       @id @default(cuid())
+  organizationId         String
+  name                   String
+  category               LeadCategory
+  zones                  String[]     @default([])
+  sizeNote               String?
+  priceRange             String?
+  estimatedUnits         String?
+  hasVirtualTourExpected Boolean      @default(false)
+  websiteQualityNote     String?
+  socialPresenceNote     String?
+  minRating              Float?
+  minReviewCount         Int?
+  priority               Int          @default(3)
+  positiveKeywords       String[]     @default([])
+  exclusionCriteria      String[]     @default([])
+  isActive               Boolean      @default(true)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leads        Lead[]
@@ -263,6 +431,192 @@ enum LeadStage {
   UNSUBSCRIBED
 }
 
+/// Catégorie de reporting d'une étape de pipeline personnalisée — voir `PipelineStage` (v0.9, ADR 0038).
+enum PipelineStageCategory {
+  OPEN
+  WON
+  LOST
+}
+
+/// Personnalisation d'AFFICHAGE du pipeline (libellé/couleur/ordre) — jamais la source de vérité métier,
+/// qui reste `Lead.stage` (l'enum `LeadStage`, inchangé). Seedée 1:1 avec `LeadStage` à la création de
+/// chaque organisation — voir ADR 0038 et `src/lib/crm/pipeline-service.ts`.
+model PipelineStage {
+  id             String                @id @default(cuid())
+  organizationId String
+  /// Correspond toujours à une valeur de `LeadStage` — jamais une étape "libre" sans sémantique métier.
+  stageKey       LeadStage
+  label          String
+  color          String                @default("#6b7280")
+  order          Int                   @default(0)
+  category       PipelineStageCategory @default(OPEN)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, stageKey])
+  @@index([organizationId, order])
+}
+
+// ---------------------------------------------------------------------------
+// Entreprises (regroupement multi-établissements) & biens immobiliers (v0.9)
+// ---------------------------------------------------------------------------
+
+/// Regroupement optionnel de plusieurs `Lead` sous une même entité juridique
+/// (groupe hôtelier, réseau d'agences...) — additif, jamais requis (voir ADR 0038).
+model Company {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  name           String
+  legalName      String?
+  siret          String?
+  website        String?
+  address        String?
+  city           String?
+  country        String   @default("France")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  leads        Lead[]
+  properties   Property[]
+
+  @@index([organizationId])
+  @@index([workspaceId])
+}
+
+/// Type physique d'un bien immobilier ("Bien immobilier" du brief v0.9) — distinct de `LeadCategory`
+/// (qui catégorise l'ÉTABLISSEMENT/client, pas le bien lui-même : une agence immobilière représente
+/// plusieurs biens de types différents).
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  VILLA
+  COMMERCIAL_PREMISES
+  HOTEL_ROOM
+  OFFICE
+  LAND
+  OTHER
+}
+
+/// Le bien physique candidat à une visite virtuelle — distinct du `Lead` qui le représente
+/// commercialement (une agence immobilière/un notaire/un architecte représente PLUSIEURS biens).
+/// Voir ADR 0038.
+model Property {
+  id             String       @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  leadId         String
+  companyId      String?
+  type           PropertyType @default(OTHER)
+  label          String
+  address        String?
+  city           String?
+  region         String?
+  country        String       @default("France")
+  latitude       Float?
+  longitude      Float?
+  surfaceM2      Float?
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company      Company?      @relation(fields: [companyId], references: [id])
+  virtualTours VirtualTour[]
+
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([companyId])
+}
+
+/// Catégorie de pièce jointe générique — documents/photos/liens (brief v0.9 : "chronologie complète").
+enum AttachmentCategory {
+  DOCUMENT
+  PHOTO
+  LINK
+}
+
+/// Pièces jointes génériques (documents/photos/liens), réutilisées par plusieurs entités —
+/// MÊME convention polymorphe que `AuditLog` (`entityType`/`entityId`, jamais une relation Prisma
+/// dédiée par type d'entité). Voir ADR 0038.
+model Attachment {
+  id             String             @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  /// Nom du modèle cible en dur (ex. "Lead", "Company", "Property", "VirtualTour", "Quote") — jamais
+  /// une chaîne libre non contrôlée par le code appelant.
+  entityType     String
+  entityId       String
+  category       AttachmentCategory
+  fileName       String
+  url            String
+  mimeType       String?
+  sizeBytes      Int?
+  uploadedById   String?
+  createdAt      DateTime           @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+  @@index([workspaceId])
+}
+
+enum VirtualTourStatus {
+  DRAFT
+  SCHEDULED
+  SHOOTING_DONE
+  PROCESSING
+  PUBLISHED
+  ARCHIVED
+}
+
+/// Module métier dédié "Visites 3D" (brief v0.9) — lié à un `Mission` existant (réutilise sa
+/// planification/son prestataire/son statut d'exécution) plutôt que de dupliquer ce mécanisme
+/// (voir ADR 0038). Photos/documents via `Attachment` (entityType="VirtualTour"), facture via
+/// `Invoice` (optionnelle, jamais générée automatiquement), historique via
+/// `src/lib/crm/timeline-service.ts` (task #81).
+model VirtualTour {
+  id             String            @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  leadId         String
+  missionId      String
+  propertyId     String?
+  invoiceId      String?
+  type           PropertyType      @default(OTHER)
+  address        String?
+  surfaceM2      Float?
+  scheduledAt    DateTime?
+  status         VirtualTourStatus @default(DRAFT)
+  matterportUrl  String?
+  tourUrl        String?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  mission      Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  property     Property?    @relation(fields: [propertyId], references: [id])
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([missionId])
+  @@index([propertyId])
+  @@index([workspaceId])
+}
+
 enum LeadSourceType {
   MANUAL
   CSV_IMPORT
@@ -286,69 +640,84 @@ model LeadSource {
 }
 
 model Lead {
-  id             String       @id @default(cuid())
+  id             String  @id @default(cuid())
   organizationId String
+  // Sous-espace de travail au sein de l'organisation (voir ADR 0005).
+  // Nullable et non exploité pour le filtrage aujourd'hui par les routes
+  // existantes (qui continuent de scoper par organizationId uniquement) ;
+  // sert de première preuve de concept du scoping par workspace et aux
+  // tests d'isolation inter-workspace.
+  workspaceId    String?
   icpId          String?
   territoryId    String?
   sourceId       String?
   campaignId     String?
   assignedToId   String?
+  /// Regroupement optionnel sous une même entité juridique (v0.9, ADR 0038) — jamais requis.
+  companyId      String?
 
   establishmentName String
   category          LeadCategory @default(OTHER)
   stage             LeadStage    @default(NEW)
 
-  websiteUrl     String?
+  websiteUrl       String?
   publicListingUrl String?
-  address        String?
-  city           String?
-  region         String?
-  country        String       @default("France")
-  latitude       Float?
-  longitude      Float?
+  address          String?
+  city             String?
+  region           String?
+  country          String  @default("France")
+  latitude         Float?
+  longitude        Float?
 
-  reviewCount    Int?
-  averageRating  Float?
-  socialLinks    Json?
+  reviewCount   Int?
+  averageRating Float?
+  socialLinks   Json?
 
   hasVirtualTour Boolean?
-  closedBusiness Boolean      @default(false)
+  closedBusiness Boolean  @default(false)
 
-  tagsRelation   Tag[]        @relation("LeadTags")
-  notesLegacy    String?
+  tagsRelation Tag[]   @relation("LeadTags")
+  notesLegacy  String?
 
-  isSuppressed   Boolean      @default(false)
-  suppressedAt   DateTime?
+  isSuppressed Boolean   @default(false)
+  suppressedAt DateTime?
 
-  importedAt     DateTime     @default(now())
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  importedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?            @relation(fields: [workspaceId], references: [id])
   icp          IdealCustomerProfile? @relation(fields: [icpId], references: [id])
   territory    Territory?            @relation(fields: [territoryId], references: [id])
   source       LeadSource?           @relation(fields: [sourceId], references: [id])
   campaign     Campaign?             @relation(fields: [campaignId], references: [id])
+  company      Company?              @relation(fields: [companyId], references: [id])
 
-  contacts     LeadContact[]
-  analyses     LeadAnalysis[]
-  scores       LeadScore[]
-  notes        LeadNote[]
-  enrollments  Enrollment[]
-  messages     Message[]
+  contacts      LeadContact[]
+  analyses      LeadAnalysis[]
+  scores        LeadScore[]
+  notes         LeadNote[]
+  enrollments   Enrollment[]
+  messages      Message[]
   conversations Conversation[]
-  tasks        Task[]
-  appointments Appointment[]
+  tasks         Task[]
+  appointments  Appointment[]
   opportunities Opportunity[]
-  quotes       Quote[]
-  customer     Customer?
-  aiRequests   AIRequest[]
-  auditLogs    AuditLog[]
+  quotes        Quote[]
+  customer      Customer?
+  aiRequests    AIRequest[]
+  auditLogs     AuditLog[]
+  properties    Property[]
+  virtualTours  VirtualTour[]
+  invoices      Invoice[]
 
+  @@unique([organizationId, publicListingUrl])
   @@index([organizationId, stage])
   @@index([organizationId, city])
   @@index([campaignId])
-  @@unique([organizationId, publicListingUrl])
+  @@index([workspaceId])
+  @@index([companyId])
 }
 
 model LeadContact {
@@ -381,10 +750,10 @@ model LeadNote {
 }
 
 model Tag {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
   name           String
-  color          String   @default("#6b7280")
+  color          String @default("#6b7280")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leads        Lead[]       @relation("LeadTags")
@@ -397,23 +766,23 @@ model Tag {
 // ---------------------------------------------------------------------------
 
 model LeadAnalysis {
-  id             String   @id @default(cuid())
-  leadId         String
-  summary        String
-  clienteleType  String?
-  digitalPresenceQuality String?
+  id                       String   @id @default(cuid())
+  leadId                   String
+  summary                  String
+  clienteleType            String?
+  digitalPresenceQuality   String?
   hasVirtualTourAssessment String?
-  opportunities  String[] @default([])
-  recommendedAngle String?
-  recommendedService String?
-  priorityLevel  String
-  personalizedArguments String[] @default([])
-  negativeSignals String[] @default([])
-  verifiedFacts  String[] @default([])
-  estimatedFacts String[] @default([])
-  missingInfo    String[] @default([])
-  aiRequestId    String?
-  createdAt      DateTime @default(now())
+  opportunities            String[] @default([])
+  recommendedAngle         String?
+  recommendedService       String?
+  priorityLevel            String
+  personalizedArguments    String[] @default([])
+  negativeSignals          String[] @default([])
+  verifiedFacts            String[] @default([])
+  estimatedFacts           String[] @default([])
+  missingInfo              String[] @default([])
+  aiRequestId              String?
+  createdAt                DateTime @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -421,12 +790,12 @@ model LeadAnalysis {
 }
 
 model LeadScore {
-  id          String   @id @default(cuid())
-  leadId      String
-  value       Int
-  category    String
-  breakdown   Json
-  computedAt  DateTime @default(now())
+  id         String   @id @default(cuid())
+  leadId     String
+  value      Int
+  category   String
+  breakdown  Json
+  computedAt DateTime @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -487,19 +856,19 @@ model Sequence {
 }
 
 model SequenceStep {
-  id                String          @id @default(cuid())
-  sequenceId        String
-  order             Int
-  delayDays         Int
-  channel           SequenceChannel
-  templateKey       String
-  conditions        Json?
-  allowedStartHour  Int             @default(8)
-  allowedEndHour    Int             @default(18)
-  allowedWeekdays   Int[]           @default([1, 2, 3, 4, 5])
-  requiresValidation Boolean        @default(true)
+  id                 String          @id @default(cuid())
+  sequenceId         String
+  order              Int
+  delayDays          Int
+  channel            SequenceChannel
+  templateKey        String
+  conditions         Json?
+  allowedStartHour   Int             @default(8)
+  allowedEndHour     Int             @default(18)
+  allowedWeekdays    Int[]           @default([1, 2, 3, 4, 5])
+  requiresValidation Boolean         @default(true)
 
-  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  sequence Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@unique([sequenceId, order])
@@ -523,16 +892,16 @@ enum EnrollmentStopReason {
 }
 
 model Enrollment {
-  id             String                @id @default(cuid())
-  leadId         String
-  sequenceId     String
-  campaignId     String?
-  status         EnrollmentStatus      @default(ACTIVE)
-  currentStepOrder Int                 @default(0)
-  nextRunAt      DateTime?
-  stopReason     EnrollmentStopReason?
-  startedAt      DateTime              @default(now())
-  stoppedAt      DateTime?
+  id               String                @id @default(cuid())
+  leadId           String
+  sequenceId       String
+  campaignId       String?
+  status           EnrollmentStatus      @default(ACTIVE)
+  currentStepOrder Int                   @default(0)
+  nextRunAt        DateTime?
+  stopReason       EnrollmentStopReason?
+  startedAt        DateTime              @default(now())
+  stoppedAt        DateTime?
 
   lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
   sequence Sequence  @relation(fields: [sequenceId], references: [id])
@@ -605,25 +974,25 @@ enum MessageStatus {
 }
 
 model Message {
-  id             String          @id @default(cuid())
-  leadId         String
-  enrollmentId   String?
-  sequenceStepId String?
-  emailAccountId String?
-  type           MessageType
-  channel        SequenceChannel @default(EMAIL)
-  tone           MessageTone     @default(PROFESSIONAL)
-  language       MessageLanguage @default(FR)
-  subject        String?
-  body           String
-  status         MessageStatus   @default(DRAFT)
-  aiRequestId    String?
-  validatedById  String?
-  validatedAt    DateTime?
-  sentAt         DateTime?
+  id                String          @id @default(cuid())
+  leadId            String
+  enrollmentId      String?
+  sequenceStepId    String?
+  emailAccountId    String?
+  type              MessageType
+  channel           SequenceChannel @default(EMAIL)
+  tone              MessageTone     @default(PROFESSIONAL)
+  language          MessageLanguage @default(FR)
+  subject           String?
+  body              String
+  status            MessageStatus   @default(DRAFT)
+  aiRequestId       String?
+  validatedById     String?
+  validatedAt       DateTime?
+  sentAt            DateTime?
   providerMessageId String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
   enrollment   Enrollment?   @relation(fields: [enrollmentId], references: [id])
@@ -674,17 +1043,17 @@ enum ReplyIntent {
 }
 
 model Conversation {
-  id             String       @id @default(cuid())
-  leadId         String
-  channel        SequenceChannel @default(EMAIL)
-  direction      String
-  fromAddress    String?
-  toAddress      String?
-  subject        String?
-  body           String
-  intent         ReplyIntent?
-  aiRequestId    String?
-  createdAt      DateTime     @default(now())
+  id          String          @id @default(cuid())
+  leadId      String
+  channel     SequenceChannel @default(EMAIL)
+  direction   String
+  fromAddress String?
+  toAddress   String?
+  subject     String?
+  body        String
+  intent      ReplyIntent?
+  aiRequestId String?
+  createdAt   DateTime        @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -741,6 +1110,9 @@ model Appointment {
   notes          String?
   summary        String?
   nextAction     String?
+  /// Identifiant de l'évènement Google Calendar correspondant (v0.9) — présent = synchronisé.
+  googleEventId  String?
+  googleSyncedAt DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -763,17 +1135,17 @@ enum OpportunityStatus {
 }
 
 model Opportunity {
-  id             String            @id @default(cuid())
-  organizationId String
-  leadId         String
-  name           String
-  estimatedValue Int
-  probability    Int               @default(20)
-  status         OpportunityStatus @default(OPEN)
-  lostReason     String?
+  id              String            @id @default(cuid())
+  organizationId  String
+  leadId          String
+  name            String
+  estimatedValue  Int
+  probability     Int               @default(20)
+  status          OpportunityStatus @default(OPEN)
+  lostReason      String?
   expectedCloseAt DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -802,8 +1174,9 @@ model Service {
   basePrice      Int
   isActive       Boolean     @default(true)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   quoteLines   QuoteLine[]
+  invoiceLines InvoiceLine[]
 
   @@index([organizationId])
 }
@@ -816,24 +1189,54 @@ enum QuoteStatus {
   EXPIRED
 }
 
-model Quote {
-  id             String      @id @default(cuid())
-  organizationId String
-  leadId         String
-  opportunityId  String?
-  reference      String
-  status         QuoteStatus @default(DRAFT)
-  totalAmount    Int         @default(0)
-  sentAt         DateTime?
-  expiresAt      DateTime?
-  acceptedAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+/// Statut de la signature électronique (abstraction, v0.9, ADR 0038) — le
+/// brief demande explicitement une ABSTRACTION (contrairement aux emails/
+/// Google Calendar, aucun fournisseur réel n'est câblé) : voir
+/// `src/lib/quotes/esignature/`.
+enum QuoteSignatureStatus {
+  NONE
+  PENDING
+  SIGNED
+  DECLINED
+}
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id])
+model Quote {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  leadId             String
+  opportunityId      String?
+  reference          String
+  status             QuoteStatus          @default(DRAFT)
+  /// Somme des lignes (quantité × prix unitaire), avant remise et TVA.
+  subtotalAmount     Int                  @default(0)
+  /// Remise globale du devis, en pourcentage (0-100) — v0.9.
+  discountPercent    Float                @default(0)
+  /// Taux de TVA appliqué, en pourcentage (ex. 20 pour 20%) — v0.9.
+  vatRate            Float                @default(20)
+  /// Montant de TVA calculé (sur le montant après remise) — v0.9.
+  vatAmount          Int                  @default(0)
+  /// Montant total TTC (inchangé depuis avant v0.9 : remise + TVA déjà appliquées).
+  totalAmount        Int                  @default(0)
+  signatureStatus    QuoteSignatureStatus @default(NONE)
+  signedAt           DateTime?
+  signerName         String?
+  signerEmail        String?
+  /// Nom du fournisseur de signature électronique utilisé (ex. "demo") — voir `esignature/types.ts`.
+  signatureProvider  String?
+  /// Identifiant de la demande côté fournisseur — permet de corréler un futur webhook réel à ce devis.
+  signatureRequestId String?
+  sentAt             DateTime?
+  expiresAt          DateTime?
+  acceptedAt         DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity?   @relation(fields: [opportunityId], references: [id])
   lines        QuoteLine[]
+  versions     QuoteVersion[]
+  invoices     Invoice[]
 
   @@unique([organizationId, reference])
   @@index([leadId])
@@ -851,6 +1254,84 @@ model QuoteLine {
   service Service? @relation(fields: [serviceId], references: [id])
 
   @@index([quoteId])
+}
+
+/// Version immuable d'un `Quote` au moment de son envoi (brief v0.9 : "Versionnement") — snapshot
+/// JSON des lignes/montants/TVA à cet instant, jamais modifié après création. `Quote` reste la
+/// version courante/éditable ; `QuoteVersion` est l'historique figé (extension complète —
+/// remise/TVA/PDF/signature électronique — traitée par `src/lib/crm/quote-service.ts`, task #83).
+model QuoteVersion {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  quoteId        String
+  versionNumber  Int
+  snapshot       Json
+  totalAmount    Int
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  quote        Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, versionNumber])
+  @@index([organizationId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+/// Facture (brief v0.9 : "Transformation en facture") — jamais générée automatiquement depuis un
+/// `Quote` : conversion explicite via `src/lib/crm/invoice-service.ts` (task #84) lorsque
+/// `Quote.status = ACCEPTED`. Modèle séparé de `Quote` (cycle de vie différent : une facture peut
+/// être payée partiellement/en retard, un devis non). Voir ADR 0038.
+model Invoice {
+  id             String        @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  leadId         String
+  quoteId        String?
+  reference      String
+  status         InvoiceStatus @default(DRAFT)
+  totalAmount    Int           @default(0)
+  vatAmount      Int           @default(0)
+  sentAt         DateTime?
+  dueAt          DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quote        Quote?        @relation(fields: [quoteId], references: [id])
+  lines        InvoiceLine[]
+  virtualTours VirtualTour[]
+
+  @@unique([organizationId, reference])
+  @@index([leadId])
+  @@index([quoteId])
+  @@index([workspaceId])
+}
+
+model InvoiceLine {
+  id        String  @id @default(cuid())
+  invoiceId String
+  serviceId String?
+  label     String
+  quantity  Int     @default(1)
+  unitPrice Int
+  vatRate   Float   @default(20)
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id])
+
+  @@index([invoiceId])
 }
 
 model Customer {
@@ -890,10 +1371,11 @@ model Mission {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  provider     Provider?    @relation(fields: [providerId], references: [id])
-  territory    Territory?   @relation(fields: [territoryId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider     Provider?     @relation(fields: [providerId], references: [id])
+  territory    Territory?    @relation(fields: [territoryId], references: [id])
+  virtualTours VirtualTour[]
 
   @@index([organizationId, status])
 }
@@ -920,7 +1402,7 @@ model AutomationRule {
 }
 
 model Notification {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   userId         String?
   type           String
@@ -928,7 +1410,7 @@ model Notification {
   body           String?
   link           String?
   readAt         DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
@@ -1017,25 +1499,32 @@ enum AIRequestStatus {
 }
 
 model AIRequest {
-  id             String          @id @default(cuid())
-  organizationId String
-  userId         String?
-  leadId         String?
-  kind           AIRequestKind
-  provider       String
-  model          String
-  prompt         String
-  response       String
-  estimatedCostUsd Float          @default(0)
-  status         AIRequestStatus @default(COMPLETED)
-  createdAt      DateTime        @default(now())
+  id               String          @id @default(cuid())
+  organizationId   String
+  userId           String?
+  leadId           String?
+  // Rattache un appel IA déclenché par un agent à son exécution — permet
+  // d'agréger le coût IA par run/installation (voir docs/adr/0007 et
+  // ROADMAP.md MOD-22). Nul pour tous les appels IA hors Agent Framework
+  // (le reste de l'application, inchangé).
+  agentRunId       String?
+  kind             AIRequestKind
+  provider         String
+  model            String
+  prompt           String
+  response         String
+  estimatedCostUsd Float           @default(0)
+  status           AIRequestStatus @default(COMPLETED)
+  createdAt        DateTime        @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
   lead         Lead?        @relation(fields: [leadId], references: [id])
+  agentRun     AgentRun?    @relation(fields: [agentRunId], references: [id])
 
   @@index([organizationId, kind])
   @@index([leadId])
+  @@index([agentRunId])
 }
 
 enum IntegrationKind {
@@ -1043,6 +1532,12 @@ enum IntegrationKind {
   AI
   CALENDAR
   DATA_PROVIDER
+  /// Canaux du Communication Hub (v0.9, ADR 0038) — additifs, mêmes conventions
+  /// `status`/`config` que les valeurs existantes.
+  SMS
+  WHATSAPP
+  PHONE
+  WEBHOOK
 }
 
 enum IntegrationStatus {
@@ -1068,16 +1563,1342 @@ model Integration {
 }
 
 model WebhookEvent {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String?
   source         String
   eventType      String
   payload        Json
-  signatureValid Boolean  @default(false)
+  signatureValid Boolean   @default(false)
   processedAt    DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, eventType])
+}
+
+// ---------------------------------------------------------------------------
+// Agent Framework (v0.3) — infrastructure uniquement, aucun agent métier.
+// Voir docs/adr/0007, 0008, 0009 et docs/02-ARCHITECTURE.md §10.
+// Étendu en v0.4 par l'Agent Director (orchestration, voir plus bas dans ce
+// même fichier) — toujours aucun agent métier réel.
+// ---------------------------------------------------------------------------
+
+enum AgentDefinitionStatus {
+  DRAFT
+  PUBLISHED
+  DEPRECATED
+  ARCHIVED
+}
+
+/// Catalogue des agents disponibles (le "quoi"). organizationId nul = agent
+/// global fourni par Autorun ; non nul = agent propre à une organisation
+/// (préparé pour des agents personnalisés futurs). Aucune logique
+/// exécutable ici : `runtimeKey` référence l'implémentation TypeScript
+/// (src/lib/agents/registry.ts).
+model AgentDefinition {
+  id                  String                @id @default(cuid())
+  organizationId      String?
+  key                 String
+  name                String
+  description         String?
+  version             String                @default("0.1.0")
+  status              AgentDefinitionStatus @default(DRAFT)
+  author              String
+  category            String
+  icon                String?
+  runtimeKey          String
+  configSchema        Json?
+  declaredToolKeys    String[]              @default([])
+  declaredPermissions String[]              @default([])
+  compatibleAiModels  String[]              @default([])
+  defaultLimits       Json?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  organization  Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installations AgentInstallation[]
+
+  @@unique([organizationId, key])
+  @@index([status])
+  @@index([category])
+}
+
+enum AgentInstallationStatus {
+  INSTALLED
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  UNINSTALLED
+}
+
+/// L'installation d'une AgentDefinition dans UN workspace (le "où" et le
+/// "avec quels droits"). Tout ce qui découle d'un agent (exécutions,
+/// mémoire, messages, planification) référence une AgentInstallation,
+/// jamais directement une AgentDefinition — garantit l'isolation
+/// multi-tenant dès le modèle de données (voir ADR 0007).
+model AgentInstallation {
+  id                 String                  @id @default(cuid())
+  organizationId     String
+  workspaceId        String
+  definitionId       String
+  status             AgentInstallationStatus @default(INSTALLED)
+  config             Json?
+  grantedToolKeys    String[]                @default([])
+  grantedPermissions String[]                @default([])
+  usageLimits        Json?
+  installedById      String?
+  installedAt        DateTime                @default(now())
+  uninstalledAt      DateTime?
+  suspendedAt        DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  definition   AgentDefinition @relation(fields: [definitionId], references: [id])
+  installedBy  User?           @relation("AgentInstalledBy", fields: [installedById], references: [id])
+
+  runs                 AgentRun[]
+  memoryEntries        AgentMemoryEntry[]
+  schedules            AgentSchedule[]
+  messagesFrom         AgentMessage[]             @relation("AgentMessageFrom")
+  messagesTo           AgentMessage[]             @relation("AgentMessageTo")
+  interventionRequests AgentInterventionRequest[]
+  plans                AgentPlan[]
+  planStepsAsTarget    AgentPlanStep[]            @relation("AgentPlanStepTarget")
+  commercialProspects  CommercialProspect[]
+  commercialActions    CommercialAction[]
+
+  @@unique([workspaceId, definitionId])
+  @@index([organizationId])
+  @@index([workspaceId, status])
+}
+
+/// Registre déclaratif des outils qu'un agent peut se voir accorder.
+/// Une ligne par outil ; l'implémentation réelle (le code appelé) vit dans
+/// src/lib/agents/tool-registry.ts et est référencée par `key`.
+model AgentTool {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  name         String
+  description  String?
+  category     String
+  inputSchema  Json?
+  outputSchema Json?
+  isBuiltIn    Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+}
+
+enum AgentRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
+
+enum AgentRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT
+  API
+  /// Exécution créée par délégation d'un autre agent (voir v0.4, Agent
+  /// Director) — distincte de MANUAL (humain) et API (appelant externe).
+  AGENT
+}
+
+/// Une exécution d'agent. File d'attente interne sur PostgreSQL (voir ADR
+/// 0008) : `status=QUEUED` + `scheduledAt` jouent le rôle de file, traitée
+/// par `processQueuedAgentRuns` (src/lib/agents/execution-engine.ts).
+model AgentRun {
+  id             String          @id @default(cuid())
+  installationId String
+  status         AgentRunStatus  @default(QUEUED)
+  trigger        AgentRunTrigger @default(MANUAL)
+  priority       Int             @default(0)
+  input          Json?
+  output         Json?
+  error          Json?
+  attempt        Int             @default(0)
+  maxAttempts    Int             @default(1)
+  timeoutMs      Int             @default(30000)
+  scheduledAt    DateTime        @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  cancelledAt    DateTime?
+  parentRunId    String?
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  parentRun    AgentRun?         @relation("AgentRunRetry", fields: [parentRunId], references: [id])
+  retries      AgentRun[]        @relation("AgentRunRetry")
+  createdBy    User?             @relation("AgentRunCreatedBy", fields: [createdById], references: [id])
+
+  logs                 AgentRunLog[]
+  aiRequests           AIRequest[]
+  messages             AgentMessage[]
+  interventionRequests AgentInterventionRequest[]
+  directorPlan         AgentPlan?                 @relation("AgentPlanOwnerRun")
+  planStep             AgentPlanStep?             @relation("AgentPlanStepSubRun")
+
+  @@index([installationId, status])
+  @@index([status, scheduledAt])
+}
+
+/// Journal d'exécution consultable depuis l'UI (distinct des logs pino
+/// applicatifs, qui ne sont pas requêtables depuis l'interface).
+model AgentRunLog {
+  id        String   @id @default(cuid())
+  runId     String
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+enum AgentMemoryScope {
+  SHORT_TERM
+  PERSISTENT
+  SHARED
+}
+
+/// Mémoire d'agent à trois portées (voir ADR 0009) : SHORT_TERM/PERSISTENT
+/// scopées à une installation, SHARED scopée au workspace
+/// (installationId nul). `embedding` réservé pour une vectorisation
+/// future, jamais renseigné par le code actuel. L'unicité par
+/// (portée, clé) est appliquée côté application (src/lib/agents/memory.ts,
+/// seul point d'écriture), pas par contrainte SQL — une contrainte unique
+/// classique ne peut pas distinguer plusieurs lignes SHARED dont
+/// installationId est NULL (NULL n'est jamais égal à NULL en SQL).
+model AgentMemoryEntry {
+  id             String           @id @default(cuid())
+  workspaceId    String
+  installationId String?
+  scope          AgentMemoryScope
+  key            String
+  value          Json
+  embedding      Json?
+  expiresAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scope, key])
+  @@index([installationId, scope, key])
+  @@index([expiresAt])
+}
+
+enum AgentMessageType {
+  TASK_REQUEST
+  TASK_RESPONSE
+  RESULT
+  ERROR
+  INTERVENTION_REQUEST
+  INFO
+}
+
+enum AgentMessageStatus {
+  PENDING
+  DELIVERED
+  READ
+  ACTIONED
+}
+
+/// Communication inter-agents et agent<->humain, systématiquement
+/// historisée (jamais de mutation/suppression, uniquement des lignes
+/// nouvelles + changement de `status`).
+model AgentMessage {
+  id                 String             @id @default(cuid())
+  workspaceId        String
+  fromInstallationId String?
+  toInstallationId   String?
+  runId              String?
+  type               AgentMessageType
+  status             AgentMessageStatus @default(PENDING)
+  payload            Json
+  createdAt          DateTime           @default(now())
+  deliveredAt        DateTime?
+  readAt             DateTime?
+
+  workspace           Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromInstallation    AgentInstallation?        @relation("AgentMessageFrom", fields: [fromInstallationId], references: [id])
+  toInstallation      AgentInstallation?        @relation("AgentMessageTo", fields: [toInstallationId], references: [id])
+  run                 AgentRun?                 @relation(fields: [runId], references: [id])
+  interventionRequest AgentInterventionRequest?
+
+  @@index([workspaceId, createdAt])
+  @@index([toInstallationId])
+  @@index([fromInstallationId])
+}
+
+enum AgentInterventionStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+/// Demande d'intervention humaine ("human in the loop"), typiquement créée
+/// à partir d'un AgentMessage de type INTERVENTION_REQUEST.
+model AgentInterventionRequest {
+  id               String                  @id @default(cuid())
+  workspaceId      String
+  installationId   String
+  runId            String?
+  messageId        String?                 @unique
+  title            String
+  description      String?
+  status           AgentInterventionStatus @default(PENDING)
+  assignedToUserId String?
+  resolvedById     String?
+  resolvedAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  run          AgentRun?         @relation(fields: [runId], references: [id])
+  message      AgentMessage?     @relation(fields: [messageId], references: [id])
+  assignedTo   User?             @relation("AgentInterventionAssignedTo", fields: [assignedToUserId], references: [id])
+  resolvedBy   User?             @relation("AgentInterventionResolvedBy", fields: [resolvedById], references: [id])
+
+  @@index([workspaceId, status])
+}
+
+enum AgentScheduleKind {
+  ONE_OFF
+  RECURRING
+  EVENT
+}
+
+/// Planification des exécutions : ponctuelle (runAt), récurrente
+/// (cronExpression), ou déclenchée par un évènement applicatif
+/// (eventKey — ex. "lead.qualified"), traitée par
+/// processDueAgentSchedules (src/lib/agents/scheduler.ts).
+model AgentSchedule {
+  id             String            @id @default(cuid())
+  installationId String
+  kind           AgentScheduleKind
+  cronExpression String?
+  runAt          DateTime?
+  eventKey       String?
+  input          Json?
+  isActive       Boolean           @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@index([installationId])
+  @@index([isActive, nextRunAt])
+}
+
+// ---------------------------------------------------------------------------
+// Agent Director — orchestration (v0.4). Le Director est un agent comme les
+// autres (AgentDefinition + AgentInstallation, exécuté par le même moteur
+// d'exécution) ; ces deux modèles ajoutent uniquement la structure d'un plan
+// d'exécution multi-étapes qu'un agent orchestrateur peut produire et piloter.
+// Voir docs/adr/0010, 0011, 0012 et docs/02-ARCHITECTURE.md §11.
+// ---------------------------------------------------------------------------
+
+enum AgentPlanStatus {
+  DRAFT
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AgentPlanStepStatus {
+  PENDING
+  READY
+  DELEGATED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+/// Plan d'exécution généré par un agent orchestrateur (le Director, dans
+/// cette version) en réponse à une demande. `installationId` est toujours
+/// l'installation orchestratrice propriétaire du plan — jamais celle d'un
+/// agent délégué (voir `AgentPlanStep.targetInstallationId`). `runId`
+/// référence l'AgentRun du Director qui a produit ce plan (1:1).
+model AgentPlan {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  installationId String
+  runId          String?         @unique
+  goal           String
+  status         AgentPlanStatus @default(DRAFT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  run          AgentRun?         @relation("AgentPlanOwnerRun", fields: [runId], references: [id])
+  steps        AgentPlanStep[]
+
+  @@index([workspaceId, status])
+  @@index([installationId])
+}
+
+/// Une étape d'un plan d'exécution. `targetInstallationId` est résolu soit
+/// explicitement (fourni à la création du plan), soit dynamiquement au
+/// moment de la délégation à partir de `targetCategory` (voir
+/// `src/lib/agents/director/delegation-engine.ts`) — les deux champs
+/// peuvent coexister le temps de la résolution. `dependsOnStepIds`
+/// référence d'autres `AgentPlanStep.id` du même plan ; seules des
+/// références vers des étapes d'index strictement inférieur sont acceptées
+/// à la création (voir `planning-engine.ts`), ce qui exclut trivialement
+/// tout cycle. `subRunId` référence l'AgentRun réellement créé pour
+/// l'agent délégué (1:1, `null` tant que l'étape n'a pas été déléguée).
+model AgentPlanStep {
+  id                   String              @id @default(cuid())
+  planId               String
+  stepIndex            Int
+  objective            String
+  targetInstallationId String?
+  targetCategory       String?
+  priority             Int                 @default(0)
+  dependsOnStepIds     String[]            @default([])
+  requiredToolKeys     String[]            @default([])
+  requiredPermissions  String[]            @default([])
+  input                Json?
+  status               AgentPlanStepStatus @default(PENDING)
+  subRunId             String?             @unique
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  durationMs           Int?
+  result               Json?
+  error                Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  plan               AgentPlan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  targetInstallation AgentInstallation? @relation("AgentPlanStepTarget", fields: [targetInstallationId], references: [id])
+  subRun             AgentRun?          @relation("AgentPlanStepSubRun", fields: [subRunId], references: [id])
+
+  @@index([planId, stepIndex])
+  @@index([targetInstallationId])
+}
+
+// ---------------------------------------------------------------------------
+// Agent Commercial (v0.5) — premier agent MÉTIER d'Autorun, construit
+// intégralement sur le Framework des Agents (v0.3) et l'Agent Director
+// (v0.4) : aucune table ici ne remplace `AgentInstallation`/`AgentRun`, elle
+// les complète. `CommercialProspect`/`CommercialAction` sont volontairement
+// distincts du `Lead`/`Opportunity`/`Quote` de Provence 360 (spécifiques au
+// vertical photographie 360°, jamais généralisés — voir MOD-02, toujours
+// reporté) : le Commercial doit rester un agent générique, réutilisable par
+// n'importe quel futur vertical, pas câblé sur les catégories Provence 360.
+// Voir docs/adr/0014 et docs/02-ARCHITECTURE.md §12.
+// ---------------------------------------------------------------------------
+
+enum CommercialStage {
+  NEW
+  TO_QUALIFY
+  QUALIFIED
+  FIRST_CONTACT
+  FOLLOW_UP
+  MEETING
+  QUOTE_SENT
+  NEGOTIATION
+  WON
+  LOST
+}
+
+/// Fiche prospect gérée par une installation de l'Agent Commercial.
+/// `installationId` est toujours requis : un prospect appartient à
+/// l'installation qui le gère (même principe que `AgentMemoryEntry`
+/// scopée à une installation) — jamais une table globale non rattachée au
+/// Framework.
+model CommercialProspect {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  workspaceId        String
+  installationId     String
+  companyName        String
+  sector             String?
+  companySize        String?
+  website            String?
+  contactName        String?
+  contactEmail       String?
+  contactPhone       String?
+  stage              CommercialStage @default(NEW)
+  score              Int?
+  scoreBreakdown     Json?
+  potentialEstimate  Json?
+  qualificationNotes String?
+  source             String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AgentInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  actions      CommercialAction[]
+
+  @@index([workspaceId, stage])
+  @@index([installationId])
+}
+
+enum CommercialActionType {
+  EMAIL_DRAFT
+  FOLLOW_UP
+  QUOTE_DRAFT
+  PROPOSAL
+  RECOMMENDATION
+}
+
+enum CommercialActionStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SENT
+  DISMISSED
+}
+
+/// Action proposée par l'Agent Commercial sur un prospect (email, relance,
+/// devis, proposition, recommandation) — un seul modèle générique plutôt
+/// qu'une table par type, pour rester facilement extensible (un nouveau
+/// type d'action = une valeur d'enum, jamais une nouvelle table) et pour
+/// que le système d'approbation soit uniforme (voir ADR 0017). Toujours
+/// créée `PENDING_APPROVAL` sauf mode autonome explicitement activé
+/// (`AgentInstallation.config.autonomousMode`, désactivé par défaut).
+model CommercialAction {
+  id             String                 @id @default(cuid())
+  organizationId String
+  workspaceId    String
+  prospectId     String
+  installationId String
+  type           CommercialActionType
+  status         CommercialActionStatus @default(PENDING_APPROVAL)
+  title          String
+  payload        Json
+  reasoning      String?
+  autoApproved   Boolean                @default(false)
+  createdAt      DateTime               @default(now())
+  decidedById    String?
+  decidedAt      DateTime?
+  sentAt         DateTime?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  prospect     CommercialProspect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  installation AgentInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  decidedBy    User?              @relation("CommercialActionDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([workspaceId, status])
+  @@index([prospectId])
+}
+
+/// Moteur de prompts (v0.5, étendu v0.7 — voir ADR 0028) : générique,
+/// utilisable par n'importe quel agent. Chaque prompt est versionné
+/// (`@@unique([key, version, locale])`), modifiable sans redéploiement
+/// (nouvelle version en base), documenté (`description`), séparé du code.
+/// `locale` rend un prompt multilingue (plusieurs variantes d'une même
+/// version) ; `parentKey` permet l'héritage (un prompt hérite des
+/// variables/instructions d'un prompt parent, résolu à l'affichage) ;
+/// `variableSchema` type chaque variable déclarée (validée avant rendu).
+model PromptTemplate {
+  id             String   @id @default(cuid())
+  key            String
+  version        Int
+  locale         String   @default("fr")
+  parentKey      String?
+  name           String
+  description    String?
+  category       String
+  template       String
+  variables      String[] @default([])
+  variableSchema Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  createdById    String?
+
+  createdBy User? @relation("PromptTemplateCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([key, version, locale])
+  @@index([key, locale, isActive])
+}
+
+// ---------------------------------------------------------------------------
+// Workflow Engine (v0.6) — moteur d'automatisation générique d'Autorun.
+// Aucune automatisation métier n'est codée en dur ici : un workflow ne
+// référence que des clés déclaratives (déclencheurs/conditions/actions)
+// résolues au démarrage par les registres de src/lib/workflows/*/registry.ts,
+// exactement comme AgentDefinition.runtimeKey ne contient jamais de code
+// exécutable (voir ADR 0007, réappliqué ici — voir ADR 0018). Distinct du
+// mécanisme `AutomationRule`/`automation-engine.ts` (v0.1, spécifique au
+// vertical photographie 360°, laissé tel quel — voir ADR 0022) : c'est le
+// chemin que toute automatisation FUTURE doit emprunter.
+// ---------------------------------------------------------------------------
+
+enum WorkflowDefinitionStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+/// Identité stable d'un workflow (le "quoi"), versionnée séparément (voir
+/// WorkflowVersion) — même séparation identité/version que PromptTemplate
+/// (v0.5), avec en plus un cycle de vie explicite. `organizationId`/
+/// `workspaceId` nuls = modèle global fourni par Autorun (catalogue de
+/// templates, jamais déclenché directement — doit d'abord être cloné dans
+/// un workspace via `cloneWorkflowDefinition`, même convention que
+/// `AgentDefinition`). `activeVersionId` référence la version qui pilote
+/// réellement les déclenchements (`WorkflowTriggerBinding`) ; les autres
+/// versions restent consultables (historique, rollback) mais inertes.
+model WorkflowDefinition {
+  id                String                   @id @default(cuid())
+  organizationId    String?
+  workspaceId       String?
+  key               String
+  name              String
+  description       String?
+  category          String
+  status            WorkflowDefinitionStatus @default(DRAFT)
+  isTemplate        Boolean                  @default(false)
+  sourceTemplateKey String?
+  activeVersionId   String?                  @unique
+  createdById       String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  archivedAt        DateTime?
+
+  organization  Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User?            @relation("WorkflowDefinitionCreatedBy", fields: [createdById], references: [id])
+  activeVersion WorkflowVersion? @relation("WorkflowDefinitionActiveVersion", fields: [activeVersionId], references: [id])
+
+  versions        WorkflowVersion[]        @relation("WorkflowVersionOwner")
+  runs            WorkflowRun[]
+  triggerBindings WorkflowTriggerBinding[]
+
+  @@unique([workspaceId, key])
+  @@index([organizationId])
+  @@index([workspaceId, status])
+  @@index([isTemplate])
+}
+
+/// Un graphe de noeuds/arêtes versionné et immuable une fois créé — on ne
+/// modifie jamais une version en place, on en crée une nouvelle (même
+/// principe que PromptTemplate). `graph` (voir
+/// src/lib/workflows/graph-types.ts pour la forme TypeScript) ne contient
+/// que des références déclaratives à des clés enregistrées au registre —
+/// jamais de code exécutable.
+model WorkflowVersion {
+  id                   String   @id @default(cuid())
+  workflowDefinitionId String
+  version              Int
+  graph                Json
+  changelog            String?
+  createdById          String?
+  createdAt            DateTime @default(now())
+
+  workflowDefinition WorkflowDefinition       @relation("WorkflowVersionOwner", fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  createdBy          User?                    @relation("WorkflowVersionCreatedBy", fields: [createdById], references: [id])
+  activeFor          WorkflowDefinition?      @relation("WorkflowDefinitionActiveVersion")
+  runs               WorkflowRun[]
+  triggerBindings    WorkflowTriggerBinding[]
+
+  @@unique([workflowDefinitionId, version])
+}
+
+/// Index des noeuds "déclencheur" extraits du graphe à l'activation d'une
+/// version (voir workflow-service.ts#activateWorkflowVersion), pour
+/// résoudre rapidement "quels workflows écoutent cet évènement / ce cron /
+/// ce webhook" sans charger et parser le JSON de chaque graphe à chaque
+/// évènement applicatif — même motivation que `AgentSchedule` pour les
+/// agents (v0.3).
+model WorkflowTriggerBinding {
+  id                   String   @id @default(cuid())
+  workflowDefinitionId String
+  workflowVersionId    String
+  workspaceId          String
+  nodeId               String
+  triggerKey           String
+  config               Json?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  workflowVersion    WorkflowVersion    @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, triggerKey, isActive])
+  @@index([workflowDefinitionId])
+}
+
+enum WorkflowRunStatus {
+  QUEUED
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
+
+enum WorkflowRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT
+  WEBHOOK
+  API
+  /// Créée par un autre workflow (noeud "sous-workflow") — distincte de
+  /// AGENT (créée par un agent, ex. escalade) et de MANUAL/API.
+  WORKFLOW
+  AGENT
+}
+
+/// Une exécution de workflow. File d'attente interne sur PostgreSQL, même
+/// principe que `AgentRun` (voir ADR 0008, réappliqué ici — voir ADR 0018) :
+/// `status=QUEUED` + `scheduledAt` jouent le rôle de file (voir
+/// `processQueuedWorkflowRuns`), `status=WAITING` + `resumeAt` pour les
+/// noeuds d'attente/délai (voir `processDueWorkflowWaits`). Ré-entrant :
+/// une exécution peut être interrompue (attente, redémarrage serveur) et
+/// reprise plus tard en ne rejouant que les étapes non terminales — la
+/// progression réelle vit toujours dans `WorkflowRunStep`, jamais dans un
+/// état en mémoire du moteur.
+model WorkflowRun {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  workspaceId          String
+  workflowDefinitionId String
+  workflowVersionId    String
+  status               WorkflowRunStatus  @default(QUEUED)
+  trigger              WorkflowRunTrigger @default(MANUAL)
+  triggerKey           String?
+  priority             Int                @default(0)
+  input                Json?
+  context              Json?
+  output               Json?
+  error                Json?
+  escalatedToDirector  Boolean            @default(false)
+  attempt              Int                @default(0)
+  maxAttempts          Int                @default(1)
+  scheduledAt          DateTime           @default(now())
+  resumeAt             DateTime?
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  cancelledAt          DateTime?
+  parentRunId          String?
+  createdById          String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  workflowVersion    WorkflowVersion    @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  parentRun          WorkflowRun?       @relation("WorkflowRunRetry", fields: [parentRunId], references: [id])
+  retries            WorkflowRun[]      @relation("WorkflowRunRetry")
+  createdBy          User?              @relation("WorkflowRunCreatedBy", fields: [createdById], references: [id])
+
+  steps WorkflowRunStep[]
+  logs  WorkflowRunLog[]
+
+  @@index([workflowDefinitionId, status])
+  @@index([workspaceId, status])
+  @@index([status, scheduledAt])
+  @@index([status, resumeAt])
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+  /// Une compensation (rollback logique) a été exécutée pour cette étape
+  /// suite à l'échec d'une étape ultérieure du même run.
+  COMPENSATED
+}
+
+/// Statut d'un noeud du graphe pour UNE exécution donnée — source de
+/// vérité de la progression (voir `WorkflowRun`). `nodeId` référence
+/// l'identifiant du noeud dans `WorkflowVersion.graph`, jamais une clé
+/// primaire SQL (le graphe n'est pas normalisé en tables).
+model WorkflowRunStep {
+  id         String             @id @default(cuid())
+  runId      String
+  nodeId     String
+  nodeType   String
+  actionKey  String?
+  status     WorkflowStepStatus @default(PENDING)
+  attempt    Int                @default(0)
+  input      Json?
+  output     Json?
+  error      Json?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  durationMs Int?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, nodeId])
+  @@index([runId, status])
+}
+
+/// Journal d'exécution consultable depuis l'UI (même rôle que
+/// `AgentRunLog`).
+model WorkflowRunLog {
+  id        String   @id @default(cuid())
+  runId     String
+  nodeId    String?
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+// ---------------------------------------------------------------------------
+// Système d'intelligence documentaire (v0.7) — Memory Engine, Knowledge
+// Engine, Context Engine (le Prompt Engine est étendu ci-dessus sur le
+// modèle PromptTemplate existant, pas dupliqué). Aucun agent ne gère sa
+// propre mémoire ou son contexte : tout passe par cette couche. Voir
+// docs/adr/0023 à 0029 et docs/02-ARCHITECTURE.md §14.
+//
+// `AgentMemoryEntry` (v0.3) n'est ni supprimé ni migré dans cette phase
+// (Director/Commercial en dépendent tel quel) — voir ADR 0023 : le
+// `MemoryEntry` générique ci-dessous est la couche que tout nouveau code
+// doit utiliser.
+// ---------------------------------------------------------------------------
+
+enum MemoryScopeType {
+  USER
+  ORGANIZATION
+  WORKSPACE
+  AGENT
+  WORKFLOW
+  CONVERSATION
+  TASK
+}
+
+enum MemoryKind {
+  LONG_TERM
+  TEMPORARY
+  DECISION
+  DOCUMENT
+  PREFERENCE
+}
+
+/// Mémoire générique multi-niveaux (Memory Engine). `scopeId` est
+/// polymorphe (id d'un User/Organization/Workspace/AgentInstallation/
+/// WorkflowDefinition/conversation/tâche selon `scopeType`), jamais une
+/// clé étrangère SQL — les portées sont trop hétérogènes pour une seule
+/// relation. Versionné comme `PromptTemplate` : une nouvelle version est
+/// toujours créée par `setMemoryEntry`, jamais de modification en place ;
+/// `isCurrent` marque la version active par (scope, clé). `summary`/
+/// `compressed` portent le résultat d'une compression automatique (voir
+/// `memory-engine.ts#compressMemoryEntry`, réutilise le moteur LLM v0.5).
+model MemoryEntry {
+  id             String          @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  scopeType      MemoryScopeType
+  scopeId        String
+  kind           MemoryKind
+  key            String
+  version        Int             @default(1)
+  isCurrent      Boolean         @default(true)
+  value          Json
+  summary        String?
+  compressed     Boolean         @default(false)
+  ttlMs          Int?
+  expiresAt      DateTime?
+  archivedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("MemoryEntryCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, scopeType, scopeId, key, isCurrent])
+  @@index([expiresAt])
+  @@index([archivedAt])
+}
+
+enum KnowledgeSourceType {
+  PDF
+  WORD
+  EXCEL
+  POWERPOINT
+  MARKDOWN
+  HTML
+  EMAIL
+  NOTE
+  CRM
+  QUOTE
+  INVOICE
+  CONVERSATION
+  LOG
+  DECISION
+  WORKFLOW
+  DOCUMENTATION
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+enum KnowledgeDocumentStatus {
+  PENDING
+  INDEXED
+  FAILED
+  ARCHIVED
+}
+
+/// Base de connaissances (Knowledge Engine). Un document par source
+/// ingérée (fichier, enregistrement CRM, conversation, log, décision,
+/// workflow...), toujours scopé organisation + workspace — jamais
+/// accessible sans cette double portée (voir ADR 0026, sécurité).
+/// `checksum` permet la détection de changement pour la réindexation
+/// incrémentale (voir `indexing-engine.ts`). `sourceRef` référence
+/// l'identifiant de la source d'origine (id de prospect, chemin de
+/// fichier...) quand pertinent, pour éviter les doublons à ré-ingestion.
+model KnowledgeDocument {
+  id             String                  @id @default(cuid())
+  organizationId String
+  workspaceId    String
+  sourceType     KnowledgeSourceType
+  sourceRef      String?
+  title          String
+  content        String?
+  metadata       Json?
+  tags           String[]                @default([])
+  checksum       String?
+  status         KnowledgeDocumentStatus @default(PENDING)
+  errorMessage   String?
+  usageCount     Int                     @default(0)
+  lastUsedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  indexedAt      DateTime?
+  archivedAt     DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User?               @relation("KnowledgeDocumentCreatedBy", fields: [createdById], references: [id])
+  chunks       KnowledgeChunk[]
+  indexLogs    KnowledgeIndexLog[]
+
+  @@unique([workspaceId, sourceType, sourceRef])
+  @@index([organizationId, workspaceId, status])
+  @@index([organizationId, workspaceId, sourceType])
+}
+
+/// Un fragment indexable d'un document, avec son embedding. Stocké en
+/// tableau de flottants Postgres natif (pas une colonne `vector`) : aucune
+/// extension pgvector n'est disponible dans cet environnement — repli
+/// portable documenté (similarité cosinus calculée côté application), voir
+/// ADR 0025. `embeddingModel` trace quel modèle a produit le vecteur, pour
+/// ne jamais comparer deux embeddings de dimensions/modèles différents.
+model KnowledgeChunk {
+  id             String   @id @default(cuid())
+  documentId     String
+  chunkIndex     Int
+  content        String
+  tokenCount     Int?
+  embedding      Float[]  @default([])
+  embeddingModel String?
+  createdAt      DateTime @default(now())
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+}
+
+enum KnowledgeIndexAction {
+  ADD
+  UPDATE
+  DELETE
+  RENAME
+  MOVE
+  REINDEX
+}
+
+/// Journal de l'indexation (voir `indexing-engine.ts`) : chaque opération
+/// (ajout/mise à jour/suppression/renommage/déplacement/réindexation) est
+/// historisée, avec sa priorité et sa durée, qu'elle ait réussi ou échoué.
+model KnowledgeIndexLog {
+  id          String               @id @default(cuid())
+  documentId  String?
+  workspaceId String
+  action      KnowledgeIndexAction
+  priority    Int                  @default(0)
+  success     Boolean              @default(true)
+  message     String?
+  durationMs  Int?
+  createdAt   DateTime             @default(now())
+
+  document KnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([documentId])
+}
+
+/// Journal des appels au moteur d'embeddings (coût, cache, version du
+/// modèle) — même rôle que `AIRequest` pour le moteur LLM (v0.5), mais
+/// distinct : un embedding n'est jamais un texte de réponse, il ne
+/// s'intègre pas proprement au même modèle.
+model EmbeddingRequest {
+  id               String   @id @default(cuid())
+  organizationId   String
+  workspaceId      String?
+  provider         String
+  model            String
+  inputCount       Int
+  dimensions       Int?
+  estimatedCostUsd Float    @default(0)
+  cached           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, provider])
+}
+
+// ---------------------------------------------------------------------------
+// Automation Engine Enterprise (v0.8) — voir docs/adr/0030 à 0037 et
+// docs/02-ARCHITECTURE.md §15. Coexiste avec le Workflow Engine (v0.6, non
+// modifié) : voir ADR 0030 pour la justification de la frontière entre les
+// deux. `Automation`/`AutomationVersion`/`AutomationTriggerBinding`
+// reprennent volontairement la même forme que `WorkflowDefinition`/
+// `WorkflowVersion`/`WorkflowTriggerBinding` (identité/version séparées,
+// registres déclaratifs) — un graphe déclaratif de plus, mais dont
+// l'exécution de chaque noeud passe par un vrai noyau de jobs durable
+// (`AutomationJob`), pas un simple tick en mémoire : c'est la différence
+// entre les deux moteurs (voir ADR 0031). `AutomationJob` sert aussi de
+// point d'entrée générique pour n'importe quel module (agents, workflows,
+// Knowledge Engine...) qui veut une exécution avec retry/verrou/
+// concurrence/priorité/DLQ sans jamais passer par un graphe.
+// ---------------------------------------------------------------------------
+
+enum AutomationDefinitionStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+/// Identité stable d'une automatisation — voir `WorkflowDefinition` pour la
+/// justification de la séparation identité/version, reprise ici à
+/// l'identique.
+model Automation {
+  id                String                     @id @default(cuid())
+  organizationId    String?
+  workspaceId       String?
+  key               String
+  name              String
+  description       String?
+  category          String
+  status            AutomationDefinitionStatus @default(DRAFT)
+  isTemplate        Boolean                    @default(false)
+  sourceTemplateKey String?
+  activeVersionId   String?                    @unique
+  createdById       String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  archivedAt        DateTime?
+
+  organization  Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User?              @relation("AutomationCreatedBy", fields: [createdById], references: [id])
+  activeVersion AutomationVersion? @relation("AutomationActiveVersion", fields: [activeVersionId], references: [id])
+
+  versions        AutomationVersion[]        @relation("AutomationVersionOwner")
+  runs            AutomationRun[]
+  jobs            AutomationJob[]
+  triggerBindings AutomationTriggerBinding[]
+  circuitBreakers AutomationCircuitBreaker[]
+
+  @@unique([workspaceId, key])
+  @@index([organizationId])
+  @@index([workspaceId, status])
+  @@index([isTemplate])
+}
+
+/// Graphe versionné et immuable une fois créé (voir `src/lib/automation/graph-types.ts`)
+/// — mêmes principes que `WorkflowVersion` : jamais modifié en place, une
+/// nouvelle version est toujours créée.
+model AutomationVersion {
+  id           String   @id @default(cuid())
+  automationId String
+  version      Int
+  graph        Json
+  changelog    String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  automation      Automation                 @relation("AutomationVersionOwner", fields: [automationId], references: [id], onDelete: Cascade)
+  createdBy       User?                      @relation("AutomationVersionCreatedBy", fields: [createdById], references: [id])
+  activeFor       Automation?                @relation("AutomationActiveVersion")
+  runs            AutomationRun[]
+  triggerBindings AutomationTriggerBinding[]
+
+  @@unique([automationId, version])
+}
+
+/// Index des noeuds "déclencheur" extraits du graphe à l'activation d'une
+/// version — même rôle que `WorkflowTriggerBinding`.
+model AutomationTriggerBinding {
+  id                  String   @id @default(cuid())
+  automationId        String
+  automationVersionId String
+  workspaceId         String
+  nodeId              String
+  triggerKey          String
+  config              Json?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  automation        Automation        @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationVersion AutomationVersion @relation(fields: [automationVersionId], references: [id], onDelete: Cascade)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, triggerKey, isActive])
+  @@index([automationId])
+}
+
+enum AutomationRunStatus {
+  QUEUED
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
+
+enum AutomationRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT
+  WEBHOOK
+  API
+  /// Créée par une autre automatisation (noeud "fork"/"sous-automatisation").
+  AUTOMATION
+}
+
+/// Une exécution d'automatisation : orchestre le graphe noeud par noeud,
+/// exactement comme `WorkflowRun` — la différence tient à l'exécution de
+/// CHAQUE noeud, qui passe par un `AutomationJob` durable (voir plus bas)
+/// plutôt que par un simple appel en mémoire (voir ADR 0031).
+model AutomationRun {
+  id                  String               @id @default(cuid())
+  organizationId      String
+  workspaceId         String
+  automationId        String
+  automationVersionId String
+  status              AutomationRunStatus  @default(QUEUED)
+  trigger             AutomationRunTrigger @default(MANUAL)
+  triggerKey          String?
+  priority            Int                  @default(0)
+  input               Json?
+  context             Json?
+  output              Json?
+  error               Json?
+  attempt             Int                  @default(0)
+  maxAttempts         Int                  @default(1)
+  scheduledAt         DateTime             @default(now())
+  resumeAt            DateTime?
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  cancelledAt         DateTime?
+  parentRunId         String?
+  createdById         String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automation        Automation        @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationVersion AutomationVersion @relation(fields: [automationVersionId], references: [id], onDelete: Cascade)
+  parentRun         AutomationRun?    @relation("AutomationRunRetry", fields: [parentRunId], references: [id])
+  retries           AutomationRun[]   @relation("AutomationRunRetry")
+  createdBy         User?             @relation("AutomationRunCreatedBy", fields: [createdById], references: [id])
+
+  jobs AutomationJob[]
+  logs AutomationRunLog[]
+
+  @@index([automationId, status])
+  @@index([workspaceId, status])
+  @@index([status, scheduledAt])
+  @@index([status, resumeAt])
+}
+
+model AutomationRunLog {
+  id        String   @id @default(cuid())
+  runId     String
+  nodeId    String?
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  run AutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+}
+
+enum AutomationJobStatus {
+  QUEUED
+  CLAIMED
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+  /// Épuisement des tentatives, ou politique de retry "manual" : le job est
+  /// posé dans la Dead Letter Queue (une requête sur ce statut, pas une
+  /// table séparée — voir `src/lib/automation/dlq/`) en attendant une
+  /// décision explicite (relance manuelle ou abandon).
+  DEAD_LETTERED
+}
+
+/// Le cœur du noyau de jobs (voir ADR 0031/0032) : chaque exécution d'un
+/// noeud d'`AutomationRun` devient une ligne durable ici — individuellement
+/// journalisée, retryable, verrouillable, priorisée, et in fine
+/// dead-letterable. Un `AutomationJob` peut aussi exister SANS
+/// `automationRunId` (job "ad hoc" enfilé directement par n'importe quel
+/// module — agents, Workflow Engine, Knowledge Engine — voulant les
+/// garanties du noyau sans jamais construire de graphe). C'est la table
+/// que le Queue Manager Postgres (défaut) réclame atomiquement via
+/// `FOR UPDATE SKIP LOCKED` (voir `src/lib/automation/queue/`).
+model AutomationJob {
+  id               String              @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  automationId     String?
+  automationRunId  String?
+  nodeId           String?
+  jobType          String
+  status           AutomationJobStatus @default(QUEUED)
+  priority         Int                 @default(0)
+  input            Json?
+  output           Json?
+  error            Json?
+  attempt          Int                 @default(0)
+  maxAttempts      Int                 @default(1)
+  retryPolicy      Json?
+  lockKey          String?
+  concurrencyKey   String?
+  concurrencyLimit Int?
+  rateLimitKey     String?
+  timeoutMs        Int?
+  scheduledAt      DateTime            @default(now())
+  claimedAt        DateTime?
+  claimedBy        String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  resumeAt         DateTime?
+  cancelledAt      DateTime?
+  durationMs       Int?
+  createdById      String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automation    Automation?    @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationRun AutomationRun? @relation(fields: [automationRunId], references: [id], onDelete: Cascade)
+
+  logs AutomationJobLog[]
+
+  @@index([status, scheduledAt])
+  @@index([status, resumeAt])
+  @@index([organizationId, workspaceId, status])
+  @@index([concurrencyKey, status])
+  @@index([lockKey])
+  @@index([automationRunId])
+  @@index([automationId])
+}
+
+model AutomationJobLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  job AutomationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+}
+
+/// Verrou par bail (lease) sur une clé arbitraire — voir ADR 0032 : un
+/// verrou consultatif Postgres (`pg_advisory_lock`) est écarté à cause de
+/// son affinité de connexion incompatible avec le pool de Prisma ; une
+/// ligne avec contrainte unique + expiration est correcte quel que soit le
+/// nombre de processus/connexions.
+model AutomationLock {
+  id         String   @id @default(cuid())
+  lockKey    String   @unique
+  holderId   String
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime
+  metadata   Json?
+
+  @@index([expiresAt])
+}
+
+enum AutomationCircuitState {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
+/// État du disjoncteur (circuit breaker) par périmètre (`key` — par exemple
+/// `automation:<id>` ou `jobType:<clé>`), persisté pour rester cohérent
+/// entre plusieurs processus/instances (voir ADR 0033).
+model AutomationCircuitBreaker {
+  id            String                 @id @default(cuid())
+  key           String                 @unique
+  automationId  String?
+  state         AutomationCircuitState @default(CLOSED)
+  failureCount  Int                    @default(0)
+  lastFailureAt DateTime?
+  openedAt      DateTime?
+  resetAt       DateTime?
+  updatedAt     DateTime               @updatedAt
+
+  automation Automation? @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
 }

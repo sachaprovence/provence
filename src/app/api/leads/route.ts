@@ -5,6 +5,7 @@ import { leadWhereForActor } from "@/lib/permissions";
 import { leadCreateSchema } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
 import { isSuppressed } from "@/lib/suppression";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 import { LeadSourceType } from "@/generated/prisma/enums";
 
 export async function GET(request: Request) {
@@ -115,6 +116,7 @@ export async function POST(request: Request) {
     entityId: lead.id,
     metadata: { source: "manual" },
   });
+  await publishAutomationEvent("lead.created", { organizationId: actor.organization.id, leadId: lead.id });
 
   return NextResponse.json(
     {

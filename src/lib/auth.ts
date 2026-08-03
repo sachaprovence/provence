@@ -57,6 +57,10 @@ export type CurrentActor = {
   user: { id: string; email: string; firstName: string; lastName: string };
   membership: { id: string; role: MembershipRole; territoryId: string | null };
   organization: { id: string; name: string };
+  // Identifiant de la session en cours — nécessaire pour résoudre/mettre à
+  // jour le workspace actif (voir src/lib/workspace-context.ts). Additif :
+  // ne casse aucun code existant qui ne lit que user/membership/organization.
+  sessionId: string;
 };
 
 export async function getCurrentActor(): Promise<CurrentActor | null> {
@@ -95,6 +99,7 @@ export async function getCurrentActor(): Promise<CurrentActor | null> {
       territoryId: membership.territoryId,
     },
     organization: { id: membership.organization.id, name: membership.organization.name },
+    sessionId: session.id,
   };
 }
 

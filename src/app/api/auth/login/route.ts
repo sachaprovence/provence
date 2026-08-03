@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSession, recordLoginEvent, verifyPassword } from "@/lib/auth";
 import { loginSchema } from "@/lib/validations/auth";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -34,6 +35,9 @@ export async function POST(request: Request) {
     userId: user.id,
     organizationId: user.memberships[0]?.organizationId,
   });
+  if (user.memberships[0]?.organizationId) {
+    await publishAutomationEvent("user.logged_in", { organizationId: user.memberships[0].organizationId, userId: user.id });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -7,7 +7,7 @@ import { onLeadScoreComputed, onPositiveReply, onDealWon } from "../src/lib/auto
 import { enrollLeadInSequence, processDueSequences, sendMessageNow, stopEnrollmentsForLead } from "../src/lib/sequence-engine";
 import { addSuppression } from "../src/lib/suppression";
 import { DemoAIProvider } from "../src/lib/ai/demo-provider";
-import { MembershipRole, EnrollmentStopReason, SuppressionReason, ReplyIntent, LeadSourceType } from "../src/generated/prisma/enums";
+import { MembershipRole, WorkspaceRole, EnrollmentStopReason, SuppressionReason, ReplyIntent, LeadSourceType } from "../src/generated/prisma/enums";
 
 const DEMO_ADMIN_EMAIL = "admin@demo.provence360.fr";
 const DEMO_SALES_EMAIL = "commercial@demo.provence360.fr";
@@ -59,7 +59,7 @@ async function main() {
   console.log("Création de l'organisation de démonstration…");
   const passwordHash = await hashPassword(DEMO_PASSWORD);
 
-  const { organization, adminUser } = await prisma.$transaction(async (tx) => {
+  const { organization, adminUser, workspace } = await prisma.$transaction(async (tx) => {
     const organization = await tx.organization.create({
       data: {
         name: "Provence 360 (Démo)",
@@ -76,17 +76,34 @@ async function main() {
       data: { email: DEMO_ADMIN_EMAIL, passwordHash, firstName: "Alex", lastName: "Admin" },
     });
     await tx.membership.create({ data: { organizationId: organization.id, userId: adminUser.id, role: MembershipRole.OWNER_ADMIN } });
-    return { organization, adminUser };
+
+    // Toute organisation reçoit un workspace par défaut (voir ADR 0005) —
+    // même logique que POST /api/auth/register, nécessaire pour que
+    // requireWorkspaceActor() résolve un contexte valide à la connexion.
+    const workspace = await tx.workspace.create({
+      data: { organizationId: organization.id, name: organization.name, slug: "principal", isDefault: true },
+    });
+    await tx.workspaceMembership.create({
+      data: { workspaceId: workspace.id, userId: adminUser.id, role: WorkspaceRole.OWNER, invitedById: adminUser.id },
+    });
+
+    return { organization, adminUser, workspace };
   });
 
   await bootstrapOrganization(organization.id);
 
   const salesUser = await prisma.user.create({ data: { email: DEMO_SALES_EMAIL, passwordHash, firstName: "Sarah", lastName: "Commerciale" } });
   await prisma.membership.create({ data: { organizationId: organization.id, userId: salesUser.id, role: MembershipRole.SALES } });
+  await prisma.workspaceMembership.create({
+    data: { workspaceId: workspace.id, userId: salesUser.id, role: WorkspaceRole.COMMERCIAL, invitedById: adminUser.id },
+  });
 
   const avignonTerritory = await prisma.territory.findFirstOrThrow({ where: { organizationId: organization.id, name: "Avignon" } });
   const providerUser = await prisma.user.create({ data: { email: DEMO_PROVIDER_EMAIL, passwordHash, firstName: "Paul", lastName: "Prestataire" } });
   await prisma.membership.create({ data: { organizationId: organization.id, userId: providerUser.id, role: MembershipRole.PROVIDER, territoryId: avignonTerritory.id } });
+  await prisma.workspaceMembership.create({
+    data: { workspaceId: workspace.id, userId: providerUser.id, role: WorkspaceRole.OPERATOR, invitedById: adminUser.id },
+  });
   await prisma.provider.create({ data: { organizationId: organization.id, territoryId: avignonTerritory.id, name: "Paul Prestataire", email: DEMO_PROVIDER_EMAIL, specialties: ["photo", "visite virtuelle"] } });
 
   console.log("Création des profils de client idéal (ICP)…");
@@ -110,6 +127,7 @@ async function main() {
     const lead = await prisma.lead.create({
       data: {
         organizationId: organization.id,
+        workspaceId: workspace.id,
         establishmentName: seed.establishmentName,
         category: seed.category,
         city: seed.city,

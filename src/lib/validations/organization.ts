@@ -16,6 +16,22 @@ export const organizationSettingsSchema = z.object({
   dailySendLimit: z.coerce.number().int().min(1).max(1000).default(50),
   rampUpEnabled: z.coerce.boolean().default(true),
   requireMessageValidation: z.coerce.boolean().default(true),
+  /// Coordonnées légales/facturation (v0.9, task #92) — alimentent les PDF de devis/factures (voir `commercial-document-pdf.ts`/`invoice-service.ts`).
+  vatNumber: z.string().max(40).optional().nullable(),
+  siret: z.string().max(40).optional().nullable(),
+  legalAddress: z.string().max(300).optional().nullable(),
+  phone: z.string().max(40).optional().nullable(),
+  invoicePrefix: z.string().max(10).optional().nullable(),
+  quotePrefix: z.string().max(10).optional().nullable(),
+});
+
+export const emailIntegrationConfigUpdateSchema = z.object({
+  smtpHost: z.string().max(255).optional().or(z.literal("")),
+  smtpPort: z.coerce.number().int().min(1).max(65535).optional(),
+  smtpUser: z.string().max(255).optional().or(z.literal("")),
+  smtpPassword: z.string().max(500).optional().or(z.literal("")),
+  smtpSecure: z.coerce.boolean().optional(),
+  apiKey: z.string().max(500).optional().or(z.literal("")),
 });
 
 export const scoringRuleUpdateSchema = z.object({

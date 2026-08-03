@@ -92,6 +92,22 @@ body {
   background: #fbeceb;
 }
 
+.btn-ghost {
+  background: transparent;
+  color: var(--color-p360-ink);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+.btn-ghost:hover {
+  background: var(--color-p360-lavender-light);
+}
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .input {
   border: 1px solid #d8d2e8;
   border-radius: 0.5rem;

@@ -6,6 +6,7 @@ import { mapRow, parseCsv, suggestColumnMapping } from "@/lib/csv-import";
 import { csvColumnMap, type LeadCsvField } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
 import { isSuppressed } from "@/lib/suppression";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 import { LeadSourceType } from "@/generated/prisma/enums";
 
 const previewSchema = z.object({ mode: z.literal("preview"), csv: z.string().min(1) });
@@ -127,6 +128,13 @@ export async function POST(request: Request) {
       entityType: "LeadSource",
       entityId: source.id,
       metadata: { created, skippedDuplicates, skippedSuppressed, errors: rowErrorsReport.length },
+    });
+    await publishAutomationEvent("import.completed", {
+      organizationId: actor.organization.id,
+      sourceId: source.id,
+      created,
+      skippedDuplicates,
+      skippedSuppressed,
     });
 
     return NextResponse.json({

@@ -4,6 +4,7 @@ import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { leadUpdateSchema } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
 import { isAdmin } from "@/lib/permissions";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -82,6 +83,7 @@ export async function PUT(request: Request, { params }: Params) {
     entityId: lead.id,
     metadata: { fields: Object.keys(body ?? {}) },
   });
+  await publishAutomationEvent("lead.updated", { organizationId: actor.organization.id, leadId: lead.id });
 
   return NextResponse.json({ lead });
 }
@@ -103,6 +105,7 @@ export async function DELETE(_request: Request, { params }: Params) {
     entityType: "Lead",
     entityId: id,
   });
+  await publishAutomationEvent("lead.deleted", { organizationId: actor.organization.id, leadId: id });
 
   return NextResponse.json({ ok: true });
 }

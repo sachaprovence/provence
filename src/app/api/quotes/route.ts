@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { toApiErrorResponse } from "@/lib/errors";
 import { quoteSchema } from "@/lib/validations/quote";
+import { createQuote } from "@/lib/crm/quote-service";
 import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(request: Request) {
@@ -25,35 +27,21 @@ export async function POST(request: Request) {
   const parsed = quoteSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Données invalides.", details: parsed.error.flatten() }, { status: 400 });
 
-  const lead = await prisma.lead.findFirst({ where: { id: parsed.data.leadId, organizationId: actor.organization.id } });
-  if (!lead) return NextResponse.json({ error: "Prospect introuvable." }, { status: 404 });
+  try {
+    const quote = await createQuote(actor.organization.id, parsed.data);
 
-  const count = await prisma.quote.count({ where: { organizationId: actor.organization.id } });
-  const reference = `DEV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
-  const totalAmount = parsed.data.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
-
-  const quote = await prisma.quote.create({
-    data: {
+    await writeAuditLog({
       organizationId: actor.organization.id,
-      leadId: lead.id,
-      opportunityId: parsed.data.opportunityId || undefined,
-      reference,
-      totalAmount,
-      expiresAt: parsed.data.expiresAt || undefined,
-      lines: { create: parsed.data.lines },
-    },
-    include: { lines: true },
-  });
+      userId: actor.user.id,
+      leadId: quote.leadId,
+      action: "quote.created",
+      entityType: "Quote",
+      entityId: quote.id,
+      metadata: { totalAmount: quote.totalAmount },
+    });
 
-  await writeAuditLog({
-    organizationId: actor.organization.id,
-    userId: actor.user.id,
-    leadId: lead.id,
-    action: "quote.created",
-    entityType: "Quote",
-    entityId: quote.id,
-    metadata: { totalAmount },
-  });
-
-  return NextResponse.json({ quote }, { status: 201 });
+    return NextResponse.json({ quote }, { status: 201 });
+  } catch (error) {
+    return toApiErrorResponse(error, { route: "POST /api/quotes" });
+  }
 }

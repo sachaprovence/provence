@@ -1,0 +1,23 @@
+# Le formatage automatique est volontairement scopé au code applicatif
+# (voir les scripts `format`/`format:check` dans package.json : ils ciblent
+# `src/**` et `tests/**`, pas `.`). Ce fichier reste une seconde barrière de
+# sécurité si jamais Prettier est invoqué sans argument sur tout le dépôt.
+node_modules
+.next
+out
+build
+coverage
+
+# Généré par Prisma, jamais édité à la main.
+src/generated
+prisma/migrations
+
+# Site vitrine statique (Squarespace) : projet distinct, conventions et
+# habillage propres, hors périmètre du socle technique Autorun.
+provence360-squarespace
+
+# Documentation en prose : le formatage Markdown (tableaux, retour à la
+# ligne) est une décision éditoriale, pas une question de style de code.
+*.md
+
+package-lock.json

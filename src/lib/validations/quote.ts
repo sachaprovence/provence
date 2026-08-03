@@ -11,7 +11,25 @@ export const quoteSchema = z.object({
   leadId: z.string(),
   opportunityId: z.string().optional().nullable(),
   expiresAt: z.coerce.date().optional().nullable(),
+  discountPercent: z.coerce.number().min(0).max(100).optional(),
+  vatRate: z.coerce.number().min(0).max(100).optional(),
   lines: z.array(quoteLineSchema).min(1),
+});
+
+export const quoteDraftUpdateSchema = z.object({
+  expiresAt: z.coerce.date().optional().nullable(),
+  discountPercent: z.coerce.number().min(0).max(100).optional(),
+  vatRate: z.coerce.number().min(0).max(100).optional(),
+  lines: z.array(quoteLineSchema).min(1).optional(),
+});
+
+export const quoteSignatureRequestSchema = z.object({
+  signerName: z.string().min(1).max(200),
+  signerEmail: z.string().email(),
+});
+
+export const quoteSignatureResultSchema = z.object({
+  status: z.enum(["SIGNED", "DECLINED"]),
 });
 
 export const opportunitySchema = z.object({
