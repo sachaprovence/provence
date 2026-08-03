@@ -145,6 +145,36 @@ export async function createCommercialTestFixture(suffix: string) {
   return { ...base, commercialDefinition };
 }
 
+/**
+ * Fabrique générique pour les 7 agents métier v0.9 (Prospection, Relance,
+ * Devis, Planning, Réseaux sociaux, Support, Analyse) — évite de dupliquer
+ * `createCommercialTestFixture` sept fois : chaque test fournit juste le
+ * `runtimeKey`, la catégorie et les outils/permissions déclarés de l'agent
+ * qu'il vérifie.
+ */
+export async function createBusinessAgentTestFixture(
+  suffix: string,
+  params: { runtimeKey: string; category: string; declaredToolKeys: string[]; declaredPermissions: string[] }
+) {
+  const base = await createAgentTestFixture(suffix);
+
+  const businessDefinition = await prisma.agentDefinition.create({
+    data: {
+      organizationId: null,
+      key: `test-${params.category}-agent-${suffix}`,
+      name: `${params.category} (test)`,
+      author: "test",
+      category: params.category,
+      status: AgentDefinitionStatus.PUBLISHED,
+      runtimeKey: params.runtimeKey,
+      declaredToolKeys: params.declaredToolKeys,
+      declaredPermissions: params.declaredPermissions,
+    },
+  });
+
+  return { ...base, businessDefinition };
+}
+
 export async function cleanupAgentTestFixtures(
   organizationIds: string[],
   userIds: string[],

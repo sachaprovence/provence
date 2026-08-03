@@ -1,7 +1,5 @@
 import "server-only";
-import { renderPrompt } from "@/lib/agents/prompts/prompt-engine";
-import { getActiveLlmProvider } from "@/lib/agents/llm";
-import { assembleContext } from "@/lib/context/context-engine";
+import { generateAgentNarrative } from "@/lib/agents/shared/generation";
 
 /**
  * Combine le moteur de prompts (texte versionné) et le moteur de
@@ -12,10 +10,8 @@ import { assembleContext } from "@/lib/context/context-engine";
  * fragile de sortie libre, et fonctionne aussi bien avec le fournisseur de
  * démonstration (texte non structuré) qu'avec un vrai fournisseur LLM.
  *
- * Passage obligé par le Context Engine (v0.7) avant tout appel IA — voir
- * ADR 0029 : l'Agent Commercial ne gère jamais lui-même son contexte, il
- * délègue systématiquement la sélection (documents/mémoire/préférences
- * utiles) à `assembleContext`.
+ * Délègue à `agents/shared/generation.ts` (v0.9, mutualisé avec les 7
+ * nouveaux agents métier) — signature inchangée, zéro régression.
  */
 export async function generateNarrative(
   promptKey: string,
@@ -28,39 +24,10 @@ export async function generateNarrative(
   provider: string;
   model: string;
 }> {
-  const rendered = await renderPrompt(promptKey, variables);
-
-  // Pas de restriction `sourceTypes` : toute connaissance indexée pertinente
-  // pour le texte du prompt rendu peut aider (fiches CRM, devis,
-  // conversations, mais aussi notes/documentation internes) — "multi-sources"
-  // du brief, le classement (recherche hybride) fait le tri, pas un filtre a priori.
-  const context = await assembleContext({
-    organizationId: scope.organizationId,
-    workspaceId: scope.workspaceId,
-    agentScopeId: scope.agentScopeId,
-    query: rendered.text,
-    maxTokens: 1500,
-  });
-
-  const provider = getActiveLlmProvider();
-  const result = await provider.complete({
-    messages: [
-      {
-        role: "system",
-        content: "Tu es l'Agent Commercial d'Autorun. Réponds de façon professionnelle, concise et personnalisée.",
-      },
-      ...(context.text.trim().length > 0
-        ? [{ role: "system" as const, content: `Contexte pertinent (Context Engine) :\n${context.text}` }]
-        : []),
-      { role: "user" as const, content: rendered.text },
-    ],
-  });
-
-  return {
-    text: result.text,
+  return generateAgentNarrative({
     promptKey,
-    promptVersion: rendered.version,
-    provider: result.provider,
-    model: result.model,
-  };
+    variables,
+    scope,
+    systemPrompt: "Tu es l'Agent Commercial d'Autorun. Réponds de façon professionnelle, concise et personnalisée.",
+  });
 }

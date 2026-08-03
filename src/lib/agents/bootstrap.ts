@@ -7,13 +7,28 @@ import { leadsCountByStageTool } from "@/lib/agents/tools/crm-tools";
 import { placeholderTools } from "@/lib/agents/tools/placeholder-tools";
 import { directorTools } from "@/lib/agents/tools/director-tools";
 import { commercialTools } from "@/lib/agents/tools/commercial-tools";
+import { prospectionTools } from "@/lib/agents/tools/prospection-tools";
+import { relanceTools } from "@/lib/agents/tools/relance-tools";
+import { devisTools } from "@/lib/agents/tools/devis-tools";
+import { planningTools } from "@/lib/agents/tools/planning-tools";
+import { socialTools } from "@/lib/agents/tools/social-tools";
+import { supportTools } from "@/lib/agents/tools/support-tools";
+import { analyseTools } from "@/lib/agents/tools/analyse-tools";
 import { diagnosticAgentRuntime, DIAGNOSTIC_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/diagnostic-agent";
 import { directorAgentRuntime, DIRECTOR_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/director-agent";
 import { commercialAgentRuntime, COMMERCIAL_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/commercial-agent";
+import { prospectionAgentRuntime, PROSPECTION_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/prospection-agent";
+import { relanceAgentRuntime, RELANCE_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/relance-agent";
+import { devisAgentRuntime, DEVIS_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/devis-agent";
+import { planningAgentRuntime, PLANNING_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/planning-agent";
+import { socialAgentRuntime, SOCIAL_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/social-agent";
+import { supportAgentRuntime, SUPPORT_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/support-agent";
+import { analyseAgentRuntime, ANALYSE_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/analyse-agent";
 import { FUTURE_AGENT_CONTRACTS } from "@/lib/agents/director/capability-contracts";
 import { registerBuiltInScoringFactors } from "@/lib/agents/commercial/scoring-engine";
 import { registerBuiltInLlmProviders } from "@/lib/agents/llm";
 import { ensureCommercialPromptSeeds } from "@/lib/agents/commercial/prompt-seeds";
+import { ensureBusinessAgentPromptSeeds } from "@/lib/agents/business-agents-prompt-seeds";
 import { AgentDefinitionStatus } from "@/generated/prisma/enums";
 
 /** Déclaration des outils du registre (voir prisma/schema.prisma#AgentTool). */
@@ -130,6 +145,110 @@ export const AGENT_TOOL_CATALOG = [
     description: "Recommande la prochaine action pour un prospect, avec justification.",
     category: "commercial",
   },
+  // Agents métier v0.9 (ADR 0038) — opèrent sur les VRAIES données CRM (Lead/Quote/Appointment/
+  // VirtualTour/Conversation), jamais un modèle séparé de démonstration.
+  {
+    key: "prospection.find_priority_leads",
+    name: "Trouver les prospects prioritaires",
+    description: "Liste les prospects non travaillés, triés par score (lecture seule).",
+    category: "prospection",
+  },
+  {
+    key: "prospection.score_lead",
+    name: "Scorer un prospect",
+    description: "Calcule et enregistre le score réel d'un prospect (même moteur que /api/leads/[id]/score).",
+    category: "prospection",
+  },
+  {
+    key: "prospection.draft_outreach",
+    name: "Rédiger un premier contact",
+    description: "Génère un message de prise de contact — jamais envoyé automatiquement.",
+    category: "prospection",
+  },
+  {
+    key: "relance.find_stale_leads",
+    name: "Trouver les prospects à relancer",
+    description: "Liste les prospects sans réponse depuis un certain délai (lecture seule).",
+    category: "relance",
+  },
+  {
+    key: "relance.draft_followup",
+    name: "Rédiger une relance",
+    description: "Génère une relance ponctuelle — jamais envoyée automatiquement.",
+    category: "relance",
+  },
+  {
+    key: "devis.draft_quote",
+    name: "Créer un devis",
+    description: "Crée un devis réel (mêmes calculs que /quotes) — nécessite MANAGE_FINANCE.",
+    category: "devis",
+  },
+  {
+    key: "devis.send_quote",
+    name: "Envoyer un devis",
+    description: "Envoie un devis existant (fige une version, ADR 0038) — nécessite MANAGE_FINANCE.",
+    category: "devis",
+  },
+  {
+    key: "devis.recommend_pricing",
+    name: "Recommander une approche tarifaire",
+    description: "Recommande une approche tarifaire pour un prospect, sans fixer de montant.",
+    category: "devis",
+  },
+  {
+    key: "planning.check_availability",
+    name: "Vérifier les disponibilités",
+    description: "Lit les créneaux occupés (Google Calendar réel ou repli sur les rendez-vous enregistrés).",
+    category: "planning",
+  },
+  {
+    key: "planning.book_appointment",
+    name: "Réserver un rendez-vous",
+    description: "Crée un rendez-vous réel, synchronisé avec Google Calendar si connecté.",
+    category: "planning",
+  },
+  {
+    key: "planning.suggest_slots",
+    name: "Suggérer des créneaux",
+    description: "Calcule les créneaux libres à partir des créneaux occupés fournis (calcul déterministe).",
+    category: "planning",
+  },
+  {
+    key: "social.list_recent_published_tours",
+    name: "Lister les visites récemment publiées",
+    description: "Liste les visites 3D publiées, candidates à une publication (lecture seule).",
+    category: "social",
+  },
+  {
+    key: "social.draft_post",
+    name: "Rédiger une publication",
+    description: "Génère un texte de publication pour une visite 3D publiée — la publication réelle reste manuelle (aucune API sociale connectée).",
+    category: "social",
+  },
+  {
+    key: "support.summarize_conversation",
+    name: "Résumer une conversation",
+    description: "Résume l'historique réel des échanges avec un prospect/client.",
+    category: "support",
+  },
+  {
+    key: "support.draft_reply",
+    name: "Rédiger une réponse",
+    description: "Répond au dernier message entrant — jamais envoyé automatiquement.",
+    category: "support",
+  },
+  {
+    key: "analyse.generate_report",
+    name: "Générer un rapport",
+    description: "Synthèse narrative des statistiques réelles de l'organisation.",
+    category: "analyse",
+  },
+  {
+    key: "analyse.detect_stalled_leads",
+    name: "Détecter les prospects bloqués",
+    description: "Liste les prospects sans progression depuis un certain délai (lecture seule).",
+    category: "analyse",
+  },
 ] as const;
 
 let registered = false;
@@ -150,10 +269,24 @@ export function registerBuiltInAgentComponents() {
   for (const tool of placeholderTools) registerToolHandler(tool);
   for (const tool of directorTools) registerToolHandler(tool);
   for (const tool of commercialTools) registerToolHandler(tool);
+  for (const tool of prospectionTools) registerToolHandler(tool);
+  for (const tool of relanceTools) registerToolHandler(tool);
+  for (const tool of devisTools) registerToolHandler(tool);
+  for (const tool of planningTools) registerToolHandler(tool);
+  for (const tool of socialTools) registerToolHandler(tool);
+  for (const tool of supportTools) registerToolHandler(tool);
+  for (const tool of analyseTools) registerToolHandler(tool);
 
   registerAgentRuntime(diagnosticAgentRuntime);
   registerAgentRuntime(directorAgentRuntime);
   registerAgentRuntime(commercialAgentRuntime);
+  registerAgentRuntime(prospectionAgentRuntime);
+  registerAgentRuntime(relanceAgentRuntime);
+  registerAgentRuntime(devisAgentRuntime);
+  registerAgentRuntime(planningAgentRuntime);
+  registerAgentRuntime(socialAgentRuntime);
+  registerAgentRuntime(supportAgentRuntime);
+  registerAgentRuntime(analyseAgentRuntime);
 
   registerBuiltInScoringFactors();
   registerBuiltInLlmProviders();
@@ -351,5 +484,125 @@ export async function syncAgentCatalog() {
     defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
   });
 
+  // 7 agents métier v0.9 (ADR 0038) — opèrent sur les VRAIES données CRM
+  // (Lead/Quote/Appointment/VirtualTour/Conversation), jamais un modèle
+  // séparé de démonstration comme `CommercialProspect`. Support et Analyse
+  // PROMEUVENT les stubs DRAFT créés en v0.4 (même mécanisme que
+  // Commercial en v0.5) ; les cinq autres n'avaient pas de stub
+  // correspondant et sont créés directement PUBLISHED.
+  await ensureGlobalAgentDefinition({
+    key: "prospection-agent",
+    name: "Agent Prospection",
+    description:
+      "Identifie et priorise les prospects existants les plus prometteurs (score réel), rédige le premier message de prise de contact. Aucun envoi automatique (ADR 0017).",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "prospection",
+    icon: "🎯",
+    runtimeKey: PROSPECTION_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["prospection.find_priority_leads", "prospection.score_lead", "prospection.draft_outreach"],
+    declaredPermissions: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  await ensureGlobalAgentDefinition({
+    key: "relance-agent",
+    name: "Agent Relance",
+    description:
+      "Identifie les prospects restés sans réponse en dehors de toute séquence programmée et rédige une relance ponctuelle. Aucun envoi automatique (ADR 0017).",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "relance",
+    icon: "🔁",
+    runtimeKey: RELANCE_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["relance.find_stale_leads", "relance.draft_followup"],
+    declaredPermissions: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  await ensureGlobalAgentDefinition({
+    key: "devis-agent",
+    name: "Agent Devis",
+    description: "Crée et envoie de vrais devis (mêmes calculs que /quotes), recommande une approche tarifaire.",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "devis",
+    icon: "🧾",
+    runtimeKey: DEVIS_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["devis.draft_quote", "devis.send_quote", "devis.recommend_pricing"],
+    declaredPermissions: ["MANAGE_FINANCE", "VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  await ensureGlobalAgentDefinition({
+    key: "planning-agent",
+    name: "Agent Planning",
+    description: "Vérifie les disponibilités (Google Calendar réel) et réserve de vrais rendez-vous, synchronisés.",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "planning",
+    icon: "📅",
+    runtimeKey: PLANNING_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["planning.check_availability", "planning.book_appointment", "planning.suggest_slots"],
+    declaredPermissions: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  await ensureGlobalAgentDefinition({
+    key: "social-agent",
+    name: "Agent Réseaux sociaux",
+    description:
+      "Rédige des publications pour de vraies visites 3D publiées. La publication réelle reste manuelle (aucune API sociale connectée dans cet environnement, voir ADR 0038).",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "social",
+    icon: "📱",
+    runtimeKey: SOCIAL_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["social.list_recent_published_tours", "social.draft_post"],
+    declaredPermissions: ["VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  // Promotion du stub DRAFT créé en v0.4 (`future-support-agent`), même mécanisme que Commercial (v0.5).
+  await promoteGlobalAgentDefinition({
+    key: "support-agent",
+    previousKeys: ["future-support-agent"],
+    name: "Agent Support",
+    description:
+      "Résume l'historique réel des échanges avec un prospect/client et rédige une réponse. Aucun envoi automatique (ADR 0017).",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "support",
+    icon: "🎧",
+    runtimeKey: SUPPORT_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["support.summarize_conversation", "support.draft_reply"],
+    declaredPermissions: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  // Promotion du stub DRAFT créé en v0.4 (`future-analyse-agent`), même mécanisme que Commercial (v0.5).
+  await promoteGlobalAgentDefinition({
+    key: "analyse-agent",
+    previousKeys: ["future-analyse-agent"],
+    name: "Agent Analyse",
+    description: "Génère un rapport narratif à partir des statistiques réelles de l'organisation et détecte les prospects bloqués.",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "analyse",
+    icon: "📊",
+    runtimeKey: ANALYSE_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["analyse.generate_report", "analyse.detect_stalled_leads"],
+    declaredPermissions: ["VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
   await ensureCommercialPromptSeeds();
+  await ensureBusinessAgentPromptSeeds();
 }

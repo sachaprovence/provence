@@ -40,16 +40,6 @@ export interface MarketingAgentTask {
   [key: string]: unknown;
 }
 
-export interface SupportAgentTask {
-  action: "answer_ticket" | "escalate_ticket" | "summarize_conversation";
-  [key: string]: unknown;
-}
-
-export interface AnalyseAgentTask {
-  action: "generate_report" | "detect_anomaly" | "forecast_metric";
-  [key: string]: unknown;
-}
-
 export interface FinanceAgentTask {
   action: "reconcile_invoice" | "flag_overdue" | "generate_statement";
   [key: string]: unknown;
@@ -68,10 +58,12 @@ export interface DeveloppementAgentTask {
  * Framework ou le Director.
  *
  * L'agent Commercial (catégorie "commercial") a quitté cette liste en
- * v0.5 : il est désormais réellement implémenté (voir
- * `definitions/commercial-agent.ts`) — sa définition est passée de
- * `DRAFT` à `PUBLISHED` par `bootstrap.ts#promoteGlobalAgentDefinition`,
- * même mécanisme que celui prévu par l'ADR 0012 pour chaque futur agent.
+ * v0.5, et Support/Analyse (catégories "support"/"analyse") en v0.9 : ils
+ * sont désormais réellement implémentés (voir `definitions/commercial-agent.ts`,
+ * `definitions/support-agent.ts`, `definitions/analyse-agent.ts`) — leur
+ * définition est passée de `DRAFT` à `PUBLISHED` par
+ * `bootstrap.ts#promoteGlobalAgentDefinition`, même mécanisme que celui
+ * prévu par l'ADR 0012 pour chaque futur agent.
  */
 export const FUTURE_AGENT_CONTRACTS: FutureAgentContract[] = [
   {
@@ -93,26 +85,6 @@ export const FUTURE_AGENT_CONTRACTS: FutureAgentContract[] = [
     plannedToolKeys: ["email.send", "search.web"],
     plannedPermissions: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
     exampleTaskShape: "MarketingAgentTask",
-  },
-  {
-    category: "support",
-    key: "future-support-agent",
-    name: "Agent Support (à venir)",
-    description: "Réponse aux tickets, escalade, résumé de conversation — non implémenté.",
-    icon: "🎧",
-    plannedToolKeys: ["email.send", "files.read"],
-    plannedPermissions: ["VIEW_WORKSPACE"],
-    exampleTaskShape: "SupportAgentTask",
-  },
-  {
-    category: "analyse",
-    key: "future-analyse-agent",
-    name: "Agent Analyse (à venir)",
-    description: "Rapports, détection d'anomalies, prévisions — non implémenté.",
-    icon: "📊",
-    plannedToolKeys: ["database.query", "crm.leads_count_by_stage", "pdf.generate"],
-    plannedPermissions: ["VIEW_WORKSPACE"],
-    exampleTaskShape: "AnalyseAgentTask",
   },
   {
     category: "finance",
