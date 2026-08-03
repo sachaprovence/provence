@@ -31,7 +31,11 @@ runIfDatabase("processDueWebhookDeliveries", () => {
     const subscription = await prisma.webhookSubscription.create({
       data: {
         organizationId: fixture.organization.id,
-        url: "https://example.test/receiver",
+        // URL unique par test — `processDueWebhookDeliveries()` scanne toutes
+        // les livraisons dues, tous tests confondus (exécutés en parallèle
+        // contre la même base) ; une URL partagée empêcherait de distinguer
+        // de façon fiable les appels fetch de CE test de ceux d'un autre.
+        url: `https://example.test/receiver/${crypto.randomUUID()}`,
         secret: params.secret ?? "test-hmac-secret",
         eventTypes: ["lead.created"],
       },
@@ -72,7 +76,13 @@ runIfDatabase("processDueWebhookDeliveries", () => {
       })
     );
 
-    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    // `processDueWebhookDeliveries()` scanne TOUTES les livraisons dues, tous
+    // tests confondus (exécutés en parallèle contre la même base) — ne
+    // jamais supposer que l'appel de CE test est `calls[0]`, retrouver
+    // l'appel qui porte son propre en-tête d'idempotence.
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const call = calls.find(([, options]) => (options.headers as Record<string, string>)["X-Autorun-Delivery-Id"] === delivery.idempotencyKey);
+    const [, options] = call!;
     const headers = options.headers as Record<string, string>;
     const expectedSignature = crypto.createHmac("sha256", "known-secret").update(`${delivery.idempotencyKey}.${options.body}`).digest("hex");
     expect(headers["X-Autorun-Signature"]).toBe(expectedSignature);
@@ -103,13 +113,18 @@ runIfDatabase("processDueWebhookDeliveries", () => {
   });
 
   it("ne retraite jamais une livraison dont la nouvelle tentative n'est pas encore due", async () => {
-    const { delivery } = await createSubscriptionWithDelivery({});
+    const { subscription, delivery } = await createSubscriptionWithDelivery({});
     await prisma.webhookDelivery.update({ where: { id: delivery.id }, data: { nextRetryAt: new Date(Date.now() + 60_000) } });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 200 }));
 
     await processDueWebhookDeliveries();
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    // `processDueWebhookDeliveries()` scanne toutes les livraisons dues, tous
+    // tests confondus (exécutés en parallèle contre la même base) — vérifier
+    // que fetch n'a jamais été appelé pour CETTE souscription, pas que le
+    // mock global n'a jamais été appelé du tout.
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    expect(calls.some(([url]) => url === subscription.url)).toBe(false);
     const unchanged = await prisma.webhookDelivery.findUniqueOrThrow({ where: { id: delivery.id } });
     expect(unchanged.status).toBe("PENDING");
     expect(unchanged.attempts).toBe(0);
