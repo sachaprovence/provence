@@ -1110,6 +1110,9 @@ model Appointment {
   notes          String?
   summary        String?
   nextAction     String?
+  /// Identifiant de l'évènement Google Calendar correspondant (v0.9) — présent = synchronisé.
+  googleEventId  String?
+  googleSyncedAt DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
