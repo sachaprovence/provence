@@ -60,6 +60,7 @@ export function QuotesClient({ quotes }: { quotes: Quote[] }) {
                     <button className="text-xs text-p360-danger hover:underline" disabled={busy === q.id} onClick={() => setStatus(q.id, "DECLINED")}>Refusé</button>
                   </>
                 )}
+                <a className="text-xs text-p360-muted hover:underline" href={`/api/quotes/${q.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>
               </td>
             </tr>
           ))}

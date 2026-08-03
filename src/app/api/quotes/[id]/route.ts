@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
+import { toApiErrorResponse } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
-import { LeadStage } from "@/generated/prisma/enums";
+import { sendQuote } from "@/lib/crm/quote-service";
 
 const updateSchema = z.object({
   status: z.enum(["DRAFT", "SENT", "ACCEPTED", "DECLINED", "EXPIRED"]).optional(),
@@ -22,28 +23,33 @@ export async function PATCH(request: Request, { params }: Params) {
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Données invalides." }, { status: 400 });
 
-  const quote = await prisma.quote.update({
-    where: { id },
-    data: {
-      status: parsed.data.status,
-      sentAt: parsed.data.status === "SENT" ? new Date() : undefined,
-      acceptedAt: parsed.data.status === "ACCEPTED" ? new Date() : undefined,
-    },
-  });
+  try {
+    // Le passage à SENT fige un instantané versionné (voir `quote-service.ts`) — jamais un simple UPDATE.
+    if (parsed.data.status === "SENT") {
+      const quote = await sendQuote(actor.organization.id, id, actor.user.id);
+      return NextResponse.json({ quote });
+    }
 
-  if (parsed.data.status === "SENT") {
-    await prisma.lead.update({ where: { id: existing.leadId }, data: { stage: LeadStage.QUOTE_SENT } });
+    const quote = await prisma.quote.update({
+      where: { id },
+      data: {
+        status: parsed.data.status,
+        acceptedAt: parsed.data.status === "ACCEPTED" ? new Date() : undefined,
+      },
+    });
+
+    await writeAuditLog({
+      organizationId: actor.organization.id,
+      userId: actor.user.id,
+      leadId: existing.leadId,
+      action: "quote.status_changed",
+      entityType: "Quote",
+      entityId: id,
+      metadata: { status: parsed.data.status },
+    });
+
+    return NextResponse.json({ quote });
+  } catch (error) {
+    return toApiErrorResponse(error, { route: "PATCH /api/quotes/[id]" });
   }
-
-  await writeAuditLog({
-    organizationId: actor.organization.id,
-    userId: actor.user.id,
-    leadId: existing.leadId,
-    action: "quote.status_changed",
-    entityType: "Quote",
-    entityId: id,
-    metadata: { status: parsed.data.status },
-  });
-
-  return NextResponse.json({ quote });
 }

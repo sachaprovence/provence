@@ -1186,19 +1186,47 @@ enum QuoteStatus {
   EXPIRED
 }
 
+/// Statut de la signature électronique (abstraction, v0.9, ADR 0038) — le
+/// brief demande explicitement une ABSTRACTION (contrairement aux emails/
+/// Google Calendar, aucun fournisseur réel n'est câblé) : voir
+/// `src/lib/quotes/esignature/`.
+enum QuoteSignatureStatus {
+  NONE
+  PENDING
+  SIGNED
+  DECLINED
+}
+
 model Quote {
-  id             String      @id @default(cuid())
-  organizationId String
-  leadId         String
-  opportunityId  String?
-  reference      String
-  status         QuoteStatus @default(DRAFT)
-  totalAmount    Int         @default(0)
-  sentAt         DateTime?
-  expiresAt      DateTime?
-  acceptedAt     DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                 String               @id @default(cuid())
+  organizationId     String
+  leadId             String
+  opportunityId      String?
+  reference          String
+  status             QuoteStatus          @default(DRAFT)
+  /// Somme des lignes (quantité × prix unitaire), avant remise et TVA.
+  subtotalAmount     Int                  @default(0)
+  /// Remise globale du devis, en pourcentage (0-100) — v0.9.
+  discountPercent    Float                @default(0)
+  /// Taux de TVA appliqué, en pourcentage (ex. 20 pour 20%) — v0.9.
+  vatRate            Float                @default(20)
+  /// Montant de TVA calculé (sur le montant après remise) — v0.9.
+  vatAmount          Int                  @default(0)
+  /// Montant total TTC (inchangé depuis avant v0.9 : remise + TVA déjà appliquées).
+  totalAmount        Int                  @default(0)
+  signatureStatus    QuoteSignatureStatus @default(NONE)
+  signedAt           DateTime?
+  signerName         String?
+  signerEmail        String?
+  /// Nom du fournisseur de signature électronique utilisé (ex. "demo") — voir `esignature/types.ts`.
+  signatureProvider  String?
+  /// Identifiant de la demande côté fournisseur — permet de corréler un futur webhook réel à ce devis.
+  signatureRequestId String?
+  sentAt             DateTime?
+  expiresAt          DateTime?
+  acceptedAt         DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)

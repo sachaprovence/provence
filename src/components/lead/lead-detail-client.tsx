@@ -6,7 +6,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { apiPost, apiPut, apiPatch, ApiError } from "@/lib/api-client";
 import type { LeadDetail } from "@/app/(app)/leads/[id]/page";
-import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, MESSAGE_TYPE_LABEL, INTENT_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, MESSAGE_TYPE_LABEL, INTENT_LABEL } from "@/lib/labels";
 import { ScoreBadge } from "@/components/score-badge";
 import type { SequenceModel, SequenceStepModel, ServiceModel, PipelineStageModel } from "@/generated/prisma/models";
 
@@ -499,6 +499,8 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
   const [busy, setBusy] = useState<string | null>(null);
   const [quoteServiceId, setQuoteServiceId] = useState(services[0]?.id ?? "");
   const [opportunityId, setOpportunityId] = useState("");
+  const [discountPercent, setDiscountPercent] = useState("0");
+  const [vatRate, setVatRate] = useState("20");
 
   async function createOpportunity(e: React.FormEvent) {
     e.preventDefault();
@@ -529,6 +531,8 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
       await apiPost("/api/quotes", {
         leadId: lead.id,
         opportunityId: opportunityId || undefined,
+        discountPercent: Number(discountPercent) || 0,
+        vatRate: Number(vatRate) || 0,
         lines: [{ serviceId: service.id, label: service.name, quantity: 1, unitPrice: service.basePrice }],
       });
       router.refresh();
@@ -594,6 +598,14 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
               {lead.opportunities.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </div>
+          <div>
+            <label className="label">Remise (%)</label>
+            <input type="number" className="input w-20" value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} min={0} max={100} />
+          </div>
+          <div>
+            <label className="label">TVA (%)</label>
+            <input type="number" className="input w-20" value={vatRate} onChange={(e) => setVatRate(e.target.value)} min={0} max={100} />
+          </div>
           <button className="btn-primary" disabled={busy === "quote"} onClick={createQuote}>Créer un devis</button>
         </div>
         <ul className="space-y-2">
@@ -603,9 +615,12 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
                 <div className="text-p360-ink font-medium">{q.reference} — {formatEuros(q.totalAmount)}</div>
                 <div className="text-xs text-p360-muted">Statut : {q.status}</div>
               </div>
-              {q.status === "DRAFT" && (
-                <button className="btn-secondary text-xs" disabled={busy === q.id} onClick={() => markQuoteSent(q.id)}>Marquer envoyé</button>
-              )}
+              <div className="flex gap-2 items-center">
+                <a className="text-xs text-p360-muted hover:underline" href={`/api/quotes/${q.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>
+                {q.status === "DRAFT" && (
+                  <button className="btn-secondary text-xs" disabled={busy === q.id} onClick={() => markQuoteSent(q.id)}>Marquer envoyé</button>
+                )}
+              </div>
             </li>
           ))}
           {lead.quotes.length === 0 && <p className="text-sm text-p360-muted">Aucun devis.</p>}
