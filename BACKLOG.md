@@ -1859,105 +1859,141 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 
 ---
 
-### Plan initial de v0.9 (partiellement livré, conservé pour référence)
+### Plan initial de v0.9 (partiellement livré, poursuivi en v0.9 bis)
 
 > La tâche `AR-0052` (`SmtpEmailProvider`) ci-dessous est livrée (sous une
 > forme étendue à Resend/Postmark/Brevo et à la configuration par
 > organisation) via `AR-0145` ci-dessus. `AR-0047` à `AR-0051`, `AR-0053`
-> et `AR-0054` restent non traitées — voir `ROADMAP.md` §1 novies.
+> et `AR-0054` sont traitées dans la section "Version 0.9 bis"
+> ci-dessous — voir `ROADMAP.md` §1 novies.
 
-## Version 0.9 bis — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06, plan initial, reporté)
+## Version 0.9 bis — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06)
 
-### AR-0047 — Logs structurés (pino)
-- **Description** : remplacer les `console.log` restants par des logs
-  structurés, avec politique explicite de champs autorisés (aucune donnée
-  sensible : mot de passe, token, contenu brut de prompt IA en clair sans
-  troncature).
-- **Fichiers concernés** : `src/lib/logger.ts` (nouveau), remplacement
-  progressif dans `src/lib/**`.
+> **Statut : en cours d'implémentation.** État des lieux réalisé avant
+> exécution (relecture du code, pas seulement de la roadmap) : `AR-0047`
+> est déjà satisfaite depuis une phase antérieure (`src/lib/logger.ts`,
+> pino, redaction, aucun `console.log` brut dans `src/` — règle de lint
+> active) — seul un test de non-régression manquait. `AR-0052` est déjà
+> livrée via `AR-0145` (v0.9). Le reste (`AR-0048`/`0049`/`0050`/`0051`/
+> `0053`/`0054`) est implémenté dans cette version, en réutilisant les
+> conventions déjà établies (fournisseur réel + repli honnête sans
+> identifiants, jamais un faux succès ; appel HTTP direct plutôt qu'un
+> SDK tiers lourd).
+
+### AR-0047 — Logs structurés (pino) — déjà livrée, test de non-régression ajouté
+- **Description** : `src/lib/logger.ts` (pino, `redact` sur
+  password/token/secret/authorization, aucun `console.log` brut autorisé
+  dans `src/` par la configuration ESLint) est en place depuis une phase
+  antérieure à v0.9 bis. Seul manquait un test prouvant que la
+  redaction fonctionne réellement.
+- **Fichiers concernés** : `tests/observability/logger.test.ts` (nouveau).
+- **Complexité** : Basse.
+- **Tests nécessaires** : un log contenant un champ sensible listé ne
+  doit jamais faire apparaître sa valeur en clair dans la sortie.
+
+### AR-0048 — Capture d'erreurs (Sentry, via l'API HTTP d'ingestion — pas de SDK)
+- **Description** : intégration RÉELLE et complète de l'API d'ingestion
+  Sentry (format "envelope", appel `fetch()` direct — même convention que
+  les fournisseurs LLM/email/Calendar : jamais de SDK tiers lourd), lue
+  depuis `SENTRY_DSN` (variable d'environnement, réglage de déploiement -
+  pas par organisation, même principe que le choix du fournisseur IA).
+  Échoue/no-op explicitement sans DSN configuré (jamais un faux succès) ;
+  le journal structuré (AR-0047) reste TOUJOURS écrit, que Sentry soit
+  configuré ou non. Complète (ne remplace pas) le mécanisme déjà existant
+  `reportClientError`/`POST /api/client-errors` (capture des erreurs
+  React côté navigateur) et `toApiErrorResponse` (erreurs serveur ≥ 500
+  uniquement — les 4xx sont des erreurs métier attendues, pas des
+  incidents).
+- **Fichiers concernés** : `src/lib/observability/error-tracking.ts`
+  (nouveau), `src/lib/errors.ts` (branchement dans
+  `toApiErrorResponse`), `src/app/api/client-errors/route.ts`.
 - **Complexité** : Moyenne.
-- **Estimation** : 2 jours.
-- **Prérequis** : AR-0006.
-- **Tests nécessaires** : test qu'aucun champ sensible listé n'apparaît
-  dans un log généré en test.
-
-### AR-0048 — Capture d'erreurs (Sentry ou équivalent)
-- **Description** : intégration d'un service de capture d'erreurs
-  applicatives avec contexte suffisant (route, organisation anonymisée,
-  stack trace).
-- **Fichiers concernés** : `src/lib/error-tracking.ts` (nouveau),
-  `next.config.ts`.
-- **Complexité** : Moyenne.
-- **Estimation** : 1,5 jour.
-- **Prérequis** : AR-0047.
-- **Tests nécessaires** : test qu'une exception simulée est bien capturée
-  en environnement de test.
+- **Tests nécessaires** : envoi réel vérifié contre un vrai petit serveur
+  HTTP local (comme les fournisseurs email/Calendar) ; no-op explicite
+  sans DSN ; jamais de secret (DSN) journalisé en clair.
 
 ### AR-0049 — Métriques de base
-- **Description** : compteurs/latences exposés (latence API moyenne, taux
-  d'échec d'envoi email, coût IA cumulé par organisation) consultables au
-  minimum via une page d'administration interne.
-- **Fichiers concernés** : `src/lib/metrics.ts` (nouveau),
-  `src/app/(app)/settings/metrics/page.tsx` (nouveau).
+- **Description** : (a) coût IA cumulé par organisation — agrégation
+  RÉELLE de `AIRequest.estimatedCostUsd` (déjà journalisé depuis v0.3,
+  jamais exploité en agrégat) ; (b) taux de succès/échec d'envoi email —
+  nouvelle écriture d'`AuditLog` (`email.sent`/`email.failed`, même
+  convention que `communication.<channel>.<status>` du Communication
+  Hub) aux points d'envoi réel existants (`sequence-engine.ts`, actions
+  `email.send`), puis agrégation ; (c) latence API — nouvelle table
+  légère `ApiRequestMetric` + petit assistant `withApiMetrics()`
+  appliqué de façon incrémentale à quelques routes représentatives
+  (`/api/leads`, `/api/messages/generate`, `/api/quotes`) plutôt qu'un
+  middleware global sur TOUTES les routes (risque de régression
+  disproportionné pour la valeur — voir ADR dédiée) — extensible route
+  par route sans changement d'architecture.
+- **Fichiers concernés** : `src/lib/observability/metrics-service.ts`
+  (nouveau), `src/lib/observability/api-metrics.ts` (nouveau),
+  `src/app/(app)/settings/metrics/page.tsx` (nouveau),
+  `src/app/api/settings/metrics/route.ts` (nouveau), migration Prisma
+  (`ApiRequestMetric`).
 - **Complexité** : Moyenne.
-- **Estimation** : 2 jours.
-- **Prérequis** : AR-0047.
-- **Tests nécessaires** : test que les compteurs reflètent des événements
-  simulés connus.
+- **Tests nécessaires** : les compteurs reflètent des évènements simulés
+  connus (coût IA, échec d'email, latence enregistrée) ; isolation
+  multi-tenant des métriques.
 
-### AR-0050 — `AnthropicAIProvider`
-- **Description** : implémentation réelle de `AIProvider` basée sur l'API
-  Anthropic (Claude), sélectionnable par `AI_PROVIDER=anthropic`, clé API
-  strictement côté serveur.
-- **Fichiers concernés** : `src/lib/ai/anthropic-provider.ts` (nouveau),
+### AR-0050 — `AnthropicAIProvider` (`src/lib/ai/`, distinct de l'abstraction LLM du Framework des Agents)
+- **Description** : implémentation réelle de `AIProvider` (couche
+  historique `src/lib/ai/`, utilisée par `analyzeLead`/`generateMessage`/
+  `sequence-engine.ts` — toujours active, PAS remplacée par l'abstraction
+  LLM du Framework des Agents qui dessert un périmètre différent) basée
+  sur l'API Anthropic (Claude), via `fetch()` direct, sélectionnable par
+  `AI_PROVIDER=anthropic`. Échoue explicitement sans `ANTHROPIC_API_KEY`.
+- **Fichiers concernés** : `src/lib/ai/providers/anthropic.ts` (nouveau),
   `src/lib/ai/index.ts`.
-- **Complexité** : Élevée.
-- **Estimation** : 3 jours.
-- **Prérequis** : AR-0043 (appels IA déjà asynchrones).
-- **Tests nécessaires** : tests de contrat `AIProvider` (déjà définis pour
-  `DemoAIProvider`) rejoués contre l'implémentation réelle avec des
-  doubles de test pour l'appel réseau.
+- **Complexité** : Moyenne.
+- **Tests nécessaires** : contrat `AIProvider` (mêmes tests que
+  `DemoAIProvider`) + appel réel vérifié contre un vrai serveur HTTP
+  local ; échec explicite sans clé API.
 
 ### AR-0051 — Quota IA dur par organisation
-- **Description** : transformer `AIRequest.estimatedCostUsd` (simple
-  journalisation aujourd'hui) en quota bloquant, configurable par
-  organisation, avec message d'erreur explicite au dépassement.
-- **Fichiers concernés** : `src/lib/ai/index.ts`,
-  `src/lib/quota.ts` (nouveau).
+- **Description** : transforme `AIRequest.estimatedCostUsd` (simple
+  journalisation) en quota bloquant mensuel, configurable par
+  organisation (`Organization.aiMonthlyBudgetUsd`, additif), avec message
+  d'erreur explicite au dépassement — vérifié avant tout nouvel appel
+  IA réel (couche `src/lib/ai/` ET Framework des Agents).
+- **Fichiers concernés** : `src/lib/ai/quota.ts` (nouveau), `src/lib/ai/index.ts`,
+  `src/lib/agents/llm/index.ts`, migration Prisma (`Organization.aiMonthlyBudgetUsd`).
 - **Complexité** : Moyenne.
-- **Estimation** : 1,5 jour.
 - **Prérequis** : AR-0050.
-- **Tests nécessaires** : test qu'une organisation au quota atteint est
-  bloquée, pas seulement avertie.
+- **Tests nécessaires** : une organisation au quota atteint est bloquée
+  (jamais seulement avertie) ; isolation multi-tenant du quota.
 
-### AR-0052 — `SmtpEmailProvider`
-- **Description** : implémentation SMTP générique de `EmailProvider`
-  (premier connecteur réel, le plus simple avant Gmail/Outlook).
-- **Fichiers concernés** : `src/lib/email/smtp-provider.ts` (nouveau).
-- **Complexité** : Moyenne.
-- **Estimation** : 1,5 jour.
-- **Prérequis** : AR-0042.
-- **Tests nécessaires** : tests de contrat `EmailProvider` + test manuel
-  documenté sur un compte SMTP de test.
+### AR-0052 — `SmtpEmailProvider` — déjà livrée via AR-0145 (v0.9)
+Voir `src/lib/email/providers/smtp.ts` (task #86, v0.9) — implémentation
+SMTP réelle, configuration par organisation. Rien à faire ici.
 
 ### AR-0053 — `GmailApiProvider`
-- **Description** : implémentation Gmail API (OAuth) de `EmailProvider`.
-- **Fichiers concernés** : `src/lib/email/gmail-provider.ts` (nouveau).
-- **Complexité** : Très élevée.
-- **Estimation** : 3,5 jours.
-- **Prérequis** : AR-0052.
-- **Tests nécessaires** : tests de contrat + test manuel documenté (OAuth
-  non simulable simplement en CI).
+- **Description** : implémentation réelle de `EmailProvider` via l'API
+  Gmail (OAuth2 + REST `fetch()` direct — même patron que Google
+  Calendar, task #87), configuration par organisation
+  (`Integration.config`, kind EMAIL, `provider: "gmail"`). Échoue
+  explicitement sans connexion OAuth.
+- **Fichiers concernés** : `src/lib/email/providers/gmail.ts` (nouveau),
+  `src/lib/email/index.ts`, routes OAuth
+  `src/app/api/email/gmail/{connect,callback}/route.ts`.
+- **Complexité** : Élevée.
+- **Prérequis** : AR-0052 (patron `EmailProvider`, déjà livré).
+- **Tests nécessaires** : contrat `EmailProvider` + flux OAuth/envoi
+  réel vérifié contre un vrai serveur HTTP local (comme Google
+  Calendar) — la vérification de bout en bout contre un vrai compte
+  Gmail n'est pas possible dans cet environnement (aucun identifiant).
 
 ### AR-0054 — `OutlookApiProvider`
-- **Description** : équivalent AR-0053 pour Microsoft Graph/Outlook.
-- **Fichiers concernés** : `src/lib/email/outlook-provider.ts` (nouveau).
-- **Complexité** : Très élevée.
-- **Estimation** : 3,5 jours.
+- **Description** : équivalent AR-0053 pour Microsoft Graph/Outlook
+  (OAuth2 + REST `fetch()` direct).
+- **Fichiers concernés** : `src/lib/email/providers/outlook.ts` (nouveau),
+  `src/lib/email/index.ts`, routes OAuth
+  `src/app/api/email/outlook/{connect,callback}/route.ts`.
+- **Complexité** : Élevée.
 - **Prérequis** : AR-0052.
 - **Tests nécessaires** : idem AR-0053.
 
-**Total estimé v0.9 bis (plan initial, partiellement livré via AR-0145) : ~18,5 jours** (AR-0053/AR-0054 parallélisables).
+**Total estimé v0.9 bis : ~14 jours de travail restant** (AR-0047/AR-0052 déjà livrées ; AR-0053/AR-0054 parallélisables).
 
 ---
 
