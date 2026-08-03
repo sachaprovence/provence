@@ -7,6 +7,7 @@ import type { WorkspaceActor } from "@/lib/workspace-context";
 import { validateWorkflowGraph } from "./graph-validation";
 import { createWorkflowRun, executeWorkflowRun } from "./execution-engine";
 import type { WorkflowGraph } from "./graph-types";
+import { ensureWebhookTriggerConfig } from "@/lib/security/webhook-secret";
 
 /**
  * Cycle de vie d'un `WorkflowDefinition` (voir brief v0.6 : créé, modifié,
@@ -165,14 +166,17 @@ async function reindexTriggerBindings(definitionId: string, workspaceId: string,
   const triggerNodes = version.graph.nodes.filter((n) => n.type === "trigger");
   if (triggerNodes.length === 0) return;
   await prisma.workflowTriggerBinding.createMany({
-    data: triggerNodes.map((node) => ({
-      workflowDefinitionId: definitionId,
-      workflowVersionId: version.id,
-      workspaceId,
-      nodeId: node.id,
-      triggerKey: (node.data as { triggerKey: string }).triggerKey,
-      config: ((node.data as { config?: unknown }).config ?? null) as never,
-    })),
+    data: triggerNodes.map((node) => {
+      const triggerKey = (node.data as { triggerKey: string }).triggerKey;
+      return {
+        workflowDefinitionId: definitionId,
+        workflowVersionId: version.id,
+        workspaceId,
+        nodeId: node.id,
+        triggerKey,
+        config: ensureWebhookTriggerConfig(triggerKey, (node.data as { config?: unknown }).config ?? null) as never,
+      };
+    }),
   });
 }
 
