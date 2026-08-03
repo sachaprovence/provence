@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PlanKey } from "@/generated/prisma/enums";
 
 export const registerSchema = z.object({
   organizationName: z.string().min(2).max(120),
@@ -6,6 +7,8 @@ export const registerSchema = z.object({
   lastName: z.string().min(1).max(60),
   email: z.string().email(),
   password: z.string().min(8).max(200),
+  // Onboarding self-service (v1.0, AR-0064) — optionnel, STARTER par défaut si absent.
+  planKey: z.nativeEnum(PlanKey).optional(),
 });
 
 export const loginSchema = z.object({
