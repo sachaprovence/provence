@@ -1,10 +1,14 @@
-# Provence 360 — Plateforme d'acquisition client automatisée
+# Autorun / Provence 360 — plateforme SaaS multi-tenant d'acquisition et d'automatisation client
 
-Logiciel interne d'acquisition client pour **Provence 360** (visites virtuelles
-3D/360°, contenus immersifs Airbnb/Booking, photos professionnelles) :
-prospection → analyse → scoring → message personnalisé → séquence de relance
-→ réponse → rendez-vous → devis → client → mission, avec tableau de bord,
-carte des prospects, et garde-fous anti-spam/RGPD intégrés.
+**Provence 360** (visites virtuelles 3D/360°, contenus immersifs
+Airbnb/Booking, photos professionnelles) est le premier vertical métier de
+**Autorun**, une plateforme SaaS multi-tenant (organisations, workspaces)
+qui combine un CRM complet, un framework d'agents IA autonomes, un moteur de
+workflows et un moteur d'automatisations événementielles, une couche
+d'intelligence documentaire (mémoire/connaissances/contexte), et une
+communication multicanal — le tout testé, isolé par organisation, et déjà
+livré (voir [`MILESTONES.md`](MILESTONES.md) pour l'historique version par
+version, de v0.1 à v0.10).
 
 📄 Spécification fonctionnelle : [`docs/01-SPECIFICATION.md`](docs/01-SPECIFICATION.md)
 🏗️ Architecture technique : [`docs/02-ARCHITECTURE.md`](docs/02-ARCHITECTURE.md)
@@ -13,6 +17,7 @@ vertical) : [`docs/00-AUTORUN-VISION.md`](docs/00-AUTORUN-VISION.md)
 🗺️ Plan de développement Autorun : [`ROADMAP.md`](ROADMAP.md) (modules) ·
 [`BACKLOG.md`](BACKLOG.md) (tâches) · [`MILESTONES.md`](MILESTONES.md)
 (jalons) · [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) (guide de travail)
+🔒 Revue de sécurité : [`docs/security/owasp-review-2026-08-03.md`](docs/security/owasp-review-2026-08-03.md)
 
 Le projet fonctionne **entièrement en mode démonstration** dès l'installation
 (fournisseurs email et IA simulés) — aucune clé API ni service payant n'est
@@ -20,6 +25,7 @@ nécessaire pour l'essayer.
 
 ## Sommaire
 
+- [Fonctionnalités](#fonctionnalités)
 - [Démarrage rapide (Docker)](#démarrage-rapide-docker)
 - [Installation locale (sans Docker)](#installation-locale-sans-docker)
 - [Comptes de démonstration](#comptes-de-démonstration)
@@ -28,6 +34,52 @@ nécessaire pour l'essayer.
 - [Brancher de vrais fournisseurs](#brancher-de-vrais-fournisseurs-après-le-mode-démo)
 - [Déploiement](#déploiement)
 - [Fonctionnalités restant à développer](#fonctionnalités-restant-à-développer)
+
+## Fonctionnalités
+
+Tout ce qui suit est réellement implémenté et testé (pas un plan) — voir
+`MILESTONES.md` pour la version qui a livré chaque bloc.
+
+- **CRM multi-tenant** : organisations et workspaces isolés, prospects
+  (import CSV, carte, Kanban/pipeline personnalisable), séquences de
+  relance email multi-étapes avec fenêtre horaire autorisée, campagnes,
+  opportunités, devis (catalogue, remises, TVA, versions, PDF, e-signature
+  — abstraction prête pour un fournisseur réel), factures (conversion
+  devis → facture), rendez-vous (synchronisation Google Calendar réelle),
+  missions, visites virtuelles 3D (VirtualTour), liste de suppression
+  RGPD/CAN-SPAM et jetons de désinscription publics.
+- **Framework des Agents** : moteur d'exécution d'agents générique
+  (planification, outils déclaratifs, mémoire, journalisation), un agent
+  Directeur qui décompose des objectifs et délègue à des agents métier, un
+  agent Commercial (qualification/scoring/génération de messages), et 7
+  agents métier spécialisés supplémentaires (relance, support,
+  planification RDV, etc.), tous branchés sur les vraies données CRM.
+- **Workflow Engine** : éditeur visuel de graphes (glisser-déposer),
+  déclencheurs/conditions/actions déclaratifs et extensibles, exécution
+  avec parallélisme, timeouts, retries et reprise, 10 modèles de workflows
+  prêts à l'emploi.
+- **Automation Engine** : automatisations événementielles asynchrones
+  (files d'attente, verrous distribués, limitation de débit, disjoncteur,
+  file de lettres mortes, planificateur multi-fuseaux/DST, priorités),
+  déclenchées par évènement, webhook (secret obligatoire) ou planification.
+- **Intelligence documentaire** : mémoire multi-niveaux, ingestion de
+  documents, indexation, recherche plein texte/vectorielle/hybride, et un
+  moteur de contexte qui sélectionne et compresse automatiquement ce qui
+  est injecté dans les prompts des agents.
+- **Communication Hub** : abstraction unique pour email (SMTP, Resend,
+  Postmark, Brevo, Gmail OAuth2, Outlook/Microsoft Graph OAuth2), SMS,
+  WhatsApp, téléphone et webhooks sortants, configurée par organisation.
+- **Observabilité** : capture d'erreurs réelle (Sentry), métriques (coût
+  IA, taux d'échec email, latence API) exposées dans un tableau de bord
+  dédié, journalisation structurée avec rédaction automatique des secrets.
+- **Sécurité** : verrouillage de compte et limitation de débit sur
+  l'authentification, secret obligatoire et vérifié à temps constant sur
+  tous les déclencheurs webhook, quota d'envoi email quotidien dur par
+  organisation (tous points d'envoi confondus), masquage systématique des
+  secrets dans les réponses API, préparation du schéma 2FA (TOTP).
+- **Tableaux de bord** : commercial, production, clients, visites, chiffre
+  d'affaires, IA, automatisations, rendez-vous, performance — tous scopés
+  par organisation.
 
 ## Démarrage rapide (Docker)
 
@@ -118,7 +170,8 @@ npm run db:reset                  # réinitialiser la base (⚠️ destructif, u
 `GET /api/health` (public) vérifie la connectivité base de données ; utilisé
 par le `HEALTHCHECK` Docker. La CI (`.github/workflows/ci.yml`) exécute lint,
 typecheck, tests et build sur chaque pull request ; `.github/workflows/e2e.yml`
-rejoue le golden path après merge sur `main`.
+rejoue les 3 suites E2E (golden path, isolation multi-tenant, Automation
+Engine) sur chaque pull request et après merge sur `main`.
 
 ### Test de bout en bout (parcours principal)
 
@@ -209,7 +262,10 @@ Voir [`docs/01-SPECIFICATION.md`](docs/01-SPECIFICATION.md#5-reporté-après-le-
 fournisseurs de données payants, vraie carte interactive, file de
 traitement distribuée (BullMQ/Redis), notifications push/Slack,
 facturation SaaS multi-plan, i18n complète de l'interface, application
-mobile, SSO/2FA, quota email dur (prévu `v0.10`, voir `MILESTONES.md`).
-Les connecteurs email réels (SMTP/Resend/Postmark/Brevo/Gmail/Outlook) et
-un fournisseur IA réel (Anthropic) sont déjà livrés — voir `MILESTONES.md`
-§v0.9 et §v0.9 bis.
+mobile, SSO, activation effective du 2FA à la connexion (le schéma et
+l'interface existent déjà, voir `src/lib/two-factor.ts`, mais rien ne
+l'impose encore), UI de signature électronique de devis avec un
+fournisseur réel, cache Redis, alerting sur seuil de métriques.
+Les connecteurs email réels (SMTP/Resend/Postmark/Brevo/Gmail/Outlook), un
+fournisseur IA réel (Anthropic) et le quota d'envoi email quotidien dur
+sont déjà livrés — voir `MILESTONES.md` §v0.9, §v0.9 bis et §v0.10.

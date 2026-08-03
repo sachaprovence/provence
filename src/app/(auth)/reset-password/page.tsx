@@ -11,6 +11,7 @@ export default function RequestResetPage() {
   const { push } = useToast();
   const [email, setEmail] = useState("");
   const [demoLink, setDemoLink] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -21,6 +22,7 @@ export default function RequestResetPage() {
         email,
       });
       setDemoLink(res.demoResetLink ?? null);
+      setSubmitted(true);
     } catch (err) {
       push({
         title: "Envoi impossible",
@@ -44,6 +46,10 @@ export default function RequestResetPage() {
             Réinitialiser maintenant
           </Link>
         </div>
+      ) : submitted ? (
+        <p className="text-sm text-p360-ink">
+          Si un compte existe pour cette adresse, un email contenant un lien de réinitialisation vient de lui être envoyé.
+        </p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input

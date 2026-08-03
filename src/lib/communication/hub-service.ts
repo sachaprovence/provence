@@ -50,25 +50,57 @@ const CHANNEL_DEFAULT_NAME: Record<CommunicationChannel, string> = {
   WEBHOOK: "Webhooks sortants",
 };
 
+export interface ChannelConfigPreview {
+  id: string;
+  kind: string;
+  name: string;
+  status: string;
+  provider: string | null;
+  /** Noms des clés de configuration renseignées — JAMAIS leurs valeurs (v0.10, AR-0154, même principe que `getEmailConfigPreview`). */
+  configuredKeys: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Aperçu SANS secrets pour l'API/l'UI — un canal peut porter n'importe quelle clé de config selon le fournisseur (clé API, jeton, secret de webhook...), jamais renvoyée en clair. */
+function toChannelConfigPreview(integration: {
+  id: string;
+  kind: string;
+  name: string;
+  status: string;
+  config: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): ChannelConfigPreview {
+  const config = (integration.config as Record<string, unknown> | null) ?? {};
+  return {
+    id: integration.id,
+    kind: integration.kind,
+    name: integration.name,
+    status: integration.status,
+    provider: typeof config.provider === "string" ? config.provider : null,
+    configuredKeys: Object.keys(config).filter((key) => key !== "provider"),
+    createdAt: integration.createdAt,
+    updatedAt: integration.updatedAt,
+  };
+}
+
 /** Configure le fournisseur actif d'un canal pour une organisation (brief v0.9 : réglages SMS/agenda/IA...). */
 export async function updateChannelConfig(
   organizationId: string,
   channel: CommunicationChannel,
   data: { provider: string; config?: Record<string, unknown> }
-) {
+): Promise<ChannelConfigPreview> {
   const existing = await prisma.integration.findFirst({ where: { organizationId, kind: channel } });
   const config = { ...(data.config ?? {}), provider: data.provider };
 
-  if (existing) {
-    return prisma.integration.update({
-      where: { id: existing.id },
-      data: { config, status: "CONNECTED" },
-    });
-  }
+  const integration = existing
+    ? await prisma.integration.update({ where: { id: existing.id }, data: { config, status: "CONNECTED" } })
+    : await prisma.integration.create({
+        data: { organizationId, kind: channel, name: CHANNEL_DEFAULT_NAME[channel], status: "CONNECTED", config },
+      });
 
-  return prisma.integration.create({
-    data: { organizationId, kind: channel, name: CHANNEL_DEFAULT_NAME[channel], status: "CONNECTED", config },
-  });
+  return toChannelConfigPreview(integration);
 }
 
 export async function sendCommunication(

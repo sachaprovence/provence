@@ -141,6 +141,19 @@ relances maintenant" en mode démo), soit par un vrai cron système appelant
 - Lien de désinscription signé par HMAC (`AUTH_SECRET`), vérifié en temps
   constant (`crypto.timingSafeEqual`).
 - Aucune clé API IA/email n'est exposée au navigateur.
+- (v0.10) Verrouillage de compte durable (`assertLoginNotLocked`, basé sur
+  `LoginEvent`, cross-instance) après 8 échecs de connexion en 15 minutes,
+  et limitation de débit best-effort en mémoire (`src/lib/security/
+  rate-limiter.ts`) sur les endpoints d'authentification les plus
+  sensibles, appliquée dans `src/proxy.ts` (runtime Node.js par défaut,
+  voir §18).
+- (v0.10) Secret de webhook obligatoire et généré automatiquement
+  (`src/lib/security/webhook-secret.ts`), vérifié en temps constant, sur
+  tous les déclencheurs webhook du Workflow Engine et de l'Automation
+  Engine — était auparavant optionnel.
+- (v0.10) Quota d'envoi email quotidien dur par organisation
+  (`src/lib/email/quota.ts`), appliqué à tous les points d'envoi réel
+  (moteur de séquences, Workflow Engine, Automation Engine).
 
 ## 7. Fonctionnalités restant à développer après le MVP
 
@@ -1398,3 +1411,80 @@ bloqué de bout en bout par le quota), `tests/email/{gmail,outlook}.test.ts`
 (vrais serveurs HTTP locaux simulant Google/Microsoft), et l'extension de
 `tests/settings/organization-settings.test.ts` pour le nouveau champ de
 quota.
+
+## 18. v0.10 — Stabilisation production (`ROADMAP.md` §1 undecies, MOD-17)
+
+Voir `docs/adr/0041` pour la justification complète. Contrairement aux
+versions précédentes (nouvelles fonctionnalités), v0.10 est un jalon de
+sécurisation : correction de failles, extension de la couverture de
+tests, et documentation — précédée d'un audit exhaustif du code (3 revues
+indépendantes) qui a révélé la faille la plus sévère de toute la revue
+(réinitialisation de mot de passe) avant toute exécution.
+
+### Faille critique corrigée : réinitialisation de mot de passe (`src/app/api/auth/reset-password/request/route.ts`)
+
+La route renvoyait **toujours** `demoResetLink` en clair dans la réponse
+JSON, même avec un fournisseur email réel configuré — aucun email n'était
+jamais réellement envoyé. Corrigé : envoi réel via
+`getEmailProvider().send(...)` quand un fournisseur réel est actif ;
+`demoResetLink` n'est renvoyé QUE si `getEmailProvider().name === "demo"`.
+La non-énumération des comptes (comportement déjà correct) est conservée
+dans les deux modes.
+
+### Verrouillage de compte et limitation de débit (`src/lib/auth.ts`, `src/lib/security/rate-limiter.ts`, `src/proxy.ts`)
+
+Deux mécanismes complémentaires, choisis selon leur nature :
+- **Verrouillage durable** (`assertLoginNotLocked`) : repose sur
+  `LoginEvent` (Postgres, déjà journalisé depuis v0.1, partagé entre
+  toutes les instances) — bloque après 8 échecs en 15 minutes. Protection
+  de sécurité critique, doit survivre à un redémarrage/plusieurs
+  instances.
+- **Limitation de débit best-effort** (`isRateLimited`) : compteur glissant
+  en mémoire par processus, documenté honnêtement comme une protection
+  best-effort (même convention que `automation/concurrency/rate-limiter.ts`,
+  v0.8) — appliquée dans `src/proxy.ts` sur les endpoints d'authentification
+  les plus sensibles. Le Proxy Next.js 16 tourne par défaut sur le runtime
+  Node.js (contrairement à l'ancien `middleware.ts`, limité à l'Edge
+  Runtime) — c'est ce qui rend cette vérification possible directement
+  dans le Proxy, sans détour par une route API intermédiaire.
+
+### Secret de webhook obligatoire (`src/lib/security/webhook-secret.ts`)
+
+Le secret des déclencheurs webhook (Workflow Engine et Automation Engine)
+était auparavant optionnel — un déclencheur créé sans secret restait
+ouvert à quiconque devine `workspaceId` + `workflowKey`/`automationKey`.
+`ensureWebhookTriggerConfig` génère désormais systématiquement un secret à
+la (ré)indexation des liaisons de déclencheur ; une migration de
+rattrapage (`20260803201424_backfill_webhook_trigger_secrets`) comble les
+liaisons existantes. Comparaison en temps constant
+(`timingSafeStringEqual`, même patron que `unsubscribe-token.ts`).
+
+### Quota email dur généralisé (`src/lib/email/quota.ts`, `src/lib/email/index.ts`)
+
+Le quota (`Organization.dailySendLimit`/`EmailAccount.dailyLimit`)
+bloquait déjà les envois dans `sequence-engine.ts`, mais l'action
+`email.send` de l'Automation Engine et du Workflow Engine appelait
+`getEmailProvider()` directement, sans aucune vérification — un
+automatisme ou un workflow pouvait envoyer un nombre illimité d'emails.
+`getEmailProviderForOrganization` généralise le patron déjà établi par
+`getAIProviderForOrganization` (v0.9 bis) : vérifie le quota avant de
+retourner le fournisseur, à chaque point d'envoi réel.
+
+### Préparation 2FA (`prisma/schema.prisma`, `src/lib/two-factor.ts`)
+
+Schéma (`User.twoFactorSecret`/`twoFactorEnabled`) et implémentation TOTP
+(RFC 6238, HMAC-SHA1) sans dépendance externe — cycle
+inscription/confirmation/désactivation complet, testé contre le vecteur de
+test officiel RFC 4226 Annexe D. Non encore imposé à la connexion
+(`src/lib/auth.ts` ne consulte pas `twoFactorEnabled`) : pose les
+fondations de `MOD-17` post-v1.0.
+
+### Extension de la couverture de tests
+
+`tests/tenant-isolation/{invoices,quotes,appointments,automations,
+communications,email,calendar}.test.ts` (7 nouveaux domaines, en
+priorité les domaines financiers et porteurs de secrets) et
+`tests/crm/{sequence-engine,suppression,unsubscribe-token}.test.ts` (3
+modules critiques jusque-là sans aucun test). `.github/workflows/e2e.yml`
+exécute désormais les 3 suites E2E sur chaque pull request, pas seulement
+après merge sur `main`.

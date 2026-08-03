@@ -1,7 +1,7 @@
 import "server-only";
 import crypto from "node:crypto";
 import { ValidationError } from "@/lib/errors";
-import { getEmailProvider } from "@/lib/email";
+import { getEmailProviderForOrganization } from "@/lib/email";
 import type { WorkflowActionHandler } from "../registry";
 
 type EmailSendInput = { fromName: string; fromEmail: string; toEmail: string; subject: string; body: string };
@@ -23,7 +23,7 @@ export const emailSendAction: WorkflowActionHandler<EmailSendInput, { providerMe
     if (!input.toEmail || !input.subject) {
       throw new ValidationError('L\'action "email.send" nécessite "toEmail" et "subject".');
     }
-    const provider = getEmailProvider();
+    const provider = await getEmailProviderForOrganization(context.organizationId);
     const result = await provider.send({
       fromName: input.fromName,
       fromEmail: input.fromEmail,

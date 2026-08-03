@@ -62,10 +62,14 @@ runIfDatabase("Automation Engine — registre de jobs/actions (plugins)", () => 
   });
 
   it("email.send utilise le fournisseur email configuré (demo)", async () => {
+    const fixture = await createWorkflowTestFixture("automation-action-email-send");
+    organizationIds.push(fixture.organization.id);
+    userIds.push(fixture.user.id);
+
     const action = getAutomationJobHandler("email.send")!;
     const result = (await action.execute(
       { fromName: "Autorun", fromEmail: "a@b.test", toEmail: "c@d.test", subject: "Sujet", body: "Corps" },
-      testContext()
+      testContext({ organizationId: fixture.organization.id, workspaceId: fixture.workspace.id })
     )) as { status: string };
 
     expect(result.status).toBe("sent");

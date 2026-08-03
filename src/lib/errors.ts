@@ -70,6 +70,14 @@ export class QuotaExceededError extends AppError {
   }
 }
 
+/** Débit dépassé ou compte temporairement verrouillé (v0.10, AR-0155) — erreur métier attendue, jamais un incident. */
+export class TooManyRequestsError extends AppError {
+  constructor(message = "Trop de requêtes.", details?: unknown) {
+    super(message, { statusCode: 429, expose: true, details });
+    this.name = "TooManyRequestsError";
+  }
+}
+
 /**
  * Convertit n'importe quelle erreur (`AppError` ou exception inattendue) en
  * `NextResponse` JSON, en journalisant systématiquement côté serveur.

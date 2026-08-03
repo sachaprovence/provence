@@ -269,6 +269,49 @@ voir `BACKLOG.md` et `docs/adr/0040`) les traite intégralement :
 livrés** (v0.9 + v0.9 bis combinés). Les décisions d'architecture prises
 pour `v0.9 bis` sont documentées dans `docs/adr/0040`.
 
+## 1 undecies. v0.10 : MOD-17 (sécurité avancée, porte obligatoire avant v1.0) est livré
+
+Avant `v1.0`, un audit exhaustif du code (pas seulement des ADR/BACKLOG
+existants) a été mené par 3 revues indépendantes ciblées (sécurité/
+isolation multi-tenant ; dette technique/duplication/performance ;
+couverture de tests/migrations/observabilité/documentation/CI), complété
+par une vérification manuelle du parcours de réinitialisation de mot de
+passe. `v0.10` (`AR-0055` à `AR-0058`, `AR-0153` à `AR-0159`, voir
+`BACKLOG.md` et `docs/adr/0041`) corrige l'intégralité des constats classés
+P0 :
+
+- **Faille critique corrigée** : le lien de réinitialisation de mot de
+  passe était toujours renvoyé en clair dans la réponse API, même avec un
+  fournisseur email réel configuré — prise de contrôle de compte triviale
+  en production (`AR-0153`).
+- **Authentification durcie** : verrouillage de compte et limitation de
+  débit sur la connexion (`AR-0155`), secret désormais obligatoire et
+  vérifié à temps constant sur tous les déclencheurs webhook (`AR-0156`),
+  masquage systématique des secrets dans les réponses API du Communication
+  Hub (`AR-0154`).
+- **Quota email dur généralisé** : le plafond d'envoi quotidien par
+  organisation, déjà bloquant dans le moteur de séquences, s'applique
+  désormais à tous les points d'envoi réel — y compris le Workflow Engine
+  et l'Automation Engine, qui l'ignoraient totalement (`AR-0057`).
+- **Préparation 2FA** : schéma de données et interface TOTP posés
+  (`AR-0058`) — fondation pour une activation complète après `v1.0`, non
+  encore imposée à la connexion.
+- **Couverture de tests étendue** : suite d'isolation multi-tenant élargie
+  aux domaines financiers et porteurs de secrets (`AR-0055`), tests
+  ajoutés pour trois modules critiques jusque-là sans aucun test —
+  moteur de séquences, liste de suppression RGPD, jetons de désinscription
+  (`AR-0158`), les 3 suites E2E exécutées désormais sur chaque pull
+  request et plus seulement après merge (`AR-0157`).
+- **Documentation à jour** : revue de sécurité consolidée
+  (`docs/security/owasp-review-2026-08-03.md`, `AR-0056`) et `README.md`
+  reflétant enfin le produit réellement livré (`AR-0159`).
+
+`MOD-17` est donc considéré **livré** au sens du critère de fin du plan
+initial (aucune vulnérabilité critique ouverte) — une revue de sécurité
+externe indépendante reste recommandée avant l'ouverture SaaS publique
+(`MOD-19`), voir la recommandation finale du rapport OWASP. Les décisions
+d'architecture prises pour `v0.10` sont documentées dans `docs/adr/0041`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -291,7 +334,7 @@ pour `v0.9 bis` sont documentées dans `docs/adr/0040`.
 | MOD-14 | Calendrier | ✅ Google Calendar réel livré via `MOD-28` (v0.9, voir §1 novies) | Moyenne |
 | MOD-15 | Infrastructure asynchrone (jobs) | ✅ Livré via `MOD-27` (v0.8, voir §1 octies) | Haute |
 | MOD-16 | Observabilité | ✅ Livré (v0.9 bis : logs déjà en place + capture d'erreurs réelle + métriques de base, voir §1 decies) | Haute |
-| MOD-17 | Sécurité avancée & conformité renforcée | À créer | Critique (avant SaaS public) |
+| MOD-17 | Sécurité avancée & conformité renforcée | ✅ Livré (v0.10 : audit exhaustif + corrections + tests d'isolation étendus + quota email dur + préparation 2FA, voir §1 undecies) | Critique (avant SaaS public) |
 | MOD-18 | Intégrations tierces & API publique | À créer | Moyenne |
 | MOD-19 | Facturation SaaS Autorun (abonnements) | À créer | Haute (condition de v1.0) |
 | MOD-20 | Vertical Pack — validation par un 2ᵉ vertical fictif | Reporté après v0.4 (voir §1 ter/§1 quater) | Critique (preuve du concept) |
@@ -1598,11 +1641,13 @@ noyau de jobs ; et `v0.9` a livré `MOD-28` (Provence 360 Operating System)
 réel) et `MOD-14` (Google Calendar réel) — à la place de la combinaison
 initialement prévue `MOD-16` + `MOD-06` réel + `MOD-04` réel (voir
 §1 novies) ; `v0.9 bis` a ensuite livré le reste de `MOD-16`/`MOD-04`/
-`MOD-06` (voir §1 decies), les complétant entièrement. `MOD-02`, `MOD-12`
-(paiement en ligne), `MOD-13` et `MOD-20` restent à faire, désormais
-après `v0.9 bis`, ainsi que la migration des modules v0.1–v0.9 vers le
-noyau de jobs de `MOD-27` (possible dès maintenant, non réalisée dans
-cette phase). Voir `MILESTONES.md` pour l'état réel version par version.
+`MOD-06` (voir §1 decies), les complétant entièrement ; et `v0.10` a livré
+`MOD-17` (sécurité avancée, voir §1 undecies), conformément au plan
+initial (porte obligatoire avant `v1.0`). `MOD-02`, `MOD-12`
+(paiement en ligne), `MOD-13` et `MOD-20` restent à faire, ainsi que la
+migration des modules v0.1–v0.9 vers le noyau de jobs de `MOD-27`
+(possible dès maintenant, non réalisée dans cette phase). Voir
+`MILESTONES.md` pour l'état réel version par version.
 
 ## 5. Éléments parallélisables
 

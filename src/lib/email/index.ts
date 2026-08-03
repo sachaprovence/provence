@@ -6,6 +6,7 @@ import { PostmarkEmailProvider } from "./providers/postmark";
 import { BrevoEmailProvider } from "./providers/brevo";
 import { GmailEmailProvider } from "./providers/gmail";
 import { OutlookEmailProvider } from "./providers/outlook";
+import { assertEmailQuotaAvailable } from "./quota";
 
 /**
  * Fournisseur actif, choisi via `EMAIL_PROVIDER` (défaut `"demo"`) — même
@@ -37,4 +38,18 @@ export function getEmailProvider(): EmailProvider {
   }
 }
 
+/**
+ * Même chose que `getEmailProvider()`, mais vérifie d'abord le quota email
+ * quotidien de l'organisation (AR-0057, `src/lib/email/quota.ts`) — lève
+ * `QuotaExceededError` si dépassé. À utiliser à chaque point d'appel réel
+ * connaissant l'organisation concernée (Automation Engine, Workflow Engine ;
+ * `sequence-engine.ts` conserve son propre contrôle pour préserver ses
+ * effets de bord spécifiques en cas de dépassement — voir ce fichier).
+ */
+export async function getEmailProviderForOrganization(organizationId: string): Promise<EmailProvider> {
+  await assertEmailQuotaAvailable(organizationId);
+  return getEmailProvider();
+}
+
 export * from "./types";
+export { assertEmailQuotaAvailable, getEmailSentTodayCount, resolveDailyEmailLimit } from "./quota";

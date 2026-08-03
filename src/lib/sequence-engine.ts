@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAIProviderForOrganization } from "@/lib/ai";
-import { getEmailProvider } from "@/lib/email";
+import { getEmailProvider, assertEmailQuotaAvailable } from "@/lib/email";
+import { QuotaExceededError } from "@/lib/errors";
 import { unsubscribeUrl } from "@/lib/unsubscribe-token";
 import { isSuppressed } from "@/lib/suppression";
 import { writeAuditLog } from "@/lib/audit";
@@ -264,18 +265,15 @@ export async function sendMessageNow(messageId: string) {
   if (message.channel === SequenceChannel.EMAIL && primaryEmail) {
     const emailAccount = await prisma.emailAccount.findFirst({ where: { organizationId: message.lead.organizationId, isActive: true } });
 
-    const sentTodayCount = await prisma.message.count({
-      where: {
-        lead: { organizationId: message.lead.organizationId },
-        status: MessageStatus.SENT,
-        sentAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-      },
-    });
-    const dailyLimit = emailAccount?.dailyLimit ?? message.lead.organization.dailySendLimit;
-    if (sentTodayCount >= dailyLimit) {
-      await prisma.message.update({ where: { id: message.id }, data: { status: MessageStatus.FAILED } });
-      await prisma.emailEvent.create({ data: { messageId: message.id, type: EmailEventType.FAILED, metadata: { reason: "daily_limit_reached" } } });
-      return;
+    try {
+      await assertEmailQuotaAvailable(message.lead.organizationId);
+    } catch (error) {
+      if (error instanceof QuotaExceededError) {
+        await prisma.message.update({ where: { id: message.id }, data: { status: MessageStatus.FAILED } });
+        await prisma.emailEvent.create({ data: { messageId: message.id, type: EmailEventType.FAILED, metadata: { reason: "daily_limit_reached" } } });
+        return;
+      }
+      throw error;
     }
 
     const result = await emailProvider.send({
