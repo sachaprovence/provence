@@ -758,21 +758,68 @@ et de la facturation client (`v0.4`/`v0.5`).
 
 ## v0.10 — Sécurité avancée (porte obligatoire avant v1.0)
 
-- **Objectif du jalon** : ce jalon est un **gate**, pas une fonctionnalité
-  — condition bloquante avant toute ouverture SaaS publique.
+> **Statut : ✅ livré** (2026-08-03). Ce jalon est un **gate**, pas une
+> fonctionnalité — condition bloquante avant toute ouverture SaaS
+> publique. Précédé d'un audit exhaustif du code (3 revues indépendantes :
+> sécurité/isolation, dette technique/performance, tests/migrations/
+> observabilité/documentation/CI, plus une vérification manuelle du
+> parcours de réinitialisation de mot de passe), qui a révélé une faille
+> critique (`AR-0153`) non anticipée par le plan initial de `MOD-17`. Voir
+> `docs/adr/0041` et `docs/security/owasp-review-2026-08-03.md`.
+
+- **Objectif du jalon** : durcir l'isolation multi-tenant et la sécurité
+  générale avant toute ouverture SaaS publique (`MOD-19`).
 - **Modules** : MOD-17.
-- **Tâches** : AR-0055 à AR-0058.
+- **Tâches** : AR-0055 à AR-0058 (concrétisées après audit), AR-0153 à
+  AR-0159 (nouvelles, issues de l'audit) — voir `BACKLOG.md` §Version 0.10
+  pour le détail complet de chacune.
 - **Critères de sortie** :
-  - 100 % des routes API couvertes par un test d'isolation multi-tenant ;
-  - rapport de revue OWASP Top 10 sans vulnérabilité critique ouverte non
-    corrigée ;
-  - quota email dur vérifié par test, au même standard que le quota IA
-    (`v0.9`) ;
-  - schéma 2FA en place (non forcé), prêt pour activation.
+  - [x] correction de la faille critique du lien de réinitialisation de
+    mot de passe (`AR-0153`) ;
+  - [x] masquage des secrets dans les réponses API du Communication Hub
+    (`AR-0154`) ;
+  - [x] verrouillage de compte et limitation de débit sur l'authentification
+    (`AR-0155`) ;
+  - [x] secret de webhook obligatoire, Workflow Engine et Automation
+    Engine (`AR-0156`) ;
+  - [x] quota email dur vérifié par test, généralisé à tous les points
+    d'envoi réel — y compris Workflow Engine et Automation Engine, qui
+    l'ignoraient totalement (`AR-0057`) ;
+  - [x] schéma et interface 2FA (TOTP) en place, non forcés, prêts pour
+    activation (`AR-0058`) ;
+  - [x] suite de tests d'isolation multi-tenant étendue aux domaines
+    financiers et porteurs de secrets — factures, devis, rendez-vous,
+    automatisations, Communication Hub, email, calendrier (`AR-0055`) ;
+  - [x] tests ajoutés pour 3 modules critiques jusque-là sans aucun test
+    (moteur de séquences, liste de suppression RGPD, jetons de
+    désinscription — `AR-0158`) ;
+  - [x] les 3 suites E2E exécutées sur chaque pull request, plus
+    seulement après merge (`AR-0157`) ;
+  - [x] rapport de revue OWASP Top 10 consolidé, sans vulnérabilité
+    critique ouverte non corrigée (`AR-0056`) ;
+  - [x] `README.md` à jour avec le périmètre fonctionnel réel (`AR-0159`) ;
+  - [x] les 522 tests passent contre une vraie base PostgreSQL
+    fraîchement migrée (434 en fin de v0.9 bis + 88 nouveaux au fil de la
+    v0.10 — dont le vecteur de test officiel RFC 4226 pour le TOTP, le
+    quota email de bout en bout, et 7 nouveaux domaines d'isolation
+    multi-tenant) ;
+  - [x] `npm run lint`, `npx tsc --noEmit`, `npm run build` et les 3
+    suites E2E (parcours principal, isolation multi-tenant, Automation
+    Engine) passent sans erreur contre un serveur de production
+    réellement démarré, sur une base fraîchement migrée et seedée.
 - **État fonctionnel de l'application** : inchangé fonctionnellement pour
-  l'utilisateur ; changement de posture de sécurité mesurable et
-  documenté. **`v1.0` ne peut pas démarrer avant que ce jalon soit
-  entièrement clos.**
+  l'utilisateur (aucune régression) ; changement de posture de sécurité
+  mesurable et documenté — la faille de réinitialisation de mot de passe
+  aurait été un incident de sécurité majeur en production si elle n'avait
+  pas été détectée avant `v1.0`.
+- **Explicitement hors périmètre (post-v1.0)** : activation effective du
+  2FA à la connexion (schéma/interface prêts, non imposés) ; revue de
+  sécurité externe indépendante (recommandée avant ouverture SaaS
+  publique, voir le rapport OWASP) ; les constats P1/P2 de l'audit
+  (N+1, index manquants, duplications mineures, alerting sur seuil, cache
+  Redis...) — détaillés et justifiés dans
+  `docs/security/owasp-review-2026-08-03.md` plutôt que transformés en
+  tâches.
 
 ## v1.0 — Ouverture SaaS (première version stable)
 

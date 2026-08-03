@@ -472,6 +472,50 @@ connaître pour tout nouveau code touchant ce périmètre :
   `GET /api/settings/metrics`) — voir §"Validation finale" de
   `BACKLOG.md` pour le détail des commandes exécutées.
 
+## 0 undecies. État de v0.10 (stabilisation production, sécurité)
+
+Voir `docs/adr/0041` pour le détail complet des décisions. Points à
+connaître pour tout nouveau code touchant ce périmètre :
+
+- **Toujours passer par `getEmailProviderForOrganization(organizationId)`
+  (`src/lib/email/index.ts`), jamais `getEmailProvider()` directement, à
+  un nouveau point d'appel réel d'envoi email** — même patron que
+  `getAIProviderForOrganization` (v0.9 bis) : vérifie le quota quotidien
+  avant de retourner le fournisseur (`QuotaExceededError`, HTTP 429, si
+  dépassé). `sequence-engine.ts` fait exception : il garde son propre
+  appel à `assertEmailQuotaAvailable` pour préserver ses effets de bord
+  spécifiques (marquer le `Message` `FAILED` + créer un `EmailEvent`) en
+  cas de dépassement, plutôt que de laisser l'erreur se propager
+  génériquement.
+- **Un déclencheur webhook (Workflow Engine ou Automation Engine) a
+  TOUJOURS un secret** — généré automatiquement par
+  `ensureWebhookTriggerConfig` (`src/lib/security/webhook-secret.ts`) à la
+  (ré)indexation des liaisons de déclencheur. Ne jamais rendre ce secret
+  optionnel dans un nouveau chemin de code ; comparer avec
+  `timingSafeStringEqual`, jamais `===`/`!==`.
+- **Les routes qui appellent `next/headers` (directement ou via
+  `recordLoginEvent`/`createSession`, `src/lib/auth.ts`) ne peuvent PAS
+  être invoquées directement dans Vitest** — `headers()` lève `"headers
+  was called outside a request scope"` hors d'un vrai contexte de requête
+  Next.js. Pour tester ces routes : vérification manuelle contre un vrai
+  serveur démarré (voir `tests/auth/login-lockout.test.ts` pour un
+  exemple documenté), ou restructurer la logique métier testable
+  séparément de la route (ex. `assertLoginNotLocked`, testé isolément).
+  Les routes qui n'appellent PAS `headers()` peuvent être importées et
+  invoquées directement avec un `Request` construit (voir
+  `tests/security/webhook-secret.test.ts`).
+- **Le Proxy Next.js 16 (`src/proxy.ts`) tourne par défaut sur le runtime
+  Node.js**, contrairement à l'ancien `middleware.ts` (Edge Runtime
+  uniquement) — permet d'y placer une logique nécessitant des API Node
+  complètes (ex. le rate limiter). Ne pas supposer les contraintes de
+  l'Edge Runtime obsolètes sans vérifier `node_modules/next/dist/docs/`
+  (voir `AGENTS.md`).
+- **`tests/tenant-isolation/` couvre désormais 15 domaines** (8 avant
+  v0.10 + 7 nouveaux : factures, devis, rendez-vous, automatisations,
+  Communication Hub, email, calendrier) — reproduire le gabarit
+  `expectNoCrossTenantLeak` pour tout nouveau domaine sensible, en
+  particulier financier ou porteur de secrets.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)

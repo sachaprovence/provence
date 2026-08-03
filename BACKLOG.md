@@ -2129,6 +2129,12 @@ SMTP réelle, configuration par organisation. Rien à faire ici.
 
 ## Version 0.10 — Stabilisation production (MOD-17, porte obligatoire avant v1.0)
 
+> **Statut : ✅ livrée** (2026-08-03). Les 11 tâches ci-dessous (AR-0153 à
+> AR-0159 nouvelles + AR-0055/0056/0057/0058 concrétisées) sont toutes
+> corrigées et testées. Voir `docs/adr/0041` et
+> `docs/security/owasp-review-2026-08-03.md` pour le détail des décisions
+> et des constats P1/P2 reportés.
+
 > **Contexte** : avant de lancer cette version, un audit exhaustif du code
 > (pas seulement des ADR/BACKLOG existants) a été mené par 3 revues
 > indépendantes ciblées (sécurité/isolation multi-tenant ; dette technique/
