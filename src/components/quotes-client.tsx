@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { apiPatch } from "@/lib/api-client";
+import { apiPatch, apiPost, ApiError } from "@/lib/api-client";
 
 type Quote = {
   id: string;
@@ -22,19 +22,36 @@ function formatEuros(cents: number) {
 export function QuotesClient({ quotes }: { quotes: Quote[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function setStatus(id: string, status: string) {
     setBusy(id);
+    setError(null);
     try {
       await apiPatch(`/api/quotes/${id}`, { status });
       router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur.");
     } finally {
+      setBusy(null);
+    }
+  }
+
+  async function convertToInvoice(id: string) {
+    setBusy(id);
+    setError(null);
+    try {
+      await apiPost(`/api/quotes/${id}/convert-to-invoice`);
+      router.push("/invoices");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur.");
       setBusy(null);
     }
   }
 
   return (
     <div className="card overflow-x-auto">
+      {error && <div className="p-3 text-sm text-p360-danger">{error}</div>}
       <table className="w-full text-sm">
         <thead className="bg-p360-lavender-light/40 text-p360-muted text-xs uppercase">
           <tr>
@@ -59,6 +76,9 @@ export function QuotesClient({ quotes }: { quotes: Quote[] }) {
                     <button className="text-xs text-p360-success hover:underline" disabled={busy === q.id} onClick={() => setStatus(q.id, "ACCEPTED")}>Accepté</button>
                     <button className="text-xs text-p360-danger hover:underline" disabled={busy === q.id} onClick={() => setStatus(q.id, "DECLINED")}>Refusé</button>
                   </>
+                )}
+                {q.status === "ACCEPTED" && (
+                  <button className="text-xs text-p360-success hover:underline" disabled={busy === q.id} onClick={() => convertToInvoice(q.id)}>Transformer en facture</button>
                 )}
                 <a className="text-xs text-p360-muted hover:underline" href={`/api/quotes/${q.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>
               </td>
