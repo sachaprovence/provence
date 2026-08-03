@@ -94,6 +94,23 @@ runIfDatabase("Communication Hub — résolution par organisation (Integration.c
     expect(auditLogs).toHaveLength(1);
   });
 
+  it("updateChannelConfig ne renvoie jamais un secret en clair (v0.10, AR-0154)", async () => {
+    const organization = await createOrg("secret-masking");
+    const integration = await updateChannelConfig(organization.id, "WHATSAPP", {
+      provider: "demo",
+      config: { apiKey: "sk_super_secret_value", accountSid: "AC123" },
+    });
+
+    const serialized = JSON.stringify(integration);
+    expect(serialized).not.toContain("sk_super_secret_value");
+    expect(serialized).not.toContain("AC123");
+    expect(integration.configuredKeys.sort()).toEqual(["accountSid", "apiKey"]);
+    expect(integration.provider).toBe("demo");
+
+    const stored = await prisma.integration.findFirst({ where: { organizationId: organization.id, kind: "WHATSAPP" } });
+    expect((stored?.config as { apiKey?: string } | null)?.apiKey).toBe("sk_super_secret_value");
+  });
+
   it("WEBHOOK est une intégration réelle : sendCommunication effectue un vrai POST HTTP", async () => {
     server = http.createServer((req, res) => {
       let body = "";
