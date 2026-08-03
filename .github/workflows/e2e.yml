@@ -1,13 +1,20 @@
 name: E2E
 
-# Rejoue le golden path (tests/e2e/golden-path.mjs) contre une instance
-# réellement démarrée et seedée, après merge sur `main` — voir ROADMAP.md
-# MOD-00 / BACKLOG.md AR-0002. C'est le filet de sécurité de non-régression
-# du parcours principal pendant toute la phase de généralisation d'Autorun.
+# Rejoue les 3 suites E2E (golden path, isolation multi-tenant, Automation
+# Engine) contre une instance réellement démarrée et seedée — sur chaque
+# pull request ET après merge sur `main` (v0.10, AR-0157 : auparavant
+# seul golden-path.mjs tournait, et uniquement après merge — une
+# régression du parcours principal ou de l'isolation multi-tenant n'était
+# donc détectée qu'APRÈS avoir atteint `main`). Voir ROADMAP.md MOD-00 /
+# BACKLOG.md AR-0002.
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "provence360-squarespace/**"
+      - "**/*.md"
+  pull_request:
     paths-ignore:
       - "provence360-squarespace/**"
       - "**/*.md"
@@ -18,7 +25,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  golden-path:
+  e2e:
     runs-on: ubuntu-latest
 
     services:
@@ -89,3 +96,9 @@ jobs:
 
       - name: Run golden path
         run: npm run test:e2e
+
+      - name: Run tenant isolation E2E
+        run: npm run test:e2e:tenants
+
+      - name: Run Automation Engine E2E
+        run: npm run test:e2e:automation
