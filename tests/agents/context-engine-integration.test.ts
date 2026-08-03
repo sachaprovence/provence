@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerLlmProvider } from "@/lib/agents/llm/registry";
 import { registerBuiltInAgentComponents } from "@/lib/agents/bootstrap";
+import { ensureCommercialPromptSeeds } from "@/lib/agents/commercial/prompt-seeds";
 import { generateNarrative } from "@/lib/agents/commercial/generation";
 import { ingestDocument } from "@/lib/knowledge/indexing-engine";
 import { KnowledgeSourceType } from "@/generated/prisma/enums";
@@ -19,8 +20,9 @@ runIfDatabase("Intégration Context Engine ↔ Agent Commercial", () => {
   const organizationIds: string[] = [];
   const userIds: string[] = [];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     registerBuiltInAgentComponents();
+    await ensureCommercialPromptSeeds();
   });
 
   afterAll(async () => {

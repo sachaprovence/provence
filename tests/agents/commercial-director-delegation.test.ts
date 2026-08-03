@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { registerBuiltInAgentComponents } from "@/lib/agents/bootstrap";
+import { ensureCommercialPromptSeeds } from "@/lib/agents/commercial/prompt-seeds";
 import { installAgent, transitionInstallation } from "@/lib/agents/installation-service";
 import { createAgentRun, executeAgentRun } from "@/lib/agents/execution-engine";
 import { COMMERCIAL_AGENT_RUNTIME_KEY } from "@/lib/agents/commercial/constants";
@@ -20,8 +21,9 @@ runIfDatabase("délégation du Director vers l'Agent Commercial", () => {
   const userIds: string[] = [];
   const definitionIds: string[] = [];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     registerBuiltInAgentComponents();
+    await ensureCommercialPromptSeeds();
   });
 
   afterAll(async () => {

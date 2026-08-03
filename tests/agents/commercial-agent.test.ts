@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { registerBuiltInAgentComponents } from "@/lib/agents/bootstrap";
+import { ensureCommercialPromptSeeds } from "@/lib/agents/commercial/prompt-seeds";
 import { registerLlmProvider } from "@/lib/agents/llm/registry";
 import { installAgent, transitionInstallation } from "@/lib/agents/installation-service";
 import { createAgentRun, executeAgentRun } from "@/lib/agents/execution-engine";
@@ -22,8 +23,9 @@ runIfDatabase("Agent Commercial", () => {
   const userIds: string[] = [];
   const definitionIds: string[] = [];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     registerBuiltInAgentComponents();
+    await ensureCommercialPromptSeeds();
   });
 
   afterAll(async () => {
