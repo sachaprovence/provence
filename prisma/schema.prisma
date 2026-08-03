@@ -53,6 +53,13 @@ model Organization {
   rampUpEnabled            Boolean  @default(true)
   scoringRules             Json?
   requireMessageValidation Boolean  @default(true)
+  /// Coordonnées légales/facturation (v0.9) — utilisées par les PDF de devis/factures et les paramètres.
+  vatNumber                String?
+  siret                    String?
+  legalAddress             String?
+  phone                    String?
+  invoicePrefix            String?  @default("FA")
+  quotePrefix              String?  @default("DEV")
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -81,6 +88,8 @@ model Organization {
   appointments        Appointment[]
   opportunities       Opportunity[]
   quotes              Quote[]
+  quoteVersions       QuoteVersion[]
+  invoices            Invoice[]
   customers           Customer[]
   missions            Mission[]
   services_           Service[]
@@ -94,6 +103,11 @@ model Organization {
   integrations        Integration[]
   webhookEvents       WebhookEvent[]
   loginEvents         LoginEvent[]
+  pipelineStages      PipelineStage[]
+  companies           Company[]
+  properties          Property[]
+  attachments         Attachment[]
+  virtualTours        VirtualTour[]
 
   @@index([name])
 }
@@ -137,6 +151,7 @@ model User {
   notifications               Notification[]
   messagesValidated           Message[]                  @relation("MessageValidatedBy")
   notesAuthored               LeadNote[]
+  attachmentsUploaded         Attachment[]
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +194,12 @@ model Workspace {
   automationRuns            AutomationRun[]
   automationJobs            AutomationJob[]
   automationTriggerBindings AutomationTriggerBinding[]
+  companies                 Company[]
+  properties                Property[]
+  attachments               Attachment[]
+  virtualTours              VirtualTour[]
+  quoteVersions             QuoteVersion[]
+  invoices                  Invoice[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -348,6 +369,16 @@ enum LeadCategory {
   RESTAURANT
   EVENT_VENUE
   RETAIL
+  /// Commerce de proximité (hors restaurant/hôtel) — v0.9.
+  COMMERCE
+  /// Architecte — souvent prescripteur plutôt que client final — v0.9.
+  ARCHITECT
+  /// Notaire — souvent prescripteur (transactions immobilières) — v0.9.
+  NOTARY
+  /// Promoteur/constructeur immobilier — v0.9.
+  CONSTRUCTOR
+  /// Collectivité territoriale (mairie, office de tourisme...) — v0.9.
+  MUNICIPALITY
   OTHER
 }
 
@@ -400,6 +431,192 @@ enum LeadStage {
   UNSUBSCRIBED
 }
 
+/// Catégorie de reporting d'une étape de pipeline personnalisée — voir `PipelineStage` (v0.9, ADR 0038).
+enum PipelineStageCategory {
+  OPEN
+  WON
+  LOST
+}
+
+/// Personnalisation d'AFFICHAGE du pipeline (libellé/couleur/ordre) — jamais la source de vérité métier,
+/// qui reste `Lead.stage` (l'enum `LeadStage`, inchangé). Seedée 1:1 avec `LeadStage` à la création de
+/// chaque organisation — voir ADR 0038 et `src/lib/crm/pipeline-service.ts`.
+model PipelineStage {
+  id             String                @id @default(cuid())
+  organizationId String
+  /// Correspond toujours à une valeur de `LeadStage` — jamais une étape "libre" sans sémantique métier.
+  stageKey       LeadStage
+  label          String
+  color          String                @default("#6b7280")
+  order          Int                   @default(0)
+  category       PipelineStageCategory @default(OPEN)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, stageKey])
+  @@index([organizationId, order])
+}
+
+// ---------------------------------------------------------------------------
+// Entreprises (regroupement multi-établissements) & biens immobiliers (v0.9)
+// ---------------------------------------------------------------------------
+
+/// Regroupement optionnel de plusieurs `Lead` sous une même entité juridique
+/// (groupe hôtelier, réseau d'agences...) — additif, jamais requis (voir ADR 0038).
+model Company {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  name           String
+  legalName      String?
+  siret          String?
+  website        String?
+  address        String?
+  city           String?
+  country        String   @default("France")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  leads        Lead[]
+  properties   Property[]
+
+  @@index([organizationId])
+  @@index([workspaceId])
+}
+
+/// Type physique d'un bien immobilier ("Bien immobilier" du brief v0.9) — distinct de `LeadCategory`
+/// (qui catégorise l'ÉTABLISSEMENT/client, pas le bien lui-même : une agence immobilière représente
+/// plusieurs biens de types différents).
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  VILLA
+  COMMERCIAL_PREMISES
+  HOTEL_ROOM
+  OFFICE
+  LAND
+  OTHER
+}
+
+/// Le bien physique candidat à une visite virtuelle — distinct du `Lead` qui le représente
+/// commercialement (une agence immobilière/un notaire/un architecte représente PLUSIEURS biens).
+/// Voir ADR 0038.
+model Property {
+  id             String       @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  leadId         String
+  companyId      String?
+  type           PropertyType @default(OTHER)
+  label          String
+  address        String?
+  city           String?
+  region         String?
+  country        String       @default("France")
+  latitude       Float?
+  longitude      Float?
+  surfaceM2      Float?
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company      Company?      @relation(fields: [companyId], references: [id])
+  virtualTours VirtualTour[]
+
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([companyId])
+}
+
+/// Catégorie de pièce jointe générique — documents/photos/liens (brief v0.9 : "chronologie complète").
+enum AttachmentCategory {
+  DOCUMENT
+  PHOTO
+  LINK
+}
+
+/// Pièces jointes génériques (documents/photos/liens), réutilisées par plusieurs entités —
+/// MÊME convention polymorphe que `AuditLog` (`entityType`/`entityId`, jamais une relation Prisma
+/// dédiée par type d'entité). Voir ADR 0038.
+model Attachment {
+  id             String             @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  /// Nom du modèle cible en dur (ex. "Lead", "Company", "Property", "VirtualTour", "Quote") — jamais
+  /// une chaîne libre non contrôlée par le code appelant.
+  entityType     String
+  entityId       String
+  category       AttachmentCategory
+  fileName       String
+  url            String
+  mimeType       String?
+  sizeBytes      Int?
+  uploadedById   String?
+  createdAt      DateTime           @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+  @@index([workspaceId])
+}
+
+enum VirtualTourStatus {
+  DRAFT
+  SCHEDULED
+  SHOOTING_DONE
+  PROCESSING
+  PUBLISHED
+  ARCHIVED
+}
+
+/// Module métier dédié "Visites 3D" (brief v0.9) — lié à un `Mission` existant (réutilise sa
+/// planification/son prestataire/son statut d'exécution) plutôt que de dupliquer ce mécanisme
+/// (voir ADR 0038). Photos/documents via `Attachment` (entityType="VirtualTour"), facture via
+/// `Invoice` (optionnelle, jamais générée automatiquement), historique via
+/// `src/lib/crm/timeline-service.ts` (task #81).
+model VirtualTour {
+  id             String            @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  leadId         String
+  missionId      String
+  propertyId     String?
+  invoiceId      String?
+  type           PropertyType      @default(OTHER)
+  address        String?
+  surfaceM2      Float?
+  scheduledAt    DateTime?
+  status         VirtualTourStatus @default(DRAFT)
+  matterportUrl  String?
+  tourUrl        String?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  mission      Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  property     Property?    @relation(fields: [propertyId], references: [id])
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([missionId])
+  @@index([propertyId])
+  @@index([workspaceId])
+}
+
 enum LeadSourceType {
   MANUAL
   CSV_IMPORT
@@ -436,6 +653,8 @@ model Lead {
   sourceId       String?
   campaignId     String?
   assignedToId   String?
+  /// Regroupement optionnel sous une même entité juridique (v0.9, ADR 0038) — jamais requis.
+  companyId      String?
 
   establishmentName String
   category          LeadCategory @default(OTHER)
@@ -473,6 +692,7 @@ model Lead {
   territory    Territory?            @relation(fields: [territoryId], references: [id])
   source       LeadSource?           @relation(fields: [sourceId], references: [id])
   campaign     Campaign?             @relation(fields: [campaignId], references: [id])
+  company      Company?              @relation(fields: [companyId], references: [id])
 
   contacts      LeadContact[]
   analyses      LeadAnalysis[]
@@ -488,12 +708,16 @@ model Lead {
   customer      Customer?
   aiRequests    AIRequest[]
   auditLogs     AuditLog[]
+  properties    Property[]
+  virtualTours  VirtualTour[]
+  invoices      Invoice[]
 
   @@unique([organizationId, publicListingUrl])
   @@index([organizationId, stage])
   @@index([organizationId, city])
   @@index([campaignId])
   @@index([workspaceId])
+  @@index([companyId])
 }
 
 model LeadContact {
@@ -947,8 +1171,9 @@ model Service {
   basePrice      Int
   isActive       Boolean     @default(true)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   quoteLines   QuoteLine[]
+  invoiceLines InvoiceLine[]
 
   @@index([organizationId])
 }
@@ -975,10 +1200,12 @@ model Quote {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity?   @relation(fields: [opportunityId], references: [id])
   lines        QuoteLine[]
+  versions     QuoteVersion[]
+  invoices     Invoice[]
 
   @@unique([organizationId, reference])
   @@index([leadId])
@@ -996,6 +1223,84 @@ model QuoteLine {
   service Service? @relation(fields: [serviceId], references: [id])
 
   @@index([quoteId])
+}
+
+/// Version immuable d'un `Quote` au moment de son envoi (brief v0.9 : "Versionnement") — snapshot
+/// JSON des lignes/montants/TVA à cet instant, jamais modifié après création. `Quote` reste la
+/// version courante/éditable ; `QuoteVersion` est l'historique figé (extension complète —
+/// remise/TVA/PDF/signature électronique — traitée par `src/lib/crm/quote-service.ts`, task #83).
+model QuoteVersion {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  quoteId        String
+  versionNumber  Int
+  snapshot       Json
+  totalAmount    Int
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  quote        Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, versionNumber])
+  @@index([organizationId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+/// Facture (brief v0.9 : "Transformation en facture") — jamais générée automatiquement depuis un
+/// `Quote` : conversion explicite via `src/lib/crm/invoice-service.ts` (task #84) lorsque
+/// `Quote.status = ACCEPTED`. Modèle séparé de `Quote` (cycle de vie différent : une facture peut
+/// être payée partiellement/en retard, un devis non). Voir ADR 0038.
+model Invoice {
+  id             String        @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  leadId         String
+  quoteId        String?
+  reference      String
+  status         InvoiceStatus @default(DRAFT)
+  totalAmount    Int           @default(0)
+  vatAmount      Int           @default(0)
+  sentAt         DateTime?
+  dueAt          DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quote        Quote?        @relation(fields: [quoteId], references: [id])
+  lines        InvoiceLine[]
+  virtualTours VirtualTour[]
+
+  @@unique([organizationId, reference])
+  @@index([leadId])
+  @@index([quoteId])
+  @@index([workspaceId])
+}
+
+model InvoiceLine {
+  id        String  @id @default(cuid())
+  invoiceId String
+  serviceId String?
+  label     String
+  quantity  Int     @default(1)
+  unitPrice Int
+  vatRate   Float   @default(20)
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id])
+
+  @@index([invoiceId])
 }
 
 model Customer {
@@ -1035,10 +1340,11 @@ model Mission {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  provider     Provider?    @relation(fields: [providerId], references: [id])
-  territory    Territory?   @relation(fields: [territoryId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider     Provider?     @relation(fields: [providerId], references: [id])
+  territory    Territory?    @relation(fields: [territoryId], references: [id])
+  virtualTours VirtualTour[]
 
   @@index([organizationId, status])
 }
@@ -1195,6 +1501,12 @@ enum IntegrationKind {
   AI
   CALENDAR
   DATA_PROVIDER
+  /// Canaux du Communication Hub (v0.9, ADR 0038) — additifs, mêmes conventions
+  /// `status`/`config` que les valeurs existantes.
+  SMS
+  WHATSAPP
+  PHONE
+  WEBHOOK
 }
 
 enum IntegrationStatus {

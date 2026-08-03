@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_AUTOMATION_RULES } from "@/lib/automation-engine";
 import { ServiceKind } from "@/generated/prisma/enums";
+import { buildDefaultPipelineStages } from "@/lib/crm/pipeline-service";
 
 export const LAUNCH_ZONES = ["Avignon", "Monteux", "Carpentras", "Orange", "Cavaillon", "Aix-en-Provence", "Marseille"];
 
@@ -49,5 +50,6 @@ export async function bootstrapOrganization(organizationId: string) {
         { organizationId, kind: "AI", name: "Fournisseur IA démo", status: "DEMO" },
       ],
     }),
+    prisma.pipelineStage.createMany({ data: buildDefaultPipelineStages(organizationId) }),
   ]);
 }

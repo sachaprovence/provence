@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireActor } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LeadDetailClient } from "@/components/lead/lead-detail-client";
+import { getPipelineStages } from "@/lib/crm/pipeline-service";
 
 async function getLead(id: string, organizationId: string) {
   return prisma.lead.findFirst({
@@ -29,10 +30,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const lead = await getLead(id, actor.organization.id);
   if (!lead) notFound();
 
-  const [sequences, services] = await Promise.all([
+  const [sequences, services, pipelineStages] = await Promise.all([
     prisma.sequence.findMany({ where: { organizationId: actor.organization.id, isActive: true }, include: { steps: true } }),
     prisma.service.findMany({ where: { organizationId: actor.organization.id, isActive: true } }),
+    getPipelineStages(actor.organization.id),
   ]);
 
-  return <LeadDetailClient lead={lead} sequences={sequences} services={services} canValidate={actor.membership.role !== "PROVIDER"} />;
+  return (
+    <LeadDetailClient
+      lead={lead}
+      sequences={sequences}
+      services={services}
+      pipelineStages={pipelineStages}
+      canValidate={actor.membership.role !== "PROVIDER"}
+    />
+  );
 }

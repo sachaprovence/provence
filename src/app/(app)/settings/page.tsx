@@ -6,18 +6,21 @@ import { AutomationRulesEditor } from "@/components/automation-rules-editor";
 import { TerritoriesManager } from "@/components/territories-manager";
 import { ServicesManager } from "@/components/services-manager";
 import { IcpManager } from "@/components/icp-manager";
+import { PipelineStagesManager } from "@/components/pipeline-stages-manager";
 import { DEFAULT_SCORING_RULES, type ScoringRule } from "@/lib/scoring";
+import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { MembershipRole } from "@/generated/prisma/enums";
 
 export default async function SettingsPage() {
   const actor = await requireRole([MembershipRole.OWNER_ADMIN]);
 
-  const [org, automationRules, territories, services, icps] = await Promise.all([
+  const [org, automationRules, territories, services, icps, pipelineStages] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: actor.organization.id } }),
     prisma.automationRule.findMany({ where: { organizationId: actor.organization.id }, orderBy: { name: "asc" } }),
     prisma.territory.findMany({ where: { organizationId: actor.organization.id }, include: { _count: { select: { leads: true, providers: true, missions: true } } }, orderBy: { name: "asc" } }),
     prisma.service.findMany({ where: { organizationId: actor.organization.id, isActive: true }, orderBy: { basePrice: "asc" } }),
     prisma.idealCustomerProfile.findMany({ where: { organizationId: actor.organization.id }, include: { _count: { select: { leads: true } } }, orderBy: { createdAt: "desc" } }),
+    getPipelineStages(actor.organization.id),
   ]);
 
   const scoringRules = (org.scoringRules as unknown as ScoringRule[] | null) ?? DEFAULT_SCORING_RULES;
@@ -62,6 +65,12 @@ export default async function SettingsPage() {
       <section className="card p-6">
         <h2 className="text-lg font-semibold text-p360-ink mb-4">Automatisations internes</h2>
         <AutomationRulesEditor initialRules={automationRules.map((r) => ({ id: r.id, name: r.name, isActive: r.isActive }))} />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Pipeline commercial</h2>
+        <p className="text-sm text-p360-muted mb-4">Renommez, recolorez et réordonnez les étapes du pipeline (Kanban et fiche prospect). Le comportement métier de chaque étape ne change jamais.</p>
+        <PipelineStagesManager stages={pipelineStages} />
       </section>
 
       <section className="card p-6">

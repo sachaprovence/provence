@@ -48,6 +48,18 @@ export const STAGE_BADGE_CLASS: Record<string, string> = {
   UNSUBSCRIBED: "bg-red-50 text-p360-danger",
 };
 
+/**
+ * Classe de badge selon la CATÉGORIE de reporting d'une étape de pipeline
+ * personnalisée (`PipelineStage.category`, v0.9, ADR 0038) — contrairement à
+ * `STAGE_BADGE_CLASS` (indexé par `LeadStage`, figé), celle-ci reste valable
+ * même quand une organisation renomme ses étapes.
+ */
+export const CATEGORY_BADGE_CLASS: Record<string, string> = {
+  OPEN: "bg-p360-lavender-light text-p360-blue",
+  WON: "bg-green-100 text-p360-success",
+  LOST: "bg-red-50 text-p360-danger",
+};
+
 export const MESSAGE_TYPE_LABEL: Record<string, string> = {
   FIRST_CONTACT_EMAIL: "Email de premier contact",
   FOLLOW_UP_SHORT: "Relance courte",

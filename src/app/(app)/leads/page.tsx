@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireActor } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { leadWhereForActor } from "@/lib/permissions";
-import { STAGE_LABEL, CATEGORY_LABEL, STAGE_BADGE_CLASS, PIPELINE_STAGES } from "@/lib/labels";
+import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS } from "@/lib/labels";
+import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { ScoreBadge } from "@/components/score-badge";
 import clsx from "clsx";
 
@@ -12,6 +13,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const actor = await requireActor();
   const sp = await searchParams;
   const view = sp.view === "kanban" ? "kanban" : "table";
+  const pipelineStages = await getPipelineStages(actor.organization.id);
+  const stageById = new Map(pipelineStages.map((s) => [s.stageKey, s]));
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -59,8 +62,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           <label className="label">Étape</label>
           <select className="input" name="stage" defaultValue={sp.stage ?? ""}>
             <option value="">Toutes</option>
-            {PIPELINE_STAGES.map((s) => (
-              <option key={s} value={s}>{STAGE_LABEL[s]}</option>
+            {pipelineStages.map((s) => (
+              <option key={s.stageKey} value={s.stageKey}>{s.label}</option>
             ))}
           </select>
         </div>
@@ -116,7 +119,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   <td className="px-4 py-2 text-p360-ink">{CATEGORY_LABEL[lead.category]}</td>
                   <td className="px-4 py-2 text-p360-ink">{lead.city ?? "—"}</td>
                   <td className="px-4 py-2">
-                    <span className={clsx("badge", STAGE_BADGE_CLASS[lead.stage])}>{STAGE_LABEL[lead.stage]}</span>
+                    <span className={clsx("badge", CATEGORY_BADGE_CLASS[stageById.get(lead.stage)?.category ?? "OPEN"])}>
+                      {stageById.get(lead.stage)?.label ?? lead.stage}
+                    </span>
                   </td>
                   <td className="px-4 py-2"><ScoreBadge value={lead.scores[0]?.value} /></td>
                   <td className="px-4 py-2 text-p360-muted">{lead.contacts[0]?.fullName ?? lead.contacts[0]?.email ?? "—"}</td>
@@ -130,13 +135,14 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-4">
-          {PIPELINE_STAGES.map((stage) => {
-            const stageLeads = filtered.filter((l) => l.stage === stage);
+          {pipelineStages.map((stage) => {
+            const stageLeads = filtered.filter((l) => l.stage === stage.stageKey);
             if (stageLeads.length === 0) return null;
             return (
-              <div key={stage} className="w-64 shrink-0">
-                <div className="text-xs font-semibold text-p360-muted mb-2 px-1">
-                  {STAGE_LABEL[stage]} ({stageLeads.length})
+              <div key={stage.stageKey} className="w-64 shrink-0">
+                <div className="text-xs font-semibold text-p360-muted mb-2 px-1 flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
+                  {stage.label} ({stageLeads.length})
                 </div>
                 <div className="space-y-2">
                   {stageLeads.map((lead) => (

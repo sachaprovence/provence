@@ -6,14 +6,15 @@ import Link from "next/link";
 import clsx from "clsx";
 import { apiPost, apiPut, apiPatch, ApiError } from "@/lib/api-client";
 import type { LeadDetail } from "@/app/(app)/leads/[id]/page";
-import { STAGE_LABEL, CATEGORY_LABEL, STAGE_BADGE_CLASS, PIPELINE_STAGES, MESSAGE_TYPE_LABEL, INTENT_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, MESSAGE_TYPE_LABEL, INTENT_LABEL } from "@/lib/labels";
 import { ScoreBadge } from "@/components/score-badge";
-import type { SequenceModel, SequenceStepModel, ServiceModel } from "@/generated/prisma/models";
+import type { SequenceModel, SequenceStepModel, ServiceModel, PipelineStageModel } from "@/generated/prisma/models";
 
 type Props = {
   lead: LeadDetail;
   sequences: (SequenceModel & { steps: SequenceStepModel[] })[];
   services: ServiceModel[];
+  pipelineStages: PipelineStageModel[];
   canValidate: boolean;
 };
 
@@ -24,7 +25,7 @@ function formatEuros(cents: number) {
   return (cents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 }
 
-export function LeadDetailClient({ lead, sequences, services, canValidate }: Props) {
+export function LeadDetailClient({ lead, sequences, services, pipelineStages, canValidate }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +65,8 @@ export function LeadDetailClient({ lead, sequences, services, canValidate }: Pro
             disabled={busy === "stage"}
             onChange={(e) => run("stage", () => apiPut(`/api/leads/${lead.id}`, { stage: e.target.value }))}
           >
-            {PIPELINE_STAGES.map((s) => (
-              <option key={s} value={s}>{STAGE_LABEL[s]}</option>
+            {pipelineStages.map((s) => (
+              <option key={s.stageKey} value={s.stageKey}>{s.label}</option>
             ))}
           </select>
           <ScoreBadge value={score?.value} />
