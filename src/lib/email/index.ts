@@ -4,6 +4,7 @@ import { SmtpEmailProvider } from "./providers/smtp";
 import { ResendEmailProvider } from "./providers/resend";
 import { PostmarkEmailProvider } from "./providers/postmark";
 import { BrevoEmailProvider } from "./providers/brevo";
+import { GmailEmailProvider } from "./providers/gmail";
 
 /**
  * Fournisseur actif, choisi via `EMAIL_PROVIDER` (défaut `"demo"`) — même
@@ -25,6 +26,8 @@ export function getEmailProvider(): EmailProvider {
       return new PostmarkEmailProvider();
     case "brevo":
       return new BrevoEmailProvider();
+    case "gmail":
+      return new GmailEmailProvider();
     case "demo":
     default:
       return new DemoEmailProvider();

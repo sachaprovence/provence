@@ -2015,21 +2015,40 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 Voir `src/lib/email/providers/smtp.ts` (task #86, v0.9) — implémentation
 SMTP réelle, configuration par organisation. Rien à faire ici.
 
-### AR-0053 — `GmailApiProvider`
+### AR-0053 — `GmailApiProvider` — livrée
 - **Description** : implémentation réelle de `EmailProvider` via l'API
-  Gmail (OAuth2 + REST `fetch()` direct — même patron que Google
-  Calendar, task #87), configuration par organisation
-  (`Integration.config`, kind EMAIL, `provider: "gmail"`). Échoue
-  explicitement sans connexion OAuth.
-- **Fichiers concernés** : `src/lib/email/providers/gmail.ts` (nouveau),
-  `src/lib/email/index.ts`, routes OAuth
-  `src/app/api/email/gmail/{connect,callback}/route.ts`.
+  Gmail v1 (`users.messages.send`, OAuth2 + REST `fetch()` direct — même
+  patron que Google Calendar, task #87), configuration par organisation
+  (`Integration.config`, kind EMAIL : `clientId`/`clientSecret`/
+  `refreshToken`, émis par le flux `/api/email/gmail/connect` →
+  `/callback`), sélectionnable par `EMAIL_PROVIDER=gmail`. Échoue
+  explicitement sans connexion OAuth ou en cas d'erreur réseau/HTTP —
+  jamais un succès simulé (même convention que SMTP/Resend/Postmark/Brevo).
+  Le client OAuth2 Google (jusque-là spécifique à Calendar) a été
+  généralisé en un module partagé `src/lib/google/oauth.ts` (`scope`
+  paramétrable) — `calendar/google/oauth.ts` délègue désormais à ce module
+  en conservant EXACTEMENT ses signatures d'origine (zéro régression sur
+  l'intégration Google Calendar déjà livrée, vérifié par sa suite de
+  tests existante inchangée).
+- **Fichiers concernés** : `src/lib/google/oauth.ts` (nouveau, partagé),
+  `src/lib/calendar/google/oauth.ts` (délègue désormais au module
+  partagé), `src/lib/email/providers/gmail.ts` (nouveau),
+  `src/lib/email/providers/gmail-oauth-flow.ts` (nouveau),
+  `src/lib/email/config.ts` (champs `clientId`/`clientSecret`/
+  `refreshToken`/`oauthBaseUrl`/`apiBaseUrl`), `src/lib/email/index.ts`,
+  routes OAuth `src/app/api/email/gmail/{connect,callback}/route.ts`,
+  Paramètres → Intégrations (bouton « Connecter Gmail »).
 - **Complexité** : Élevée.
 - **Prérequis** : AR-0052 (patron `EmailProvider`, déjà livré).
-- **Tests nécessaires** : contrat `EmailProvider` + flux OAuth/envoi
-  réel vérifié contre un vrai serveur HTTP local (comme Google
-  Calendar) — la vérification de bout en bout contre un vrai compte
-  Gmail n'est pas possible dans cet environnement (aucun identifiant).
+- **Tests** : `tests/email/gmail.test.ts` — échec explicite sans
+  configuration ; envoi réel (refresh de jeton + envoi) vérifié contre un
+  vrai serveur HTTP local (en-têtes, message RFC 2822 encodé en base64url
+  décodé et vérifié) ; échec explicite sur erreur HTTP d'envoi et sur
+  échec de renouvellement du jeton ; flux OAuth complet (URL de
+  consentement avec le bon `scope`, échec explicite sans `refresh_token`
+  renvoyé, persistance dans `Integration.config`) — la vérification de
+  bout en bout contre un vrai compte Gmail n'est pas possible dans cet
+  environnement (aucun identifiant OAuth disponible), voir ADR 0038.
 
 ### AR-0054 — `OutlookApiProvider`
 - **Description** : équivalent AR-0053 pour Microsoft Graph/Outlook
