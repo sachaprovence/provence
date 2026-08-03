@@ -1936,19 +1936,34 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
   connus (coût IA, échec d'email, latence enregistrée) ; isolation
   multi-tenant des métriques.
 
-### AR-0050 — `AnthropicAIProvider` (`src/lib/ai/`, distinct de l'abstraction LLM du Framework des Agents)
+### AR-0050 — `AnthropicAIProvider` (`src/lib/ai/`, distinct de l'abstraction LLM du Framework des Agents) — livrée
 - **Description** : implémentation réelle de `AIProvider` (couche
   historique `src/lib/ai/`, utilisée par `analyzeLead`/`generateMessage`/
   `sequence-engine.ts` — toujours active, PAS remplacée par l'abstraction
   LLM du Framework des Agents qui dessert un périmètre différent) basée
   sur l'API Anthropic (Claude), via `fetch()` direct, sélectionnable par
-  `AI_PROVIDER=anthropic`. Échoue explicitement sans `ANTHROPIC_API_KEY`.
+  `AI_PROVIDER=anthropic`. Échoue explicitement sans `ANTHROPIC_API_KEY`,
+  sur erreur HTTP, ou si la réponse ne contient pas le JSON structuré
+  demandé (jamais un résultat fabriqué). Les méthodes retournant des
+  données structurées (`analyzeLead`, `recommendScore`, `generateMessage`,
+  `classifyReply`, `recommendNextAction`) demandent à Claude un objet JSON
+  strict, parsé et normalisé (valeurs par défaut sûres si un champ optionnel
+  manque, `classifyReply` retombe sur `ReplyIntent.UNKNOWN` si la valeur
+  renvoyée n'appartient pas à l'énumération) ; les méthodes texte libre
+  (`summarizeConversation`, `translate`, `generateSalesReport`) renvoient
+  directement le texte de Claude. `estimateCostUsd` reste basée sur une
+  estimation caractères→tokens (tarifs publics Claude Sonnet), comme
+  `DemoAIProvider` — la signature héritée de `AIProvider` ne transporte pas
+  l'usage réel de tokens.
 - **Fichiers concernés** : `src/lib/ai/providers/anthropic.ts` (nouveau),
-  `src/lib/ai/index.ts`.
+  `src/lib/ai/providers/http-helpers.ts` (nouveau, propre à cette couche —
+  distinct de `src/lib/agents/llm/providers/http-helpers.ts`), `src/lib/ai/index.ts`.
 - **Complexité** : Moyenne.
-- **Tests nécessaires** : contrat `AIProvider` (mêmes tests que
-  `DemoAIProvider`) + appel réel vérifié contre un vrai serveur HTTP
-  local ; échec explicite sans clé API.
+- **Tests** : `tests/ai/anthropic-provider.test.ts` — échec explicite sans
+  clé API ; appel réel vérifié contre un vrai serveur HTTP local (en-têtes,
+  corps de requête, modèle) ; parsing JSON pour les 5 méthodes structurées ;
+  normalisation d'une intention hors énumération vers `UNKNOWN` ; échec
+  explicite sur erreur HTTP (401) et sur réponse texte non structurée.
 
 ### AR-0051 — Quota IA dur par organisation
 - **Description** : transforme `AIRequest.estimatedCostUsd` (simple
