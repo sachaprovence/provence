@@ -312,6 +312,45 @@ externe indépendante reste recommandée avant l'ouverture SaaS publique
 (`MOD-19`), voir la recommandation finale du rapport OWASP. Les décisions
 d'architecture prises pour `v0.10` sont documentées dans `docs/adr/0041`.
 
+## 1 duodecies. v1.0 : MOD-18 (API publique) et MOD-19 (facturation SaaS) sont livrés
+
+`v1.0` (`AR-0059` à `AR-0066`, voir `BACKLOG.md` et `docs/adr/0042`)
+implémente intégralement le périmètre défini sans le modifier :
+
+- **`MOD-18` — API publique & intégrations tierces** : routes
+  `GET /api/public/v1/{leads,opportunities,invoices}` en lecture seule,
+  authentifiées par clé API scopée à l'organisation (`AR-0059`), rate
+  limiting (60 req/min par clé, `AR-0060`), webhooks sortants signés
+  HMAC avec retry et idempotence, réutilisant le bus d'évènements
+  générique (v0.6) et le moteur de retry de l'Automation Engine (v0.8)
+  plutôt que de les réimplémenter (`AR-0061`). Documentation OpenAPI
+  (`docs/api/openapi.yaml`).
+- **`MOD-19` — Facturation SaaS Autorun** : plans d'abonnement
+  (Starter/Pro/Entreprise) avec quotas copiés sur l'organisation à la
+  souscription (`AR-0062`), Stripe Billing réel (abonnement récurrent,
+  changement de plan, annulation, webhooks entrants idempotents) plus un
+  fournisseur démo activant l'abonnement immédiatement sans configuration
+  externe (`AR-0063`), onboarding self-service (inscription → choix de
+  plan → provisionnement automatique, sans intervention manuelle,
+  `AR-0064`), interface de gestion de l'abonnement (`AR-0065`).
+- **Recette finale** (`AR-0066`) : les 4 suites E2E (golden path,
+  isolation multi-tenant, Automation Engine, onboarding self-service)
+  passent contre un build de production réel ; 602 tests automatisés
+  passent ; typecheck/lint/build sans erreur. Voir
+  `docs/release/v1.0-recette.md` pour le détail complet et l'évaluation
+  finale de préparation à la production.
+
+`MOD-18` et `MOD-19` sont donc considérés **livrés** au sens des critères
+de fin définis dans ce document. Deux écarts de périmètre ont été
+documentés plutôt que masqués : `AR-0063` référençait `AR-0027` (paiement
+client final) comme prérequis, or `AR-0027` à `AR-0030` n'ont jamais été
+implémentées — la plomberie Stripe Billing a donc été construite de zéro
+pour l'abonnement SaaS, domaine distinct du paiement client final ;
+`AR-0064` décrivait un choix de vertical à l'inscription, or `MOD-20`
+(Vertical Pack) reste reporté depuis `v0.4` et n'a jamais été livré — le
+parcours d'inscription ne propose donc que le choix du plan. Les
+décisions d'architecture complètes sont documentées dans `docs/adr/0042`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -335,8 +374,8 @@ d'architecture prises pour `v0.10` sont documentées dans `docs/adr/0041`.
 | MOD-15 | Infrastructure asynchrone (jobs) | ✅ Livré via `MOD-27` (v0.8, voir §1 octies) | Haute |
 | MOD-16 | Observabilité | ✅ Livré (v0.9 bis : logs déjà en place + capture d'erreurs réelle + métriques de base, voir §1 decies) | Haute |
 | MOD-17 | Sécurité avancée & conformité renforcée | ✅ Livré (v0.10 : audit exhaustif + corrections + tests d'isolation étendus + quota email dur + préparation 2FA, voir §1 undecies) | Critique (avant SaaS public) |
-| MOD-18 | Intégrations tierces & API publique | À créer | Moyenne |
-| MOD-19 | Facturation SaaS Autorun (abonnements) | À créer | Haute (condition de v1.0) |
+| MOD-18 | Intégrations tierces & API publique | ✅ Livré (v1.0 : API publique lecture seule, clés API, rate limiting, webhooks sortants signés, voir §1 duodecies) | Moyenne |
+| MOD-19 | Facturation SaaS Autorun (abonnements) | ✅ Livré (v1.0 : plans, Stripe Billing réel + démo, onboarding self-service, interface de facturation, voir §1 duodecies) | Haute (condition de v1.0) |
 | MOD-20 | Vertical Pack — validation par un 2ᵉ vertical fictif | Reporté après v0.4 (voir §1 ter/§1 quater) | Critique (preuve du concept) |
 | MOD-22 | Framework des Agents IA | ✅ Livré (v0.3) | Critique |
 | MOD-23 | Agent Director (orchestrateur) | ✅ Livré (v0.4) | Critique |

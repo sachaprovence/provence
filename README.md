@@ -8,7 +8,10 @@ workflows et un moteur d'automatisations événementielles, une couche
 d'intelligence documentaire (mémoire/connaissances/contexte), et une
 communication multicanal — le tout testé, isolé par organisation, et déjà
 livré (voir [`MILESTONES.md`](MILESTONES.md) pour l'historique version par
-version, de v0.1 à v0.10).
+version, de v0.1 à v1.0), désormais ouverte en SaaS self-service : API
+publique versionnée, webhooks sortants signés, plans d'abonnement et
+facturation récurrente Stripe (ou démo, sans configuration), onboarding
+sans intervention manuelle.
 
 📄 Spécification fonctionnelle : [`docs/01-SPECIFICATION.md`](docs/01-SPECIFICATION.md)
 🏗️ Architecture technique : [`docs/02-ARCHITECTURE.md`](docs/02-ARCHITECTURE.md)
@@ -80,6 +83,14 @@ Tout ce qui suit est réellement implémenté et testé (pas un plan) — voir
 - **Tableaux de bord** : commercial, production, clients, visites, chiffre
   d'affaires, IA, automatisations, rendez-vous, performance — tous scopés
   par organisation.
+- **Ouverture SaaS** : API publique versionnée en lecture
+  (`/api/public/v1/**`, clés API scopées par organisation, rate limiting),
+  webhooks sortants signés (HMAC, retry, idempotence), plans d'abonnement
+  (Starter/Pro/Entreprise) avec quotas appliqués immédiatement, Stripe
+  Billing réel (abonnement récurrent, changement de plan, annulation,
+  webhooks entrants) ou fournisseur démo sans configuration, onboarding
+  self-service (inscription → choix de plan → provisionnement
+  automatique) et interface de gestion de la facturation.
 
 ## Démarrage rapide (Docker)
 
@@ -237,6 +248,13 @@ reste du code :
 3. **Carte interactive réelle** : les champs `Lead.latitude`/`longitude`
    existent déjà ; brancher Mapbox/Leaflet dans `src/app/(app)/map/page.tsx`
    à la place de la vue liste actuelle.
+4. **Facturation SaaS (Stripe)** : `BILLING_PROVIDER=stripe` (clés
+   `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, voir `.env.example`) —
+   activation d'abonnement, changement de plan et annulation passent alors
+   par l'API Stripe réelle au lieu du fournisseur démo (activation
+   immédiate, sans configuration). Configurer un webhook Stripe pointant
+   vers `POST /api/billing/webhook` et un `Plan.stripePriceId` par plan
+   (Starter/Pro/Entreprise) côté tableau de bord Stripe.
 
 ## Déploiement
 
@@ -260,12 +278,17 @@ séparément dans le MVP).
 
 Voir [`docs/01-SPECIFICATION.md`](docs/01-SPECIFICATION.md#5-reporté-après-le-mvp-hors-périmètre-v1) :
 fournisseurs de données payants, vraie carte interactive, file de
-traitement distribuée (BullMQ/Redis), notifications push/Slack,
-facturation SaaS multi-plan, i18n complète de l'interface, application
-mobile, SSO, activation effective du 2FA à la connexion (le schéma et
-l'interface existent déjà, voir `src/lib/two-factor.ts`, mais rien ne
-l'impose encore), UI de signature électronique de devis avec un
-fournisseur réel, cache Redis, alerting sur seuil de métriques.
+traitement distribuée (BullMQ/Redis), notifications push/Slack, second
+vertical métier réel (`MOD-20`, actuellement reporté — le choix de
+vertical n'existe donc pas à l'inscription), paiement en ligne pour le
+client final de chaque organisation (`AR-0027`, distinct de la facturation
+SaaS Autorun elle-même, déjà livrée en v1.0), i18n complète de
+l'interface, application mobile, SSO, activation effective du 2FA à la
+connexion (le schéma et l'interface existent déjà, voir
+`src/lib/two-factor.ts`, mais rien ne l'impose encore), UI de signature
+électronique de devis avec un fournisseur réel, cache Redis, alerting sur
+seuil de métriques.
 Les connecteurs email réels (SMTP/Resend/Postmark/Brevo/Gmail/Outlook), un
-fournisseur IA réel (Anthropic) et le quota d'envoi email quotidien dur
-sont déjà livrés — voir `MILESTONES.md` §v0.9, §v0.9 bis et §v0.10.
+fournisseur IA réel (Anthropic), le quota d'envoi email quotidien dur,
+l'API publique, les webhooks sortants et la facturation SaaS Stripe sont
+déjà livrés — voir `MILESTONES.md` §v0.9, §v0.9 bis, §v0.10 et §v1.0.

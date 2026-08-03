@@ -516,6 +516,46 @@ connaître pour tout nouveau code touchant ce périmètre :
   `expectNoCrossTenantLeak` pour tout nouveau domaine sensible, en
   particulier financier ou porteur de secrets.
 
+## 0 duodecies. État de v1.0 (ouverture SaaS, API publique, Stripe Billing)
+
+Voir `docs/adr/0042` pour le détail complet des décisions. Points à
+connaître pour tout nouveau code touchant ce périmètre :
+
+- **`/api/public/v1/**` (authentifié par clé API) et `/api/plans` (public,
+  sans authentification) sont deux espaces distincts, volontairement** —
+  ne jamais ajouter une route sans authentification sous
+  `/api/public/v1/`, et ne jamais faire porter à une route interne d'aide
+  UI (comme `/api/plans`) la sémantique d'API publique versionnée.
+- **Toute nouvelle route publique en lecture doit passer par
+  `withPublicApiHandler`/`withPublicApiHandlerParams`
+  (`src/lib/public-api/handler.ts`)** — centralise authentification, rate
+  limiting (60 req/min/clé) et conversion d'erreur ; ne jamais dupliquer
+  cette logique dans la route elle-même.
+- **`applyPlanToOrganization` (`src/lib/billing/plan-service.ts`) est la
+  SEULE façon de faire varier les quotas d'une organisation** — ne jamais
+  écrire directement `Organization.dailySendLimit`/`aiMonthlyBudgetUsd`
+  ailleurs qu'à travers cette fonction, pour qu'un changement de plan
+  reste la source de vérité unique.
+- **Une organisation `RESTRICTED` (échec de paiement) est bloquée en
+  écriture au niveau du Proxy** (`src/proxy.ts`,
+  `SUBSCRIPTION_GATE_EXEMPT_PREFIXES`), jamais route par route — si une
+  nouvelle route de facturation doit rester accessible à une organisation
+  restreinte (pour qu'elle puisse se régulariser), ajouter son préfixe à
+  cette liste plutôt que de contourner le Proxy.
+- **`BillingProvider` (abonnement SaaS de l'éditeur) est un domaine
+  distinct du futur `AR-0027` (paiement client final)** — ne jamais
+  réutiliser `src/lib/billing/` pour un besoin de paiement client, même
+  si Stripe est le fournisseur des deux côtés à terme.
+- **Un mutateur de `window.location.href` dans un composant client doit
+  être extrait en fonction top-level** (hors du corps du composant),
+  sinon le linter `react-hooks/immutability` (react-compiler) le
+  rapporte à tort comme une mutation de variable de rendu — voir
+  `redirectToCheckout` dans `src/app/(app)/settings/billing/
+  billing-client.tsx` pour le patron à suivre.
+- **`tests/e2e/self-service-onboarding.mjs` est la 4ᵉ suite E2E**,
+  exécutée en CI sur chaque pull request au même titre que les 3
+  précédentes — la mettre à jour si le parcours d'inscription change.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)

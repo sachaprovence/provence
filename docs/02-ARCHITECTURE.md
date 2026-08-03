@@ -1488,3 +1488,107 @@ priorité les domaines financiers et porteurs de secrets) et
 modules critiques jusque-là sans aucun test). `.github/workflows/e2e.yml`
 exécute désormais les 3 suites E2E sur chaque pull request, pas seulement
 après merge sur `main`.
+
+## 19. v1.0 — Ouverture SaaS (`ROADMAP.md` MOD-18/MOD-19, `BACKLOG.md` AR-0059 à AR-0066)
+
+Voir `docs/adr/0042` pour la justification complète. Premier jalon de
+fonctionnalités depuis `v0.9 bis` (v0.10 était un jalon de sécurisation
+pur) : ouvre Autorun à des intégrations tierces (API publique, webhooks
+sortants) et transforme l'application en SaaS facturable en self-service
+(plans, Stripe Billing, onboarding automatique).
+
+### API publique v1 et clés API (`src/lib/public-api/`, AR-0059/AR-0060)
+
+`GET /api/public/v1/{leads,opportunities,invoices}[/[id]]` — routes en
+lecture seule, authentifiées par clé API (`ApiKey`, hachée SHA-256,
+jamais stockée en clair, préfixe visible pour identification), toujours
+scopées `organizationId` côté serveur (jamais transmis par le client).
+`withPublicApiHandler`/`withPublicApiHandlerParams` (`src/lib/public-api/
+handler.ts`) centralisent authentification + rate limiting (60
+requêtes/minute par clé, réutilise `isRateLimited`, v0.10) + conversion
+d'erreur en un seul point, plutôt que de dupliquer cette logique dans
+chaque route. Documentation OpenAPI 3.0.3 : `docs/api/openapi.yaml`.
+Gestion des clés : `/settings/api-keys` (réservé `OWNER_ADMIN`).
+
+### Webhooks sortants (`src/lib/webhooks-outbound.ts`, `src/lib/jobs/webhook-delivery-job.ts`, AR-0061)
+
+`registerOutboundWebhookListeners()` s'abonne au bus d'évènements
+générique déjà existant (`src/lib/events/domain-events.ts`, v0.6) — les
+mêmes évènements métier réels déjà publiés par `publishAutomationEvent`
+(`lead.created`, `quote.signed`, `invoice.paid`, ...) déclenchent
+désormais aussi une livraison de webhook sortant, sans nouveau point
+d'émission ajouté à la logique métier. Chaque livraison
+(`WebhookDelivery`) est signée HMAC-SHA256 (`X-Autorun-Signature`),
+identifiée par une clé d'idempotence unique, et retentée selon la
+politique de retry déjà éprouvée de l'Automation Engine (`decideRetry`,
+`DEFAULT_RETRY_POLICY`, v0.8) plutôt qu'une réimplémentation. Gestion des
+abonnements : `/settings/webhooks`.
+
+### Plans d'abonnement et quotas (`src/lib/billing/plan-service.ts`, AR-0062)
+
+`Plan` (STARTER/PRO/ENTERPRISE, seedé en migration de données — référence
+nécessaire dans tout environnement, pas seulement en démo) porte les
+valeurs de quota de référence. `applyPlanToOrganization` les COPIE
+directement sur `Organization.{dailySendLimit,aiMonthlyBudgetUsd}` au
+moment de la souscription/du changement de plan — tout le code de
+vérification de quota déjà existant (`sequence-engine.ts`, `src/lib/ai/
+quota.ts`, `src/lib/email/quota.ts`) continue de lire ces deux champs
+sans jamais avoir à connaître la notion de plan. `assertMemberLimitAvailable`
+est appelée aux deux points réels de création de `Membership` (invitation
+directe, acceptation d'invitation de workspace) ; no-op pour toute
+organisation sans plan (comportement additif).
+
+### Facturation Stripe (`src/lib/billing/`, AR-0063)
+
+`BillingProvider` (interface) a deux implémentations : `DemoBillingProvider`
+(activation synchrone, sans configuration externe — comportement par
+défaut, même convention que `DemoAIProvider`/`DemoEmailProvider`) et
+`StripeBillingProvider` (REST API via `fetch()`, sans SDK `stripe`, en
+cohérence avec Sentry/Gmail/Outlook/Google Calendar — voir ADR 0042 pour
+la discussion complète de ce choix). Le fournisseur ne gère jamais les
+quotas directement : `subscription-service.ts` orchestre le fournisseur
+ET `plan-service.ts` (source de vérité locale des quotas), traite les
+webhooks entrants Stripe de façon idempotente (réutilise
+`WebhookEvent.externalId`, ajouté par v1.0 sur un modèle jusque-là non
+exploité pour ce cas d'usage). Une organisation en échec de paiement
+(`SubscriptionStatus.RESTRICTED`) est bloquée en écriture au niveau du
+Proxy (`src/proxy.ts`, `SUBSCRIPTION_GATE_EXEMPT_PREFIXES` exempte
+`/api/billing`/`/api/cron`/`/api/settings/billing` pour permettre à
+l'organisation de toujours régulariser elle-même sa facturation), jamais
+en lecture, et sans jamais perdre de données.
+
+### Onboarding self-service et interface de facturation (AR-0064/AR-0065)
+
+`POST /api/auth/register` accepte un `planKey` optionnel (STARTER par
+défaut) et déclenche automatiquement `startOrganizationCheckout` juste
+après la création de l'organisation — activation immédiate en mode démo,
+ou URL de paiement Stripe à suivre en mode réel (retournée au client, qui
+redirige). `GET /api/plans` (public, sans authentification) permet de
+choisir un plan AVANT la création du compte. `/settings/billing` (plan
+actuel, statut, consommation de quota en temps réel, changement de plan,
+annulation) suit le même patron que `/settings/api-keys`/`/settings/
+webhooks`. Le parcours complet (inscription → choix de plan → activation
+→ page de facturation) est validé de bout en bout par
+`tests/e2e/self-service-onboarding.mjs`, exécuté en CI sur chaque pull
+request au même titre que les 3 suites E2E précédentes.
+
+### Écarts de périmètre documentés : pas de réutilisation d'`AR-0027`, pas de sélecteur de vertical
+
+`AR-0063` référence `AR-0027` (intégration Stripe côté facturation
+client final) comme prérequis dans `BACKLOG.md` — vérifié inexistant
+dans le code (`AR-0027` à `AR-0030` n'ont jamais été implémentées,
+confirmé par recherche exhaustive de "stripe" dans `src/` avant ce
+jalon). La plomberie Stripe (authentification par clé secrète, encodage
+de formulaire, vérification de signature de webhook) a donc été
+construite de zéro pour l'abonnement SaaS, plutôt que de réutiliser une
+abstraction `PaymentProvider` qui n'existe pas.
+
+De même, `AR-0064` décrit un « choix du vertical de départ » à
+l'inscription — `MOD-20` (Vertical Pack, second vertical fictif), dont ce
+choix dépendrait, reste reporté depuis `v0.4` et n'a jamais été livré
+(confirmé par recherche exhaustive de "vertical" dans `src/` : aucun
+concept de vertical métier configurable n'existe, un seul produit
+Provence 360 est câblé en dur). `/register` ne propose donc que le choix
+du plan, pas du vertical — un sélecteur factice aurait été trompeur sans
+`MOD-20` réellement livré derrière. Voir ADR 0042 pour la discussion
+complète des deux écarts.

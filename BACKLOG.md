@@ -2389,6 +2389,16 @@ owasp-review-2026-08-03.md` (AR-0056) plutôt que transformés en tâches.
 
 ## Version 1.0 — Ouverture SaaS (MOD-18, MOD-19) — première version stable
 
+> **Statut : ✅ livrée** (2026-08-03). Les 8 tâches ci-dessous (`AR-0059`
+> à `AR-0066`) sont implémentées intégralement, sans modification du
+> périmètre défini, à deux écarts documentés près (voir `docs/adr/0042`) :
+> `AR-0063` référençait `AR-0027` (paiement client final, jamais
+> implémentée) comme prérequis — la plomberie Stripe a été construite de
+> zéro pour l'abonnement SaaS ; `AR-0064` décrivait un choix de vertical à
+> l'inscription — `MOD-20` (Vertical Pack) reste reporté depuis `v0.4` et
+> n'a jamais été livré, donc omis du parcours d'inscription. Voir
+> `docs/release/v1.0-recette.md` pour la recette finale complète.
+
 ### AR-0059 — API publique en lecture (v1)
 - **Description** : premières routes `api/public/v1/**` en lecture seule
   (prospects, opportunités, factures), authentifiées par clé API scopée à
@@ -2486,6 +2496,11 @@ owasp-review-2026-08-03.md` (AR-0056) plutôt que transformés en tâches.
 - **Tests nécessaires** : c'est la tâche de test elle-même.
 
 **Total estimé v1.0 : ~19,5 jours.**
+
+**Total v1.0 : 8 tâches (AR-0059 à AR-0066), toutes livrées.** Voir
+`docs/adr/0042` pour les décisions d'architecture et les deux écarts de
+périmètre documentés, et `docs/release/v1.0-recette.md` pour la recette
+finale complète.
 
 ---
 

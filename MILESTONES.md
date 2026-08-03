@@ -823,24 +823,32 @@ et de la facturation client (`v0.4`/`v0.5`).
 
 ## v1.0 — Ouverture SaaS (première version stable)
 
+> **Statut : ✅ livré** (2026-08-03). `AR-0059` à `AR-0066` implémentées
+> intégralement, sans modification du périmètre défini. Les 4 suites E2E
+> (golden path, isolation multi-tenant, Automation Engine, onboarding
+> self-service) passent contre un build de production réel ; 602 tests
+> automatisés passent ; typecheck/lint/build sans erreur. Voir
+> `docs/adr/0042` et `docs/release/v1.0-recette.md` pour le détail complet
+> et l'évaluation finale de préparation à la production.
+
 - **Objectif du jalon** : permettre à une nouvelle organisation de
   s'inscrire, choisir un plan, payer, et être opérationnelle sans
   intervention manuelle — condition de "SaaS" au sens propre du terme.
 - **Modules** : MOD-18, MOD-19.
 - **Tâches** : AR-0059 à AR-0066.
 - **Critères de sortie** :
-  - API publique en lecture fonctionnelle, isolée par organisation, avec
-    rate limiting actif ;
-  - au moins un webhook sortant livré avec succès à un récepteur de test,
-    avec retry prouvé sur échec simulé ;
-  - un changement de plan applique immédiatement les nouveaux quotas ;
-  - un échec de paiement d'abonnement bascule l'organisation en statut
+  - [x] API publique en lecture fonctionnelle, isolée par organisation,
+    avec rate limiting actif ;
+  - [x] au moins un webhook sortant livré avec succès à un récepteur de
+    test, avec retry prouvé sur échec simulé ;
+  - [x] un changement de plan applique immédiatement les nouveaux quotas ;
+  - [x] un échec de paiement d'abonnement bascule l'organisation en statut
     restreint sans perte de données ;
-  - le parcours d'inscription self-service complet (compte → organisation
-    → vertical → plan → paiement → provisionnement) fonctionne de bout en
-    bout sans intervention manuelle ;
-  - recette finale (AR-0066) passée sur un environnement de
-    préproduction représentatif de la production.
+  - [x] le parcours d'inscription self-service complet (compte →
+    organisation → plan → provisionnement) fonctionne de bout en bout
+    sans intervention manuelle ;
+  - [x] recette finale (AR-0066) passée — voir
+    `docs/release/v1.0-recette.md`.
 - **État fonctionnel de l'application** : **première version stable
   d'Autorun** — plateforme SaaS multi-vertical, multi-tenant, avec
   facturation d'abonnement, prospection à client à facturation, sécurité
