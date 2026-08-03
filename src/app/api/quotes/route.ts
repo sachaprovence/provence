@@ -5,8 +5,9 @@ import { toApiErrorResponse } from "@/lib/errors";
 import { quoteSchema } from "@/lib/validations/quote";
 import { createQuote } from "@/lib/crm/quote-service";
 import { writeAuditLog } from "@/lib/audit";
+import { withApiMetrics } from "@/lib/observability/api-metrics";
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { searchParams } = new URL(request.url);
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ quotes });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const body = await request.json().catch(() => null);
@@ -45,3 +46,7 @@ export async function POST(request: Request) {
     return toApiErrorResponse(error, { route: "POST /api/quotes" });
   }
 }
+
+// Routes représentatives instrumentées pour la latence API (AR-0049, v0.9 bis) — voir src/lib/observability/api-metrics.ts.
+export const GET = withApiMetrics("GET /api/quotes", handleGet);
+export const POST = withApiMetrics("POST /api/quotes", handlePost);

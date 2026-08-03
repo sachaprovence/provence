@@ -5,9 +5,10 @@ import { getAIProvider } from "@/lib/ai";
 import { generateMessageSchema } from "@/lib/validations/message";
 import { unsubscribeUrl } from "@/lib/unsubscribe-token";
 import { writeAuditLog } from "@/lib/audit";
+import { withApiMetrics } from "@/lib/observability/api-metrics";
 import { LeadStage, MessageStatus } from "@/generated/prisma/enums";
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -119,3 +120,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ message });
 }
+
+// Route représentative instrumentée pour la latence API (AR-0049, v0.9 bis) — voir src/lib/observability/api-metrics.ts.
+export const POST = withApiMetrics("POST /api/messages/generate", handlePost);

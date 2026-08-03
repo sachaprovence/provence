@@ -108,6 +108,7 @@ model Organization {
   properties          Property[]
   attachments         Attachment[]
   virtualTours        VirtualTour[]
+  apiRequestMetrics   ApiRequestMetric[]
 
   @@index([name])
 }
@@ -2901,4 +2902,31 @@ model AutomationCircuitBreaker {
   automation Automation? @relation(fields: [automationId], references: [id], onDelete: Cascade)
 
   @@index([automationId])
+}
+
+// ---------------------------------------------------------------------------
+// Observabilité (v0.9 bis, AR-0049) — voir docs/adr, ROADMAP.md §1 novies.
+// Métriques de latence API, appliquées de façon INCRÉMENTALE (quelques
+// routes représentatives instrumentées via `withApiMetrics`, jamais un
+// middleware global) — voir `src/lib/observability/api-metrics.ts`. Le coût
+// IA (`AIRequest.estimatedCostUsd`, déjà existant depuis v0.3) et le taux
+// d'échec d'envoi email (`EmailEvent`, déjà existant depuis v0.1) sont
+// agrégés directement depuis ces tables existantes, sans nouveau modèle.
+// ---------------------------------------------------------------------------
+
+/// Une ligne par requête API instrumentée — `organizationId` nul si la
+/// requête a échoué avant résolution de l'acteur (ex. non authentifiée).
+model ApiRequestMetric {
+  id             String   @id @default(cuid())
+  organizationId String?
+  route          String
+  method         String
+  statusCode     Int
+  durationMs     Int
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([route])
 }
