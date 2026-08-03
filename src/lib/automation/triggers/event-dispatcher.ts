@@ -23,6 +23,11 @@ import { publishDomainEvent, subscribeDomainEvent, type DomainEventPayload } fro
 export async function publishAutomationEvent(eventKey: string, payload: DomainEventPayload = {}): Promise<void> {
   const { registerBuiltInAutomationComponents } = await import("../bootstrap");
   registerBuiltInAutomationComponents();
+  // Webhooks sortants (v1.0, AR-0061) — s'abonnent au même bus générique,
+  // voir `src/lib/webhooks-outbound.ts`. Import dynamique pour la même
+  // raison que ci-dessus (éviter tout cycle d'import statique).
+  const { registerOutboundWebhookListeners } = await import("@/lib/webhooks-outbound");
+  registerOutboundWebhookListeners();
   await publishDomainEvent(eventKey, payload);
 }
 
