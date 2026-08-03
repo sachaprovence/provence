@@ -1093,7 +1093,11 @@ câblé à un point d'émission de la plateforme (`lead.created`/`updated`/
 `webhook.received`, `manual.user_action`) — même honnêteté que le Workflow
 Engine (§13, v0.6, qui ne câble réellement que `agent.run.completed`) — voir
 ADR 0037. `fireAutomationsForEvent` filtre STRICTEMENT par organisation
-quand le payload en fournit une.
+quand le payload en fournit une. Étendu en v0.9 (§16, `MOD-28`) avec
+`appointment.created`, `quote.sent`/`signed`/`signature_declined`,
+`invoice.created`/`sent`/`paid`, `virtual_tour.created`/`shooting_done`/
+`published`, `property.created` — déjà publiés par les services v0.9 mais
+jusque-là sans abonné (extension anticipée par l'ADR 0037 elle-même).
 
 ### Job Executor (`executor/`) — le coeur du noyau de jobs
 
@@ -1156,3 +1160,162 @@ glisser-déposer pour cette phase), permission `MANAGE_AUTOMATIONS` dédiée
 `tests/automation/dashboard-service.test.ts`,
 `tests/automation/permissions.test.ts`, et
 `tests/e2e/automation-golden-path.mjs`.
+
+## 16. Provence 360 Operating System (v0.9 — `ROADMAP.md` MOD-28)
+
+Voir `docs/adr/0038` et `0039` pour la justification complète. Contrairement
+aux phases précédentes (un moteur transversal nouveau), v0.9 étend
+ADDITIVEMENT le CRM/le suivi commercial/la production existants et
+construit sept nouveaux agents métier + dix automatisations prêtes à
+l'emploi au-dessus des moteurs déjà livrés (Framework des Agents, Workflow/
+Automation Engine, Memory/Knowledge/Context Engine) — aucun moteur
+transversal supplémentaire.
+
+### CRM étendu (`Company`/`Property`/`Attachment`) et chronologie
+
+`Lead` reste l'unique table CRM centrale. `Company` (regroupement
+juridique optionnel), `Property` (bien immobilier, distinct du `Lead`
+qui le représente) et `Attachment` (documents/photos polymorphes, même
+convention qu'`AuditLog` — `entityType`/`entityId`, jamais une table par
+type) sont additifs. `crm/timeline-service.ts` agrège en LECTURE SEULE
+`LeadNote`/`Message`/`Conversation`/`Appointment`/`Task`/`Quote`/
+`AuditLog`/`Attachment` par date — jamais une nouvelle table d'écriture.
+`PipelineStage` (scopé organisation, seedé 1:1 avec les 14 valeurs de
+`LeadStage`) personnalise l'AFFICHAGE du Kanban ; `Lead.stage` (l'enum)
+reste l'unique source de vérité pour le scoring/l'automatisation/les
+séquences.
+
+### Devis étendus, Facturation (`quote-service.ts`, `invoice-service.ts`)
+
+`Quote` gagne remise, taux/montant de TVA, PDF (`pdf-lib`, zéro
+dépendance transitive, partagé entre devis et facture via
+`commercial-document-pdf.ts`), versionnement immuable (`QuoteVersion`,
+snapshot pris à l'envoi dans une transaction), abstraction de signature
+électronique (fournisseur démo, comme demandé par le brief). `Invoice`/
+`InvoiceLine` sont nouveaux — `convertQuoteToInvoice` exige
+`Quote.status === ACCEPTED`, jamais une conversion automatique.
+
+### Communication Hub (`src/lib/communication/`)
+
+Registre par canal (SMS/WhatsApp/téléphone/webhook — email garde son
+abstraction préexistante, plus riche), même idiome que les registres LLM/
+embedding/Queue Manager (`resolveChannelProvider`/
+`registerBuiltInCommunicationProviders`). Configuration PAR ORGANISATION
+dans `Integration.config` (déjà en base depuis v0.2 mais jusque-là
+décoratif). Webhook sortant RÉEL (signature HMAC-SHA256 optionnelle via
+`metadata.secret`) ; SMS/WhatsApp/téléphone restent des stubs honnêtes
+simulés (aucun fournisseur tiers disponible dans cet environnement).
+
+### Emails réels par organisation (`src/lib/email/providers/`)
+
+SMTP (`nodemailer`), Resend, Postmark, Brevo : implémentation RÉELLE et
+complète (pas un stub simulé), qui échoue explicitement (`status:
+"failed"`, message clair) si aucune configuration n'est présente —
+jamais un faux succès. `resolveEmailConfig`/`configValue` lisent
+`Integration.config` (kind EMAIL) avec repli sur variable
+d'environnement pour le mode démo/mono-organisation. Vérifié contre de
+VRAIS petits serveurs locaux (`smtp-server`, `http.createServer()`) plutôt
+que des mocks — la vérification de bout en bout contre un vrai compte
+Resend/Postmark/Brevo/SMTP externe n'a pas été possible dans cet
+environnement (aucun identifiant disponible).
+
+### Google Calendar réel (`src/lib/calendar/google/`)
+
+OAuth2 + REST via `fetch()` direct (cohérent avec le reste de la
+plateforme — aucun SDK lourd comme `googleapis`). `trySyncAppointmentToGoogle`
+est TOUJOURS best-effort (ne bloque jamais la création/modification d'un
+rendez-vous en cas d'échec de synchronisation, seulement un avertissement
+journalisé). `getGoogleCalendarBusySlots` calcule les disponibilités
+réelles ; en l'absence de connexion, l'appelant retombe honnêtement sur
+les vrais `Appointment` déjà enregistrés. Vérifié contre un vrai serveur
+HTTP local simulant l'API Google (OAuth token exchange/refresh, Calendar
+API create/update/delete/freeBusy).
+
+### Visites 3D (`VirtualTour`, `src/lib/production/virtual-tour-service.ts`)
+
+Nouveau module métier dédié Provence 360 (lien Matterport, lien de
+visite, surface, type, statut). `leadId` est TOUJOURS dérivé de la
+`Mission` liée (via `Mission.customer.leadId`), jamais accepté séparément
+en entrée — élimine tout risque d'incohérence entre le client d'une
+visite et celui de sa mission. `Mission` (`MOD-08`) reste intentionnellement
+générique, non modifié.
+
+### Tableaux de bord métier (`src/lib/dashboards/dashboard-service.ts`)
+
+Six tableaux de bord non encore couverts par les phases précédentes
+(Production, Clients, Visites, Rendez-vous, Activité IA, Performance),
+sur une seule page `/dashboards` — Commercial/CA (`/dashboard`, existant)
+et Automatisations (`/automations`, v0.8) le sont déjà.
+
+### Sept agents métier — sur les VRAIES données CRM, jamais un modèle de démonstration
+
+Prospection, Relance, Devis, Planning, Réseaux sociaux, Support, Analyse
+suivent le même PATRON architectural que l'Agent Commercial (v0.5) —
+`AgentDefinition` + runtime + outils déclaratifs + câblage Context Engine
+obligatoire (ADR 0029) + journal d'audit + vérification de permission —
+mais opèrent sur les vraies tables `Lead`/`Quote`/`Appointment`/
+`VirtualTour`/`Conversation` et réutilisent les vrais services déjà
+construits en v0.9 (`quote-service.ts`, `calendar/google/*`, `stats.ts`,
+le vrai moteur de scoring `@/lib/scoring`) — JAMAIS un modèle de
+démonstration séparé comme `CommercialProspect`/`CommercialAction`
+(propre à Commercial, non modifié). Voir ADR 0039 pour la justification
+complète de ce choix. Deux extractions évitent de dupliquer sept fois la
+même plomberie : `agents/shared/generation.ts#generateAgentNarrative`
+(appel LLM + Context Engine, extrait de `commercial/generation.ts` sans
+changer sa signature externe) et
+`agents/shared/simple-runtime.ts#createSimpleAgentRuntime` (runtime de
+dispatch générique action → outil déclaratif). Support et Analyse
+PROMEUVENT les stubs DRAFT créés en v0.4 (`future-support-agent`/
+`future-analyse-agent`, même mécanisme `promoteGlobalAgentDefinition` que
+Commercial en v0.5) ; les cinq autres sont créés directement PUBLISHED.
+Aucun envoi/publication automatique (ADR 0017, inchangée) : les messages
+générés restent `PENDING_VALIDATION`, la publication sociale et la
+réservation de rendez-vous sont les seules actions à effet immédiat
+(cohérent avec leur nature — un rendez-vous réservé n'a pas besoin d'une
+validation humaine intermédiaire, contrairement à un message envoyé à un
+prospect).
+
+### Dix automatisations métier prêtes à l'emploi (Automation Engine)
+
+Mêmes principes que les 10 templates du Workflow Engine (v0.6,
+`workflows/templates/seed-templates.ts`) appliqués à l'Automation Engine
+(v0.8, `automation/templates/seed-templates.ts`) : `Automation` globaux
+(`isTemplate: true`, `workspaceId` nul), jamais activables directement,
+clonés dans un workspace avant activation. Différence assumée : CHAQUE
+déclencheur et CHAQUE action référencés sont réellement câblés dès
+aujourd'hui (contrairement à certains templates v0.6 qui référençaient
+une action pas encore implémentée à l'époque) — nécessite d'étendre
+`REAL_EMISSION_EVENT_KEYS` (§15, ADR 0037) avec les évènements
+`quote.*`/`invoice.*`/`virtual_tour.*`/`property.created` déjà publiés
+par les services v0.9 mais jusque-là sans abonné, et un nouveau point
+d'émission réel `appointment.created`.
+
+### Réglages (`/settings`)
+
+Coordonnées légales/TVA/logo de l'organisation (`Organization.logoUrl`/
+`vatNumber`/`siret`/`legalAddress`/`phone`/`invoicePrefix`/`quotePrefix`,
+déjà en base depuis les extensions CRM ci-dessus mais rendues éditables
+ici — alimentent les PDF de devis/factures). Identifiants email par
+organisation (`updateEmailIntegrationConfig`, fusionne plutôt que
+remplace — un secret laissé vide dans le formulaire ne remplace jamais un
+secret déjà enregistré ; `getEmailConfigPreview` ne renvoie JAMAIS un
+secret en clair au navigateur, seulement sa présence). Le fournisseur IA
+reste un réglage de DÉPLOIEMENT (`LLM_PROVIDER`/`AI_PROVIDER`, ADR 0015),
+jamais par organisation — la section correspondante affiche un statut
+honnête plutôt qu'un formulaire qui n'agirait sur rien (voir ADR 0039).
+
+### Tests
+
+`tests/crm/{timeline,pipeline}-service.test.ts`,
+`tests/crm/{quote,invoice}-service.test.ts`,
+`tests/communication/hub-service.test.ts` (vrai serveur HTTP local),
+`tests/email/real-providers.test.ts` (vrais serveurs SMTP/HTTP locaux),
+`tests/email/email-settings.test.ts`,
+`tests/calendar/google-calendar.test.ts` (vrai serveur HTTP local),
+`tests/production/virtual-tour-service.test.ts`,
+`tests/dashboards/dashboard-service.test.ts`,
+`tests/agents/{prospection,relance,devis,planning,social,support,
+analyse}-agent.test.ts` (effets de bord réels vérifiés dans chaque
+table concernée), `tests/automation/business-automation-templates.test.ts`
+(scénario complet déclencheur→job→agent→effet réel), et
+`tests/settings/organization-settings.test.ts`.

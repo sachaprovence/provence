@@ -369,6 +369,64 @@ périmètre :
   `tests/e2e/automation-golden-path.mjs` contre un serveur réellement
   démarré, zéro erreur console.
 
+## 0 novies. État du Provence 360 Operating System (v0.9)
+
+Le système d'exploitation métier de Provence 360 (`ROADMAP.md` MOD-28,
+`docs/02-ARCHITECTURE.md` §16) est livré, en remplacement du plan initial
+de v0.9 (observabilité transversale + connecteurs réels IA/email, voir
+`MILESTONES.md` §v0.9 bis). Points à connaître pour tout nouveau code
+touchant ce périmètre :
+
+- **Les 7 agents métier (Prospection/Relance/Devis/Planning/Réseaux
+  sociaux/Support/Analyse) opèrent sur les VRAIES tables CRM, jamais un
+  modèle de démonstration** — contrairement à l'Agent Commercial (v0.5),
+  qui reste sur `CommercialProspect`/`CommercialAction` (non modifié).
+  Tout nouvel outil pour l'un de ces agents doit lire/écrire les vraies
+  tables (`Lead`/`Quote`/`Appointment`/`VirtualTour`/`Conversation`) et
+  réutiliser les vrais services déjà construits (`quote-service.ts`,
+  `calendar/google/*`, `stats.ts`, `@/lib/scoring`) — voir ADR 0039.
+  N'écrivez jamais un nouvel outil d'agent métier contre
+  `commercial/scoring-engine.ts` ou un modèle de démonstration similaire.
+- **`agents/shared/generation.ts#generateAgentNarrative` et
+  `agents/shared/simple-runtime.ts#createSimpleAgentRuntime` sont les
+  points d'extension communs des 8 agents métier** (Commercial + les 7
+  nouveaux) — un nouvel agent métier simple (une action = un appel
+  d'outil) doit utiliser `createSimpleAgentRuntime`, jamais réécrire un
+  runtime de dispatch depuis zéro.
+- **Étendre le câblage réel de l'Automation Engine reste une liste
+  explicite** (`trigger-engine.ts#REAL_EMISSION_EVENT_KEYS`, ADR 0037) —
+  v0.9 y a ajouté `appointment.created`, `quote.*`, `invoice.*`,
+  `virtual_tour.*`, `property.created`. Un nouveau `publishAutomationEvent(...)`
+  dans un service métier ne déclenche RIEN tant que sa clé n'est pas
+  ajoutée à cette liste — vérifier les deux avant de supposer qu'un
+  évènement déclenche déjà une automatisation.
+- **Les identifiants email sont PAR ORGANISATION
+  (`Integration.config`, kind `EMAIL`), le fournisseur AI/LLM reste un
+  réglage de DÉPLOIEMENT** (`AI_PROVIDER`/`LLM_PROVIDER`, ADR 0015/0039)
+  — ne pas essayer d'ajouter une configuration par organisation pour le
+  LLM sans relire l'ADR 0039 (choix explicite, alternative écartée pour
+  cette phase, coût de refactor disproportionné par rapport au besoin
+  réel).
+- **`updateEmailIntegrationConfig` FUSIONNE, ne remplace jamais** — un
+  champ secret (`smtpPassword`/`apiKey`) laissé vide dans le formulaire de
+  réglages ne doit jamais effacer un identifiant déjà enregistré ; et
+  `getEmailConfigPreview` ne renvoie JAMAIS un secret en clair au
+  navigateur (seulement sa présence, `hasSmtpPassword`/`hasApiKey`). Tout
+  nouveau réglage exposant un secret par organisation doit suivre ce même
+  patron fusion + aperçu masqué.
+- **`VirtualTour.leadId` est TOUJOURS dérivé de la `Mission` liée**
+  (`resolveLeadIdFromMission`), jamais accepté séparément en entrée — même
+  principe que d'autres dérivations strictes déjà établies dans le CRM.
+- **Toute nouvelle fonctionnalité de ce périmètre doit être vérifiée au
+  moins une fois par une vraie requête HTTP contre un serveur en cours
+  d'exécution** — la page `/settings` (nouvelles sections Entreprise/TVA/
+  logo, Email, Intelligence artificielle) et les routes
+  `GET`/`PUT /api/settings/integrations/email` et
+  `PUT /api/settings/organization` ont été vérifiées de bout en bout
+  (connexion admin démo, rendu de page, persistance/relecture des champs,
+  non-fuite des secrets) contre un serveur de développement réellement
+  démarré, zéro erreur console.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)
@@ -439,8 +497,10 @@ référence rapide pendant le développement :
   d'environnement et valeurs d'enum techniques.
 - Jamais de préfixe `NEXT_PUBLIC_` sur une variable contenant un secret.
 - Pas de `console.log` brut dans `src/` (règle de lint, voir AR-0006) —
-  utiliser le logger structuré une fois `MOD-16` en place (`v0.9`), un
-  logger minimal transitoire avant cela si nécessaire.
+  utiliser `src/lib/logger.ts` (pino, déjà en place depuis plusieurs
+  phases) ; l'observabilité transversale dédiée (`MOD-16`, logs
+  structurés/capture d'erreurs/métriques centralisées) reste reportée
+  après v0.9 — voir `ROADMAP.md` §1 novies et `MILESTONES.md` §v0.9 bis.
 
 ## 5. Stratégie de tests
 

@@ -635,12 +635,76 @@ et de la facturation client (`v0.4`/`v0.5`).
   utilisateur final, mais l'application encaisse un import volumineux ou
   un pic d'envoi sans dégrader le temps de réponse HTTP.
 
-## v0.9 — Observabilité et connecteurs réels
+## v0.9 — Provence 360 Operating System (remplace le plan initial)
+
+> **Statut : ✅ livré** (2026-08-03). Comme pour `v0.2`–`v0.8`, ce jalon a
+> été **redéfini sur demande explicite** : le contenu initialement prévu
+> ici (observabilité transversale + connecteurs réels IA/email, voir
+> `v0.9 bis` ci-dessous) est partiellement livré en tant qu'ingrédient de
+> ce module plus large (connecteurs email réels), et reporté pour le
+> reste (observabilité transversale dédiée, IA réellement configurable
+> par organisation) — remplacé par un module jugé prioritaire par le
+> mandat explicite du brief : transformer Autorun en système
+> d'exploitation quotidien de Provence 360. Voir `ROADMAP.md` §1 novies et
+> §MOD-28, ainsi que `docs/adr/0038` et `0039`.
+
+- **Objectif du jalon** : « piloter quasiment toute mon entreprise depuis
+  Autorun » — CRM étendu, devis/facturation réels, communication
+  multicanal, email et agenda réels, visites 3D, tableaux de bord
+  métier, 7 agents métier opérant sur les vraies données, automatisations
+  prêtes à l'emploi, réglages complets.
+- **Modules** : MOD-28 (étend additivement MOD-03/MOD-07/MOD-08/MOD-11 ;
+  délivre une partie du périmètre technique de MOD-06 et MOD-14 ;
+  réutilise les gabarits de MOD-25/MOD-27 et le patron architectural de
+  MOD-24).
+- **Tâches** : voir `BACKLOG.md`, section v0.9 (extensions du schéma CRM,
+  chronologie, pipeline personnalisable, devis/factures réels,
+  Communication Hub, connecteurs email réels, Google Calendar réel,
+  Visites 3D, tableaux de bord, 7 agents métier, automatisations prêtes à
+  l'emploi, réglages, ADR, validation finale).
+- **Critères de sortie** :
+  - [x] les 288 tests de v0.1 à v0.8 passent toujours sans modification de
+    leur comportement ;
+  - [x] 96 nouveaux tests (384 au total) passent contre une vraie base
+    PostgreSQL : CRM étendu/chronologie, pipeline, devis/factures, Hub de
+    communication (vrai serveur HTTP local), emails réels (vrais serveurs
+    SMTP/HTTP locaux), Google Calendar (vrai serveur HTTP local), Visites
+    3D, tableaux de bord, 7 agents métier (effets de bord réels vérifiés :
+    `LeadScore`, `Message` en attente de validation, `Quote`/
+    `QuoteVersion`, `Appointment`, `AuditLog`), automatisations métier
+    (scénario complet déclencheur→job→agent→effet réel), réglages ;
+  - [x] `npm run lint`, `npx tsc --noEmit` et `npm run build` passent sans
+    erreur ;
+  - [x] validé par de vraies requêtes HTTP contre un serveur de
+    développement réellement démarré (connexion admin démo, page
+    Paramètres rendue avec ses nouvelles sections, GET/PUT des routes de
+    réglages email et organisation), pas seulement des tests automatisés.
+- **État fonctionnel de l'application** : Provence 360, le multi-tenant,
+  les moteurs Agents/Director/Commercial/Workflow/Automation/intelligence
+  documentaire restent **entièrement fonctionnels** ; un nouvel espace
+  `/dashboards` (6 tableaux de bord), `/invoices`, `/visits` sont
+  accessibles ; 7 nouveaux agents métier installables ; 10 automatisations
+  prêtes à l'emploi clonables depuis l'Automation Engine ; la page
+  Paramètres expose entreprise/TVA/logo/email/agenda et un statut IA
+  honnête.
+- **Limite connue** : l'observabilité transversale dédiée (`MOD-16`) reste
+  hors périmètre (au-delà des tableaux de bord métier déjà livrés par
+  MOD-25/26/27/28) ; le fournisseur IA reste un réglage de déploiement
+  (`LLM_PROVIDER`/`AI_PROVIDER`), pas configurable par organisation comme
+  l'email (voir ADR 0039) ; SMS/WhatsApp/téléphone restent des stubs
+  honnêtes (aucun fournisseur tiers disponible dans cet environnement) ;
+  le paiement en ligne (Stripe réel, `MOD-12`) reste hors périmètre.
+
+## v0.9 bis — Observabilité et connecteurs réels (plan initial, reporté)
 
 - **Objectif du jalon** : donner de la visibilité opérationnelle et
   remplacer les fournisseurs démo par des fournisseurs réels pour l'IA et
-  l'email.
-- **Modules** : MOD-16, MOD-04 (IA réelle), MOD-06 (email réel).
+  l'email. Le volet email réel est livré via `MOD-28` (v0.9, connecteurs
+  SMTP/Resend/Postmark/Brevo par organisation) — voir `ROADMAP.md`
+  §1 novies. L'observabilité transversale dédiée et l'IA réellement
+  configurable par organisation restent reportées.
+- **Modules** : MOD-16, MOD-04 (IA réelle), MOD-06 (email réel — partie
+  livrée via `MOD-28`).
 - **Tâches** : AR-0047 à AR-0054.
 - **Critères de sortie** :
   - logs structurés sans donnée sensible détectée par test automatisé ;
@@ -649,11 +713,12 @@ et de la facturation client (`v0.4`/`v0.5`).
   - bascule `AI_PROVIDER=demo` → `AI_PROVIDER=anthropic` sans changement de
     code, avec quota dur vérifié par test ;
   - au moins un connecteur email réel (SMTP) fonctionnel de bout en bout
-    sur un compte de test.
+    sur un compte de test — ✅ livré via `MOD-28` (v0.9), vérifié contre un
+    vrai serveur SMTP local.
 - **État fonctionnel de l'application** : Autorun peut désormais tourner en
-  conditions réelles (IA et email non simulés) pour une organisation
-  pilote, avec une équipe capable de diagnostiquer un incident en
-  production.
+  conditions réelles (email non simulé, par organisation) pour une
+  organisation pilote ; l'observabilité transversale dédiée et le
+  diagnostic IA restent à construire.
 
 ## v0.10 — Sécurité avancée (porte obligatoire avant v1.0)
 
@@ -721,7 +786,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.7 bis | Fonctionnalité (reportée) | Oui | Non |
 | v0.8 | Infrastructure (moteur d'automatisation transversal) | Oui (éditeur + tableau de bord Automations) | Oui (fondation du noyau de jobs pour toute automatisation future) |
 | v0.8 bis | Infrastructure (migration, reportée) | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |
-| v0.9 | Fonctionnalité + ops | Oui (IA/email réels) | Oui (v0.10 en dépend partiellement) |
+| v0.9 | Fonctionnalité (système d'exploitation Provence 360) | Oui (CRM étendu, devis/factures, visites 3D, tableaux de bord, 7 agents métier, automatisations, réglages) | Non (chaque extension reste additive) |
+| v0.9 bis | Fonctionnalité + ops (partiellement livrée, reportée pour le reste) | Oui (email réel) | Non |
 | v0.10 | Sécurité | Non | **Oui, bloquant pour v1.0** |
 | v1.0 | Ouverture SaaS | Oui | — (fin de cycle) |
 

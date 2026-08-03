@@ -1701,7 +1701,172 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 
 ---
 
-## Version 0.9 — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06)
+## Version 0.9 — Provence 360 Operating System (MOD-28, remplace le plan initial)
+
+### AR-0139 — Extensions CRM (Company/Property/Attachment) et ADR 0038/0039
+- **Description** : décisions de périmètre v0.9 (ADR 0038), schéma Prisma
+  additif — `Company`, `Property`, `Attachment` (polymorphe, même
+  convention qu'`AuditLog`), extension de `LeadCategory` (5 valeurs).
+- **Fichiers concernés** : `prisma/schema.prisma`, migrations,
+  `src/lib/validations/crm.ts`, `docs/adr/0038-*.md`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : aucun.
+
+### AR-0140 — Chronologie (timeline-service.ts)
+- **Description** : agrégation en lecture seule de `LeadNote`/`Message`/
+  `Conversation`/`Appointment`/`Task`/`Quote`/`AuditLog`/`Attachment`,
+  jamais une nouvelle table.
+- **Fichiers concernés** : `src/lib/crm/timeline-service.ts`,
+  `src/app/api/leads/[id]/timeline/route.ts`.
+- **Complexité** : Basse.
+- **Estimation** : 0,5 jour.
+- **Prérequis** : AR-0139.
+
+### AR-0141 — Pipeline personnalisable (`PipelineStage`)
+- **Description** : étapes affichées personnalisables (libellé/couleur/
+  ordre) par organisation, seedées 1:1 avec `LeadStage` — `LeadStage`
+  reste l'unique source de vérité métier.
+- **Fichiers concernés** : `src/lib/crm/pipeline-service.ts`,
+  `src/components/pipeline-stages-manager.tsx`,
+  `src/app/api/pipeline-stages/**`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0139.
+
+### AR-0142 — Devis étendus (remise/TVA/PDF/versionnement/signature)
+- **Description** : `Quote` étendu (remise, TVA, PDF via `pdf-lib`,
+  versionnement immuable `QuoteVersion`), abstraction de signature
+  électronique (fournisseur démo).
+- **Fichiers concernés** : `src/lib/crm/quote-service.ts`,
+  `quote-pricing.ts`, `quote-pdf.ts`, `commercial-document-pdf.ts`,
+  `src/lib/quotes/esignature/**`.
+- **Complexité** : Élevée.
+- **Estimation** : 3 jours.
+- **Prérequis** : AR-0139.
+
+### AR-0143 — Facturation (`Invoice`/`InvoiceLine`, conversion depuis un devis)
+- **Description** : nouveaux modèles `Invoice`/`InvoiceLine`, conversion
+  explicite (jamais automatique) d'un devis `ACCEPTED`.
+- **Fichiers concernés** : `src/lib/crm/invoice-service.ts`,
+  `invoice-pdf.ts`, `src/app/api/invoices/**`,
+  `src/app/api/quotes/[id]/convert-to-invoice/route.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0142.
+
+### AR-0144 — Communication Hub (registre de canaux SMS/WhatsApp/téléphone/webhook)
+- **Description** : registre par canal réutilisant `Integration.config` ;
+  webhook sortant réel (HMAC optionnel) ; SMS/WhatsApp/téléphone en stubs
+  honnêtes.
+- **Fichiers concernés** : `src/lib/communication/**`,
+  `src/app/api/communications/**`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : aucun.
+
+### AR-0145 — Connecteurs email réels (SMTP/Resend/Postmark/Brevo)
+- **Description** : implémentation réelle et complète, configuration par
+  organisation via `Integration.config` (repli sur variable
+  d'environnement), échec explicite si non configuré. Délivre le
+  périmètre AR-0052/53/54 (email réel) du plan initial de v0.9.
+- **Fichiers concernés** : `src/lib/email/providers/{smtp,resend,
+  postmark,brevo}.ts`, `src/lib/email/config.ts`.
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : vrais serveurs SMTP/HTTP locaux (pas de mock).
+
+### AR-0146 — Google Calendar réel (OAuth2 + REST)
+- **Description** : `fetch()` direct (cohérent avec le reste de la
+  plateforme), synchronisation best-effort des rendez-vous, repli
+  honnête sur les rendez-vous déjà enregistrés si non connecté.
+- **Fichiers concernés** : `src/lib/calendar/google/**`,
+  `src/app/api/calendar/**`.
+- **Complexité** : Élevée.
+- **Estimation** : 2,5 jours.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : vrai serveur HTTP local (OAuth + Calendar API).
+
+### AR-0147 — Visites 3D (`VirtualTour`)
+- **Description** : nouveau module lié à une `Mission` existante (réutilise
+  planification/prestataire), jamais une duplication de `Mission`.
+- **Fichiers concernés** : `src/lib/production/virtual-tour-service.ts`,
+  `src/app/(app)/visits/page.tsx`, `src/app/api/virtual-tours/**`.
+- **Complexité** : Moyenne.
+- **Estimation** : 1,5 jour.
+- **Prérequis** : AR-0139.
+
+### AR-0148 — Tableaux de bord métier (Production/Clients/Visites/RDV/IA/Performance)
+- **Description** : 6 tableaux de bord non encore couverts (Commercial/CA
+  et Automatisations déjà livrés en v0.5/v0.8).
+- **Fichiers concernés** : `src/lib/dashboards/dashboard-service.ts`,
+  `src/app/(app)/dashboards/page.tsx`.
+- **Complexité** : Moyenne.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0142, AR-0143, AR-0147.
+
+### AR-0149 — 7 agents métier (Prospection/Relance/Devis/Planning/Réseaux sociaux/Support/Analyse)
+- **Description** : même patron que l'Agent Commercial (v0.5), mais
+  opèrent sur les vraies données CRM et réutilisent les vrais services
+  v0.9 — jamais un modèle de démonstration séparé (voir ADR 0039).
+  Support/Analyse promeuvent les stubs DRAFT créés en v0.4.
+- **Fichiers concernés** : `src/lib/agents/tools/*-tools.ts`,
+  `src/lib/agents/definitions/*-agent.ts`,
+  `src/lib/agents/shared/{generation,simple-runtime}.ts`,
+  `src/lib/agents/business-agents-prompt-seeds.ts`.
+- **Complexité** : Très élevée.
+- **Estimation** : 5 jours.
+- **Prérequis** : AR-0142, AR-0144, AR-0145, AR-0146, AR-0147.
+
+### AR-0150 — 10 automatisations métier prêtes à l'emploi
+- **Description** : gabarits `Automation`/`AutomationVersion` scellés au
+  bootstrap, clonables (même mécanisme que les templates du Workflow
+  Engine, v0.6) — extension de `REAL_EMISSION_EVENT_KEYS` (ADR 0037) pour
+  que chaque déclencheur/action référencé soit réellement câblé.
+- **Fichiers concernés** : `src/lib/automation/templates/seed-templates.ts`,
+  `src/lib/automation/trigger-engine.ts`,
+  `src/lib/automation/triggers/builtin-triggers.ts`.
+- **Complexité** : Moyenne.
+- **Estimation** : 2 jours.
+- **Prérequis** : AR-0142, AR-0143, AR-0147, AR-0149.
+
+### AR-0151 — Réglages (entreprise/TVA/logo/email/IA)
+- **Description** : coordonnées légales/TVA/logo de l'organisation
+  (déjà en base depuis AR-0139 mais jamais éditables), identifiants email
+  par organisation (jamais un secret renvoyé en clair), statut honnête du
+  fournisseur IA actif.
+- **Fichiers concernés** : `src/components/organization-form.tsx`,
+  `src/components/email-settings-form.tsx`,
+  `src/app/api/settings/integrations/email/route.ts`,
+  `src/app/(app)/settings/page.tsx`.
+- **Complexité** : Basse.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0145.
+
+### AR-0152 — ADR 0038/0039 et validation finale
+- **Description** : documentation des décisions de périmètre/architecture
+  de cette version, validation complète (typecheck/lint/tests/build) et
+  vérification manuelle contre un serveur de développement réel.
+- **Fichiers concernés** : `docs/adr/0038-*.md`, `docs/adr/0039-*.md`,
+  `ROADMAP.md`, `MILESTONES.md`, `BACKLOG.md`, `docs/02-ARCHITECTURE.md`,
+  `DEVELOPMENT_GUIDE.md`.
+- **Complexité** : Basse.
+- **Estimation** : 1 jour.
+- **Prérequis** : AR-0139 à AR-0151.
+
+**Total estimé du travail réellement livré pour v0.9 : ~27 jours.**
+
+---
+
+### Plan initial de v0.9 (partiellement livré, conservé pour référence)
+
+> La tâche `AR-0052` (`SmtpEmailProvider`) ci-dessous est livrée (sous une
+> forme étendue à Resend/Postmark/Brevo et à la configuration par
+> organisation) via `AR-0145` ci-dessus. `AR-0047` à `AR-0051`, `AR-0053`
+> et `AR-0054` restent non traitées — voir `ROADMAP.md` §1 novies.
+
+## Version 0.9 bis — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06, plan initial, reporté)
 
 ### AR-0047 — Logs structurés (pino)
 - **Description** : remplacer les `console.log` restants par des logs
@@ -1792,7 +1957,7 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 - **Prérequis** : AR-0052.
 - **Tests nécessaires** : idem AR-0053.
 
-**Total estimé v0.9 : ~18,5 jours** (AR-0053/AR-0054 parallélisables).
+**Total estimé v0.9 bis (plan initial, partiellement livré via AR-0145) : ~18,5 jours** (AR-0053/AR-0054 parallélisables).
 
 ---
 

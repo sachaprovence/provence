@@ -208,6 +208,37 @@ avec le Workflow Engine (`MOD-25`, v0.6) sans le modifier — voir ADR 0030.
 Les décisions d'architecture prises pour `MOD-27` sont documentées dans
 `docs/adr/0030` à `0037`.
 
+## 1 novies. Changement de plan explicite : v0.9 devient le "Provence 360 Operating System", pas MOD-16/MOD-06 réel/MOD-04 réel isolés
+
+La version `v0.9` initialement envisagée (`MOD-16` observabilité +
+`MOD-06` connecteurs email réels + `MOD-04` IA réelle, voir §MOD-16/06/04
+et l'ancien §v0.9 de `MILESTONES.md`, désormais `§v0.9 bis`) a été
+**remplacée, sur demande explicite**, par un nouveau module transversal :
+`MOD-28` (« Provence 360 Operating System » — transformer Autorun de
+plateforme SaaS générique multi-vertical en système d'exploitation
+quotidien d'UNE entreprise réelle, Provence 360). Raison : le brief v0.9
+est explicite — « L'objectif est que je puisse piloter quasiment toute
+mon entreprise depuis Autorun » et « Chaque fonctionnalité développée
+doit avoir une utilité directe dans l'activité quotidienne » — un
+périmètre governé par la valeur métier réelle, pas par la prochaine
+brique technique générique de la feuille de route initiale.
+
+Conséquence sur l'ordre : `MOD-28` **délivre une partie substantielle du
+périmètre technique de `MOD-06`** (connecteurs email réels SMTP/Resend/
+Postmark/Brevo, par organisation) et de `MOD-14` (Google Calendar réel,
+déjà classé "reporté après v0.7" — livré ici à la place) — les deux sont
+donc considérés **livrés via `MOD-28`**, pas reportés. `MOD-16`
+(observabilité transversale dédiée, au-delà des tableaux de bord
+spécifiques déjà livrés par `MOD-25`/`MOD-26`/`MOD-27`/`MOD-28`) et l'IA
+réellement branchée par organisation (au lieu d'un choix de fournisseur
+au niveau du déploiement, voir ADR 0015/0039) restent hors périmètre de
+cette phase — reportés à nouveau, cette fois sans nouvelle date fixée
+(voir `BACKLOG.md`). `MOD-28` coexiste avec le CRM/Devis/Suivi commercial/
+Production existants (`MOD-03`/`MOD-07`/`MOD-08`) en les étendant
+uniquement de façon additive, jamais en les restructurant — voir ADR
+0038. Les décisions d'architecture prises pour `MOD-28` sont documentées
+dans `docs/adr/0038` et `0039`.
+
 ## 2. Vue d'ensemble des modules
 
 | ID | Module | État actuel | Priorité |
@@ -216,20 +247,20 @@ Les décisions d'architecture prises pour `MOD-27` sont documentées dans
 | MOD-01 | Identité & Accès | Existant (Phase 0), étendu multi-tenant (v0.2) | Haute (généralisation) |
 | MOD-02 | Configuration métier / Vertical Pack | Reporté à v0.3 (voir §0 bis) | Critique |
 | MOD-21 | Multi-tenant Organization/Workspace | ✅ Livré (v0.2) | Critique |
-| MOD-03 | CRM Prospects | Existant (Phase 0) | Haute (généralisation) |
-| MOD-04 | Analyse & Scoring IA | Existant (Phase 0) | Haute (généralisation + réel) |
+| MOD-03 | CRM Prospects | Étendu (v0.9 via `MOD-28` : Company/Property/Attachment/pipeline personnalisable/chronologie, voir §1 novies) | Haute (généralisation) |
+| MOD-04 | Analyse & Scoring IA | Existant (Phase 0) ; Agent Analyse (v0.9, `MOD-28`) réutilise les vraies statistiques, pas un recalcul séparé | Haute (généralisation + réel) |
 | MOD-05 | Campagnes & Séquences | Existant (Phase 0) | Moyenne (généralisation) |
-| MOD-06 | Communication (email) | Existant (Phase 0) | Haute (connecteurs réels) |
-| MOD-07 | Suivi commercial | Existant (Phase 0) | Basse (déjà générique) |
-| MOD-08 | Exécution / Production | Existant (Phase 0) | Basse (déjà générique) |
-| MOD-09 | Automatisation | Existant (Phase 0) | Moyenne (généralisation) |
+| MOD-06 | Communication (email) | ✅ Connecteurs réels (SMTP/Resend/Postmark/Brevo) livrés via `MOD-28` (v0.9, voir §1 novies) | Haute (connecteurs réels) |
+| MOD-07 | Suivi commercial | Étendu (v0.9 via `MOD-28` : devis remise/TVA/PDF/signature, factures) | Basse (déjà générique) |
+| MOD-08 | Exécution / Production | Étendu (v0.9 via `MOD-28` : module Visites 3D `VirtualTour`) | Basse (déjà générique) |
+| MOD-09 | Automatisation | Existant (Phase 0) ; 10 automatisations métier prêtes à l'emploi ajoutées à l'Automation Engine (v0.9, `MOD-28`) | Moyenne (généralisation) |
 | MOD-10 | Conformité & Audit | Existant (Phase 0) | Haute (extension RGPD) |
-| MOD-11 | Statistiques & Dashboard | Existant (Phase 0) | Basse (généralisation) |
-| MOD-12 | Facturation client final | Reporté après v0.5 (voir §1 quater/§1 quinquies) | Haute |
+| MOD-11 | Statistiques & Dashboard | Étendu (v0.9 via `MOD-28` : tableaux de bord Production/Clients/Visites/IA/RDV/Performance) | Basse (généralisation) |
+| MOD-12 | Facturation client final | Base livrée via `MOD-28` (v0.9 : devis/factures réels) — paiement en ligne (Stripe) toujours reporté | Haute |
 | MOD-13 | Gestion documentaire | Reporté après v0.6 (voir §1 sexies) | Moyenne |
-| MOD-14 | Calendrier | Reporté après v0.7 (voir §1 septies) | Moyenne |
+| MOD-14 | Calendrier | ✅ Google Calendar réel livré via `MOD-28` (v0.9, voir §1 novies) | Moyenne |
 | MOD-15 | Infrastructure asynchrone (jobs) | ✅ Livré via `MOD-27` (v0.8, voir §1 octies) | Haute |
-| MOD-16 | Observabilité | À créer | Haute |
+| MOD-16 | Observabilité | Reporté à nouveau après v0.9 (voir §1 novies) | Haute |
 | MOD-17 | Sécurité avancée & conformité renforcée | À créer | Critique (avant SaaS public) |
 | MOD-18 | Intégrations tierces & API publique | À créer | Moyenne |
 | MOD-19 | Facturation SaaS Autorun (abonnements) | À créer | Haute (condition de v1.0) |
@@ -240,6 +271,7 @@ Les décisions d'architecture prises pour `MOD-27` sont documentées dans
 | MOD-25 | Workflow Engine (moteur d'automatisation + éditeur visuel) | ✅ Livré (v0.6) | Critique |
 | MOD-26 | Intelligence documentaire (Memory/Knowledge/Context/Prompt Engine) | ✅ Livré (v0.7) | Critique |
 | MOD-27 | Automation Engine (moteur d'automatisation Enterprise) | ✅ Livré (v0.8) | Critique |
+| MOD-28 | Provence 360 Operating System (CRM étendu, Devis/Facturation, Communication Hub, email/agenda réels, Visites 3D, tableaux de bord, 7 agents métier, automatisations prêtes à l'emploi, réglages) | ✅ Livré (v0.9) | Critique |
 
 ## 3. Détail par module
 
@@ -1378,6 +1410,115 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   (golden path, isolation multi-tenant, Automation Engine) validées contre
   une instance réellement démarrée.
 
+### MOD-28 — Provence 360 Operating System (v0.9, priorisé avant MOD-16/MOD-13/MOD-17...)
+
+- **Objectif** : transformer Autorun de plateforme technique générique en
+  système d'exploitation quotidien de Provence 360 — chaque fonctionnalité
+  ajoutée a une utilité directe et vérifiable dans l'activité réelle
+  (prospection, devis, planification, production, communication,
+  facturation), jamais une généralisation multi-vertical hypothétique.
+- **Fonctionnalités** :
+  - **CRM étendu** (`Company`/`Property`/`Attachment`, additifs) : regroupement
+    optionnel de prospects sous une entité juridique, biens immobiliers
+    distincts du prospect qui les représente, documents/photos polymorphes
+    (même convention que `AuditLog`). `LeadCategory` étendue de 5 valeurs
+    (COMMERCE/ARCHITECT/NOTARY/CONSTRUCTOR/MUNICIPALITY).
+  - **Chronologie** (`crm/timeline-service.ts`) : agrégation en LECTURE
+    SEULE de `LeadNote`/`Message`/`Conversation`/`Appointment`/`Task`/
+    `Quote`/`AuditLog`/`Attachment` — jamais une nouvelle table qui
+    dupliquerait un historique déjà capturé ailleurs.
+  - **Pipeline personnalisable** (`PipelineStage`, scopé organisation) :
+    renommage/recoloration/réordonnancement de l'affichage Kanban —
+    `LeadStage` (14 valeurs) reste l'unique source de vérité pour le
+    scoring/l'automatisation/les séquences, jamais modifié.
+  - **Devis étendus + Facturation** : remise, taux/montant de TVA, PDF
+    (`pdf-lib`, sans dépendance transitive), versionnement immuable
+    (`QuoteVersion`, snapshot à l'envoi), abstraction de signature
+    électronique (fournisseur démo, comme prévu par le brief). `Invoice`/
+    `InvoiceLine` nouveaux — conversion Devis→Facture jamais automatique
+    (décision métier, uniquement depuis un devis `ACCEPTED`).
+  - **Communication Hub** (`communication/`) : registre par canal (SMS/
+    WhatsApp/téléphone/webhook — email gardé dans son abstraction
+    existante, plus riche), même idiome que les registres LLM/embedding/
+    Queue Manager. Webhook sortant RÉEL (signature HMAC optionnelle) ; SMS/
+    WhatsApp/téléphone restent des stubs honnêtes (aucun fournisseur tiers
+    disponible dans cet environnement).
+  - **Emails réels** (`email/providers/`) : SMTP (`nodemailer`), Resend,
+    Postmark, Brevo — implémentation RÉELLE et complète, configuration PAR
+    ORGANISATION (`Integration.config`, avec repli sur variable
+    d'environnement pour le mode démo), échec explicite si non configuré,
+    jamais un succès simulé.
+  - **Google Calendar réel** (`calendar/google/`) : OAuth2 + REST en
+    `fetch()` direct (cohérent avec le reste de la plateforme, pas de SDK
+    lourd), synchronisation best-effort des rendez-vous
+    (`trySyncAppointmentToGoogle`, ne bloque jamais la création d'un
+    rendez-vous), repli honnête sur les rendez-vous déjà enregistrés si
+    non connecté.
+  - **Visites 3D** (`VirtualTour`, nouveau) : lien Matterport/lien de
+    visite, surface, type, statut — lié à une `Mission` existante
+    (réutilise sa planification/son prestataire) plutôt que de dupliquer
+    ce mécanisme.
+  - **Tableaux de bord** : 6 nouveaux (Production/Clients/Visites/
+    Rendez-vous/Activité IA/Performance, `/dashboards`) — Commercial/CA
+    (existant `/dashboard`) et Automatisations (existant `/automations`,
+    v0.8) déjà couverts.
+  - **7 agents métier** (Prospection/Relance/Devis/Planning/Réseaux
+    sociaux/Support/Analyse) : même patron architectural que l'Agent
+    Commercial (v0.5), mais opèrent sur les VRAIES données CRM et
+    réutilisent les VRAIS services v0.9 (`quote-service.ts`,
+    `calendar/google/*`, `stats.ts`, moteur de scoring réel) — jamais un
+    modèle de démonstration séparé. Voir ADR 0039.
+  - **10 automatisations métier prêtes à l'emploi** (Automation Engine,
+    v0.8) : Nouveau prospect, Demande de devis, Rendez-vous confirmé,
+    Visite terminée, Facture envoyée, Paiement reçu, Client inactif,
+    Demande d'avis Google, Relance automatique, Publication réseaux
+    sociaux — chaque déclencheur/action référencé est réellement câblé
+    (extension de `REAL_EMISSION_EVENT_KEYS`, voir ADR 0037/0039).
+  - **Réglages** : coordonnées légales/TVA/logo de l'organisation
+    (alimentent les PDF de devis/factures), identifiants email par
+    organisation (jamais un secret renvoyé en clair au navigateur), statut
+    honnête du fournisseur IA actif (reste un réglage de déploiement, pas
+    par organisation — voir ADR 0039).
+- **Dépendances** : `MOD-24` (Agent Commercial, patron architectural),
+  `MOD-25`/`MOD-27` (Workflow/Automation Engine, gabarits prêts à
+  l'emploi), `MOD-26` (Context Engine, obligatoire pour tout nouvel agent,
+  ADR 0029).
+- **Priorité** : Critique — mandat explicite de cette phase.
+- **Risques techniques** :
+  - Tension entre « suivre le gabarit de l'Agent Commercial » et « chaque
+    fonctionnalité doit avoir une utilité directe » — résolue en
+    réinterprétant le gabarit comme un patron architectural, jamais une
+    réplique du modèle de démonstration de Commercial (voir ADR 0039).
+  - `configValue` (résolution de configuration email) ne traitait
+    initialement que des valeurs `string` — un `smtpPort` stocké en JSON
+    comme `number` retombait silencieusement sur la valeur par défaut ;
+    détecté par un test SMTP réel contre un serveur local, corrigé.
+  - `suggestSlotsTool` (Agent Planning) ne renvoyait initialement qu'un
+    seul créneau par plage libre au lieu de la remplir entièrement ;
+    détecté par un test déterministe, corrigé.
+- **Choix d'architecture** : voir ADR 0038 (périmètre et coexistence
+  additive), ADR 0039 (agents métier sur les vraies données, extension du
+  câblage des déclencheurs, réglages IA vs email).
+- **Tests à prévoir** (tous livrés) : CRM étendu et chronologie
+  (`tests/crm/*.test.ts`), pipeline (`pipeline-service.test.ts`), devis/
+  factures (`quote-service.test.ts`, `invoice-service.test.ts`),
+  Communication Hub (`tests/communication/hub-service.test.ts` — vrai
+  serveur HTTP local), emails réels (`tests/email/real-providers.test.ts`
+  — vrais serveurs SMTP/HTTP locaux, `email-settings.test.ts`), Google
+  Calendar (`tests/calendar/google-calendar.test.ts` — vrai serveur HTTP
+  local), Visites 3D (`tests/production/virtual-tour-service.test.ts`),
+  tableaux de bord (`tests/dashboards/dashboard-service.test.ts`), 7
+  agents métier (`tests/agents/{prospection,relance,devis,planning,
+  social,support,analyse}-agent.test.ts`), automatisations métier
+  (`tests/automation/business-automation-templates.test.ts` — scénario
+  complet déclencheur→job→agent→effet réel), réglages
+  (`tests/settings/organization-settings.test.ts`).
+- **Critères de fin** : golden path Provence 360, isolation multi-tenant,
+  tous les moteurs transversaux (Agents, Workflow, Automation, Memory/
+  Knowledge/Context) inchangés après cette phase ; 100 % des tests
+  automatisés passent contre une vraie base PostgreSQL (384 tests),
+  zéro régression ; lint, typecheck et build de production passent.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -1422,10 +1563,15 @@ Commercial) à la place de `MOD-12` partie 2 (voir §1 quinquies), et
 (Automation Engine Enterprise) — qui délivre entièrement le périmètre
 technique de `MOD-15` (voir §1 octies) — à la place de la migration
 initialement prévue de `MOD-04`/`MOD-05`/`MOD-06`/`MOD-12`/`MOD-14` vers le
-noyau de jobs ; `MOD-02`, `MOD-12`, `MOD-13`, `MOD-14` et `MOD-20` restent à
-faire, désormais après `v0.8`, ainsi que la migration de ces modules vers le
-noyau de jobs de `MOD-27` (possible dès maintenant, non réalisée dans cette
-phase). Voir `MILESTONES.md` pour l'état réel version par version.
+noyau de jobs ; et `v0.9` a livré `MOD-28` (Provence 360 Operating System)
+— qui délivre une partie substantielle du périmètre de `MOD-06` (email
+réel) et `MOD-14` (Google Calendar réel) — à la place de la combinaison
+initialement prévue `MOD-16` + `MOD-06` réel + `MOD-04` réel (voir
+§1 novies) ; `MOD-02`, `MOD-12` (paiement en ligne), `MOD-13`, `MOD-16` et
+`MOD-20` restent à faire, désormais après `v0.9`, ainsi que la migration
+des modules v0.1–v0.9 vers le noyau de jobs de `MOD-27` (possible dès
+maintenant, non réalisée dans cette phase). Voir `MILESTONES.md` pour
+l'état réel version par version.
 
 ## 5. Éléments parallélisables
 
