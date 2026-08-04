@@ -2506,7 +2506,7 @@ finale complète.
 
 ## Version 1.1 — Provence 360 Production (MOD-29)
 
-> **Statut : 🚧 en cours** (démarré 2026-08-04). Contrairement à `v1.0`
+> **Statut : ✅ livrée** (démarrée et livrée le 2026-08-04). Contrairement à `v1.0`
 > (périmètre déjà défini par des tâches préexistantes), `v1.1` part d'un
 > brief produit du fondateur de Provence 360 : Autorun cesse d'être
 > développé comme un SaaS générique pour devenir le logiciel métier
@@ -2525,7 +2525,7 @@ finale complète.
 > les parties manquantes ou non reliées à l'interface plutôt que de tout
 > reconstruire. Voir `docs/adr/0043` pour les décisions d'architecture.
 
-### AR-0160 — Modèle `Contact` (personne physique, indépendant d'un `Lead`)
+### AR-0160 — Modèle `Contact` (personne physique, indépendant d'un `Lead`) — livrée
 - **Description** : aujourd'hui, une personne (`LeadContact`) est
   toujours scopée à un seul `Lead` (`leadId` obligatoire, suppression en
   cascade) — impossible de représenter un contact partagé entre
@@ -2547,7 +2547,7 @@ finale complète.
   visible sur les deux fiches ; isolation multi-tenant ; migration de
   données ne perd aucun `LeadContact` existant.
 
-### AR-0161 — Interface Entreprises (`Company`) et Biens (`Property`)
+### AR-0161 — Interface Entreprises (`Company`) et Biens (`Property`) — livrée
 - **Description** : `Company` et `Property` ont un service et une API
   complets depuis `v0.9` mais **aucune page** (`src/app/(app)/companies/`
   et `src/app/(app)/properties/` n'existent pas) — invisibles pour
@@ -2565,7 +2565,7 @@ finale complète.
 - **Tests nécessaires** : isolation multi-tenant sur les deux nouvelles
   routes.
 
-### AR-0162 — Interface pièces jointes (documents/photos)
+### AR-0162 — Interface pièces jointes (documents/photos) — livrée
 - **Description** : `Attachment` (polymorphe, `entityType`/`entityId`)
   existe côté schéma/service/API depuis `v0.9` mais **aucun composant
   d'upload ni de galerie** n'existe dans `src/components`. Créer un
@@ -2584,7 +2584,7 @@ finale complète.
   isolation multi-tenant (un fichier d'une organisation n'est jamais
   accessible à une autre).
 
-### AR-0163 — Interface de gestion des tags
+### AR-0163 — Interface de gestion des tags — livrée
 - **Description** : le modèle `Tag` (many-to-many avec `Lead`) existe
   côté schéma et est renvoyé par l'API mais n'est ni créé, ni affiché, ni
   filtrable dans aucune UI. Créer un gestionnaire de tags (création,
@@ -2598,7 +2598,7 @@ finale complète.
 - **Prérequis** : aucun.
 - **Tests nécessaires** : filtrage par tag scopé par organisation.
 
-### AR-0164 — Fiche 360° (assemblage complet sur les pages de détail)
+### AR-0164 — Fiche 360° (assemblage complet sur les pages de détail) — livrée
 - **Description** : le cœur du brief — chaque fiche prospect/client doit
   réellement afficher timeline, documents, notes, historique,
   automatisations, agents IA, visites, devis, factures, paiements,
@@ -2627,7 +2627,7 @@ finale complète.
   que `getLead()` élargi ne dégrade pas le temps de réponse au-delà d'un
   seuil raisonnable (une seule requête agrégée, pas de N+1).
 
-### AR-0165 — Pipeline : évènement de transition d'étape + vocabulaire Provence 360
+### AR-0165 — Pipeline : évènement de transition d'étape + vocabulaire Provence 360 — livrée
 - **Description** : `Lead.stage` reste un enum fixe (`LeadStage`, 15
   valeurs) — décision volontairement conservée (voir ADR 0043, alternative
   écartée : refonte en étapes totalement libres, jugée trop risquée pour
@@ -2653,7 +2653,7 @@ finale complète.
   ancien/nouveau statut ; jamais publié si aucun changement d'étape
   réel ; un workflow peut s'abonner spécifiquement à une transition.
 
-### AR-0166 — Visites 3D : champs manquants (GPS, équipement, technicien, durée, Google Maps)
+### AR-0166 — Visites 3D : champs manquants (GPS, équipement, technicien, durée, Google Maps) — livrée
 - **Description** : compléter `VirtualTour` avec les champs identifiés
   manquants par l'audit : `latitude`/`longitude` (ou reprise directe de
   `Property.latitude`/`longitude` quand `propertyId` est renseigné),
@@ -2670,7 +2670,7 @@ finale complète.
 - **Tests nécessaires** : lien Google Maps généré correctement à partir
   des coordonnées ou, à défaut, de l'adresse.
 
-### AR-0167 — Visites 3D : livraison client et facturation directe
+### AR-0167 — Visites 3D : livraison client et facturation directe — livrée
 - **Description** : ajouter un état `DELIVERED` (ou un champ
   `deliveredAt`/`clientAcceptedAt` distinct du statut existant) au cycle
   de vie de `VirtualTour`, avec une action explicite "Marquer comme
@@ -2690,7 +2690,7 @@ finale complète.
 - **Tests nécessaires** : `virtual_tour.delivered` publié une seule fois
   par visite ; création de facture depuis une visite jamais automatique.
 
-### AR-0168 — Historique des versions de devis (rendre `QuoteVersion` consultable)
+### AR-0168 — Historique des versions de devis (rendre `QuoteVersion` consultable) — livrée
 - **Description** : `QuoteVersion` capture déjà un instantané JSON à
   chaque passage `DRAFT`→`SENT` (`src/lib/crm/quote-service.ts`) mais
   n'est exposé par aucune route ni aucune UI — écriture sans jamais
@@ -2705,7 +2705,7 @@ finale complète.
 - **Tests nécessaires** : liste des versions scopée par organisation,
   triée chronologiquement.
 
-### AR-0169 — Facturation : paiements partiels et échéance automatique
+### AR-0169 — Facturation : paiements partiels et échéance automatique — livrée
 - **Description** : `InvoiceStatus` est aujourd'hui binaire
   (`PAID`/pas `PAID`), sans montant partiel ni passage automatique en
   retard. Ajouter un modèle `InvoicePayment` (montant, date, moyen,
@@ -2725,7 +2725,7 @@ finale complète.
   somme des paiements atteint le total ; passage `OVERDUE` seulement
   après échéance ET solde restant dû.
 
-### AR-0170 — Fournisseurs SMS/WhatsApp/Téléphone réels (Twilio)
+### AR-0170 — Fournisseurs SMS/WhatsApp/Téléphone réels (Twilio) — livrée
 - **Description** : `sms-demo-provider.ts`, `whatsapp-demo-provider.ts`
   et `phone-demo-provider.ts` sont aujourd'hui de purs stubs (aucun appel
   réseau). Implémenter des fournisseurs réels via l'API REST Twilio (pas
@@ -2746,7 +2746,7 @@ finale complète.
   (serveur HTTP local simulant l'API Twilio) — construction exacte de la
   requête, gestion des erreurs, jamais de clé en clair dans les logs.
 
-### AR-0171 — Sélection du fournisseur de communication par organisation (plus seulement variable d'environnement)
+### AR-0171 — Sélection du fournisseur de communication par organisation (plus seulement variable d'environnement) — livrée
 - **Description** : `getEmailProvider()`/la résolution de canal du hub
   choisissent aujourd'hui le fournisseur uniquement via une variable
   d'environnement globale au déploiement — deux organisations d'une même
@@ -2770,7 +2770,7 @@ finale complète.
   fournisseur, sans interférence (isolation multi-tenant de la
   configuration).
 
-### AR-0172 — Rappels Google Calendar
+### AR-0172 — Rappels Google Calendar — livrée
 - **Description** : les évènements créés/modifiés via la synchronisation
   Google Calendar n'embarquent aujourd'hui aucun rappel
   (`toGoogleEventBody()` ne construit jamais de champ `reminders`).
@@ -2786,7 +2786,7 @@ finale complète.
 - **Tests nécessaires** : `reminders.overrides` présent avec le bon délai
   dans le corps envoyé à l'API Google.
 
-### AR-0173 — Agent Qualification (dédié, extrait de l'Agent Commercial)
+### AR-0173 — Agent Qualification (dédié, extrait de l'Agent Commercial) — livrée
 - **Description** : la qualification existe aujourd'hui uniquement comme
   outil (`commercial.qualify_prospect`) interne à l'Agent Commercial —
   jamais orchestrable indépendamment (par un workflow/une automatisation
@@ -2803,7 +2803,7 @@ finale complète.
   soit via l'Agent Commercial ou le nouvel Agent Qualification (même
   moteur de scoring sous-jacent).
 
-### AR-0174 — Agent Visites (surveillance du cycle de vie des visites 3D)
+### AR-0174 — Agent Visites (surveillance du cycle de vie des visites 3D) — livrée
 - **Description** : aucun agent ne surveille aujourd'hui le pipeline des
   visites 3D lui-même (l'Agent Réseaux Sociaux ne rédige que des posts
   APRÈS publication). Créer un `visites-agent` qui détecte les visites
@@ -2819,7 +2819,7 @@ finale complète.
 - **Tests nécessaires** : détection correcte des visites bloquées selon
   des seuils de durée par statut.
 
-### AR-0175 — Modèle d'automatisation "Livraison effectuée"
+### AR-0175 — Modèle d'automatisation "Livraison effectuée" — livrée
 - **Description** : 9 des 10 déclencheurs cibles du brief sont déjà
   couverts par les modèles d'automatisation existants ; "livraison"
   n'a pas d'évènement dédié aujourd'hui (le plus proche,
@@ -2833,7 +2833,7 @@ finale complète.
 - **Tests nécessaires** : le modèle se déclenche bien sur
   `virtual_tour.delivered`, jamais sur un autre évènement de visite.
 
-### AR-0176 — Tableau de bord Planning
+### AR-0176 — Tableau de bord Planning — livrée
 - **Description** : nouveau dashboard dédié — charge par technicien/
   agenda équipe, rendez-vous à venir, visites programmées sur la
   semaine — absent aujourd'hui (seul un KPI "rendez-vous" isolé existe
@@ -2847,7 +2847,7 @@ finale complète.
 - **Prérequis** : aucun.
 - **Tests nécessaires** : agrégation scopée par organisation.
 
-### AR-0177 — Tableau de bord Financier
+### AR-0177 — Tableau de bord Financier — livrée
 - **Description** : nouveau dashboard dédié — chiffre d'affaires dans le
   temps, factures en attente/en retard (réutilise `AR-0169`), devis en
   cours, prévisionnel simple — le CA n'existe aujourd'hui que comme KPI
@@ -2861,7 +2861,7 @@ finale complète.
 - **Tests nécessaires** : agrégation scopée par organisation ; cohérence
   entre le total affiché et la somme réelle des factures.
 
-### AR-0178 — Métrique "Temps gagné" (tableau de bord Automatisations)
+### AR-0178 — Métrique "Temps gagné" (tableau de bord Automatisations) — livrée
 - **Description** : estimation du temps économisé grâce aux
   automatisations/agents IA — nombre d'actions automatisées exécutées
   avec succès × durée unitaire estimée (configurable par type d'action,
@@ -2877,7 +2877,7 @@ finale complète.
 - **Tests nécessaires** : calcul cohérent avec le nombre réel de jobs
   réussis sur la période.
 
-### AR-0179 — Paramètres : agenda (horaires, capacité)
+### AR-0179 — Paramètres : agenda (horaires, capacité) — livrée
 - **Description** : aucune section "Agenda" n'existe aujourd'hui dans
   les paramètres (seule la connexion Google Calendar y figure, sans
   configuration d'horaires). Ajouter horaires d'ouverture par jour,
@@ -2895,7 +2895,7 @@ finale complète.
 - **Tests nécessaires** : `check_availability` respecte les horaires
   configurés et la capacité par créneau.
 
-### AR-0180 — Paramètres : préférences de notification
+### AR-0180 — Paramètres : préférences de notification — livrée
 - **Description** : aucune section de préférences de notification
   n'existe. Ajouter un réglage par utilisateur (canal — email/
   application — et évènement — nouveau prospect assigné, devis signé,
@@ -2913,7 +2913,7 @@ finale complète.
 - **Tests nécessaires** : une préférence désactivée bloque bien l'envoi
   correspondant, sans affecter les autres utilisateurs/évènements.
 
-### AR-0181 — Recherche globale
+### AR-0181 — Recherche globale — livrée
 - **Description** : aucune recherche transverse n'existe aujourd'hui
   (chaque liste — prospects, devis, factures — a son propre filtre
   local). Créer un point d'entrée de recherche global (icône dans la
@@ -2929,7 +2929,7 @@ finale complète.
 - **Tests nécessaires** : isolation multi-tenant sur chaque type de
   résultat.
 
-### AR-0182 — Command Palette (`cmd+k`)
+### AR-0182 — Command Palette (`cmd+k`) — livrée
 - **Description** : palette de commandes façon éditeur de code —
   navigation rapide (aller à une page), actions rapides (créer un
   prospect/devis/RDV), recherche (réutilise `AR-0181`). Nouvelle
@@ -2948,7 +2948,7 @@ finale complète.
 - **Tests nécessaires** : aucun test automatisé dédié pertinent (UI
   pure) — vérification manuelle documentée dans la recette finale.
 
-### AR-0183 — Glisser-déposer sur le pipeline commercial (Kanban)
+### AR-0183 — Glisser-déposer sur le pipeline commercial (Kanban) — livrée
 - **Description** : le Kanban (`/leads?view=kanban`) ne permet
   aujourd'hui de changer d'étape que par menu déroulant. Ajouter le
   glisser-déposer entre colonnes (change `Lead.stage`, publie
@@ -2968,7 +2968,7 @@ finale complète.
   produit exactement le même résultat serveur qu'un changement par menu
   déroulant (même route API appelée).
 
-### AR-0184 — Mode sombre
+### AR-0184 — Mode sombre — livrée
 - **Description** : l'infrastructure de theming par variables CSS
   existe déjà (`src/app/globals.css`, palette claire unique) mais aucun
   mode sombre n'est câblé. Ajouter les variantes sombres des variables
@@ -2986,7 +2986,7 @@ finale complète.
   pure) — vérification manuelle sur les pages principales, documentée
   dans la recette finale.
 
-### AR-0185 — Raccourcis clavier globaux et affinement responsive
+### AR-0185 — Raccourcis clavier globaux et affinement responsive — livrée
 - **Description** : aucun gestionnaire de raccourcis clavier global
   n'existe. Ajouter les raccourcis les plus utiles (`cmd+k` pour la
   palette d'`AR-0182`, `g` puis une lettre pour naviguer façon Gmail/
@@ -3005,6 +3005,17 @@ finale complète.
   pure) — vérification manuelle documentée dans la recette finale.
 
 **Total estimé v1.1 : ~34 jours (26 tâches, `AR-0160` à `AR-0185`).**
+
+**Total v1.1 : 26 tâches (AR-0160 à AR-0185), toutes livrées.** Voir
+`docs/adr/0043` pour les décisions d'architecture prises en amont et
+`docs/adr/0044` pour les décisions d'implémentation affinées pendant le
+développement (extraction d'agents, capacité d'agenda, périmètre du
+filtrage des préférences de notification). Validation finale : lint,
+typecheck, build production, suite complète (678 tests), 4 suites E2E
+(golden path, isolation multi-tenant, automatisations, onboarding
+self-service), audit de sécurité (`npm audit` — 5 vulnérabilités
+transitives pré-existantes de `next`, non introduites par `v1.1`,
+confirmées par comparaison `git stash`) — voir `RELEASE_NOTES.md`.
 
 ---
 

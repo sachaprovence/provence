@@ -384,7 +384,7 @@ décisions d'architecture complètes sont documentées dans `docs/adr/0042`.
 | MOD-26 | Intelligence documentaire (Memory/Knowledge/Context/Prompt Engine) | ✅ Livré (v0.7) | Critique |
 | MOD-27 | Automation Engine (moteur d'automatisation Enterprise) | ✅ Livré (v0.8) | Critique |
 | MOD-28 | Provence 360 Operating System (CRM étendu, Devis/Facturation, Communication Hub, email/agenda réels, Visites 3D, tableaux de bord, 7 agents métier, automatisations prêtes à l'emploi, réglages) | ✅ Livré (v0.9) | Critique |
-| MOD-29 | Provence 360 Production (fiches 360°, pipeline adapté, visites/devis/factures complets, communication réelle, agents/automatisations/dashboards complémentaires, UX) | 🚧 En cours (v1.1) | Critique (usage quotidien réel) |
+| MOD-29 | Provence 360 Production (fiches 360°, pipeline adapté, visites/devis/factures complets, communication réelle, agents/automatisations/dashboards complémentaires, UX) | ✅ Livré (v1.1) | Critique (usage quotidien réel) |
 
 ## 3. Détail par module
 
@@ -1657,7 +1657,8 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   fidélisé sont réellement praticables sans sortir d'Autorun ; zéro
   régression sur les jalons précédents ; lint, typecheck, build de
   production et suite de tests complète passent ; recette finale
-  documentée dans `docs/release/v1.1-recette.md`.
+  documentée dans `docs/release/v1.1-recette.md`. **Tous vérifiés —
+  jalon livré le 2026-08-04.**
 
 ## 4. Ordre logique de développement
 
