@@ -1,0 +1,71 @@
+name: Migrations depuis zéro
+
+# AR-0163 (v1.2) — teste que le schéma actuel se construit depuis une base
+# PostgreSQL vide (créée puis supprimée par scripts/test-migrations-fresh-db.ts
+# lui-même, avec ses propres garde-fous — voir docs/adr/0045), que les seeds
+# sont idempotents, et qu'un build de production démarre dessus. Réutilise le
+# même service Postgres que ci.yml/e2e.yml (une base temporaire distincte y
+# est créée, jamais la base `provence360` du service). Job séparé de ci.yml
+# pour ne pas doubler la durée de chaque run CI standard (voir le raisonnement
+# de portée dans scripts/test-migrations-fresh-db.ts).
+
+on:
+  pull_request:
+    paths-ignore:
+      - "provence360-squarespace/**"
+      - "**/*.md"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "provence360-squarespace/**"
+      - "**/*.md"
+  workflow_dispatch: {}
+
+concurrency:
+  group: migrations-fresh-db-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrations-fresh-db:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: provence
+          POSTGRES_PASSWORD: provence
+          POSTGRES_DB: provence360
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U provence -d provence360"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://provence:provence@localhost:5432/provence360?schema=public
+      AUTH_SECRET: ci-secret-not-for-production-0000000000
+      AI_PROVIDER: demo
+      EMAIL_PROVIDER: demo
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test des migrations depuis une base temporaire vide
+        run: npm run test:migrations:fresh

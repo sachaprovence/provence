@@ -19,7 +19,8 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "NODE_OPTIONS=--require=./prisma/seed-server-only-cjs-hook.cjs tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "test:migrations:fresh": "tsx scripts/test-migrations-fresh-db.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
