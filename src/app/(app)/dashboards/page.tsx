@@ -9,6 +9,8 @@ import {
   getAppointmentsDashboard,
   getAiActivityDashboard,
   getPerformanceDashboard,
+  getPlanningDashboard,
+  getFinancialDashboard,
 } from "@/lib/dashboards/dashboard-service";
 
 function formatEuros(cents: number) {
@@ -35,13 +37,15 @@ export default async function DashboardsPage() {
   const actor = await requireActor();
   const organizationId = actor.organization.id;
 
-  const [production, clients, visits, appointments, ai, performance] = await Promise.all([
+  const [production, clients, visits, appointments, ai, performance, planning, financial] = await Promise.all([
     getProductionDashboard(organizationId),
     getClientsDashboard(organizationId),
     getVisitsDashboard(organizationId),
     getAppointmentsDashboard(organizationId),
     getAiActivityDashboard(organizationId),
     getPerformanceDashboard(organizationId),
+    getPlanningDashboard(organizationId),
+    getFinancialDashboard(organizationId),
   ]);
 
   return (
@@ -49,13 +53,55 @@ export default async function DashboardsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-p360-ink">Tableaux de bord</h1>
-          <p className="text-p360-muted text-sm mt-1">Production, Clients, Visites, Rendez-vous, Activité IA, Performance</p>
+          <p className="text-p360-muted text-sm mt-1">Planning, Production, Clients, Visites, Rendez-vous, Financier, Activité IA, Performance</p>
         </div>
         <div className="flex gap-2">
           <Link href="/dashboard" className="btn-secondary text-xs">Commercial &amp; CA</Link>
           <Link href="/automations" className="btn-secondary text-xs">Automatisations</Link>
         </div>
       </div>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-p360-ink">Planning</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-p360-ink mb-3">Charge par technicien</h3>
+            <ul className="space-y-1 text-sm">
+              {planning.providerLoad.map((p) => (
+                <li key={p.id} className="flex justify-between text-p360-ink">
+                  <span>{p.name}</span>
+                  <span className="tabular-nums text-p360-muted">{p.activeMissionsCount} mission(s) active(s)</span>
+                </li>
+              ))}
+              {planning.providerLoad.length === 0 && <li className="text-p360-muted">Aucun prestataire actif.</li>}
+            </ul>
+          </div>
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-p360-ink mb-3">Rendez-vous à venir</h3>
+            <ul className="space-y-1 text-sm">
+              {planning.upcomingAppointments.map((a) => (
+                <li key={a.id} className="flex justify-between text-p360-ink">
+                  <span>{a.leadEstablishmentName} <span className="text-p360-muted text-xs">({a.title})</span></span>
+                  <span className="tabular-nums text-p360-muted text-xs">{new Date(a.startAt).toLocaleString("fr-FR")}</span>
+                </li>
+              ))}
+              {planning.upcomingAppointments.length === 0 && <li className="text-p360-muted">Aucun rendez-vous à venir.</li>}
+            </ul>
+          </div>
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-p360-ink mb-3">Visites 3D — 7 prochains jours</h3>
+            <ul className="space-y-1 text-sm">
+              {planning.toursThisWeek.map((t) => (
+                <li key={t.id} className="flex justify-between text-p360-ink">
+                  <span>{t.leadEstablishmentName} <span className="text-p360-muted text-xs">({VIRTUAL_TOUR_STATUS_LABEL[t.status] ?? t.status})</span></span>
+                  <span className="tabular-nums text-p360-muted text-xs">{t.scheduledAt ? new Date(t.scheduledAt).toLocaleDateString("fr-FR") : "—"}</span>
+                </li>
+              ))}
+              {planning.toursThisWeek.length === 0 && <li className="text-p360-muted">Aucune visite programmée cette semaine.</li>}
+            </ul>
+          </div>
+        </div>
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-p360-ink">Production</h2>
@@ -122,6 +168,35 @@ export default async function DashboardsPage() {
           {appointments.byStatus.map((s) => (
             <StatTile key={s.status} label={APPOINTMENT_STATUS_LABEL[s.status] ?? s.status} value={String(s.count)} />
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-p360-ink">Financier</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatTile label="CA encaissé (12 derniers mois)" value={formatEuros(financial.totalRevenue)} />
+          <StatTile label="Prévisionnel (CA + devis acceptés)" value={formatEuros(financial.forecastedRevenue)} />
+          <StatTile label="Factures en attente" value={`${financial.pendingInvoices.count} — ${formatEuros(financial.pendingInvoices.totalAmount)}`} />
+          <StatTile label="Factures en retard" value={`${financial.overdueInvoices.count} — ${formatEuros(financial.overdueInvoices.totalAmount)}`} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-p360-ink mb-3">CA encaissé par mois</h3>
+            <ul className="space-y-1 text-sm">
+              {financial.revenueByMonth.map((m) => (
+                <li key={m.month} className="flex justify-between text-p360-ink">
+                  <span>{m.month}</span>
+                  <span className="tabular-nums text-p360-muted">{formatEuros(m.amount)}</span>
+                </li>
+              ))}
+              {financial.revenueByMonth.length === 0 && <li className="text-p360-muted">Aucun encaissement sur la période.</li>}
+            </ul>
+          </div>
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-p360-ink mb-3">Devis en cours</h3>
+            <p className="text-2xl font-semibold text-p360-ink">{financial.quotesInProgress.count}</p>
+            <p className="text-sm text-p360-muted">{formatEuros(financial.quotesInProgress.totalAmount)} au total</p>
+          </div>
         </div>
       </section>
 
