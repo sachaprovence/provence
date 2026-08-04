@@ -324,3 +324,44 @@ de refaire ce qui existe déjà :
 - `npm run backup:metrics-report` (AR-0174) devient l'outil de vérification
   que la planification fonctionne réellement dans la durée — documenté
   comme tel, pas seulement comme un rapport ponctuel.
+
+## Décision — AR-0176 : sécurité (revue ciblée, pas une reprise de l'audit v0.10)
+
+Détail complet dans `docs/security/security-review-v1.3-2026-08-04.md`
+(nouveau document, même convention que `npm-audit-v1.2-2026-08-04.md` — un
+audit versionné distinct plutôt qu'une réécriture de l'audit v0.10). Deux
+constats P1 documentés comme ouverts depuis la revue OWASP v0.10 ont été
+fermés : absence de scan de secrets automatisé en CI
+(`scripts/scan-secrets.ts` + `scripts/lib/secret-scan.ts`, câblé dans
+`.github/workflows/ci.yml`) et comparaison non constante pour
+`CRON_SECRET` (`isValidCronRequest()`, `timingSafeStringEqual`, les 7
+routes `/api/cron/*` migrées). Complété par : `npm audit` (0
+vulnérabilité), revue des en-têtes HTTP, audit des permissions confirmant
+qu'aucune régression d'isolation multi-tenant n'a été introduite par le
+retrofit `X-Request-Id` à ~160 sites d'appel (AR-0173), revue de la
+limitation de débit (mécanismes existants confirmés intacts).
+
+## Décision — AR-0177 : documentation de production
+
+Cinq documents ajoutés dans `docs/operations/`, chacun renvoyant vers les
+autres plutôt que de dupliquer leur contenu (même principe que les
+documents v1.2 existants) :
+- `DEPLOYMENT_CHECKLIST.md` — version "à cocher" de `DEPLOYMENT.md`.
+- `INCIDENT_RESPONSE.md` — niveaux de sévérité + scénarios courants,
+  chacun renvoyant vers l'outil/le document existant pertinent (readiness,
+  `/settings/metrics`, `BACKUP_RESTORE.md`...) plutôt que d'improviser une
+  nouvelle procédure.
+- `FIRST_CUSTOMER_ONBOARDING.md` — s'adresse à l'OPÉRATEUR, pas au client
+  (le parcours d'inscription en libre-service, lui, existe déjà depuis
+  v1.0/AR-0064) : quelles intégrations valider avant un premier client
+  réel, et comment, en s'appuyant sur l'outillage AR-0172.
+- `RUNBOOK.md` — point d'entrée unique des tâches d'exploitation
+  courantes (quotidiennes/hebdomadaires/à la demande), y compris les
+  limites connues à ne jamais oublier en astreinte (pas d'alerting
+  proactif, stockage démo non persistant, intégrations non validées en
+  conditions réelles dans cet environnement).
+- `ENVIRONMENT_VARIABLES.md` — référence vérifiée par recherche exhaustive
+  de tous les `process.env.X` du dépôt (jamais une simple recopie de
+  `.env.example`, qui peut diverger du code réel) : 45 variables
+  distinctes recensées, catégorisées, avec leur défaut et leur fichier
+  source.
