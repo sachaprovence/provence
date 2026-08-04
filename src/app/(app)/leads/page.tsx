@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { leadWhereForActor } from "@/lib/permissions";
 import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS } from "@/lib/labels";
 import { getPipelineStages } from "@/lib/crm/pipeline-service";
+import { listTags } from "@/lib/crm/tag-service";
 import { ScoreBadge } from "@/components/score-badge";
+import { TagManager, TagBadge } from "@/components/tag-manager";
 import clsx from "clsx";
 
 type SearchParams = { [key: string]: string | undefined };
@@ -15,6 +17,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const view = sp.view === "kanban" ? "kanban" : "table";
   const pipelineStages = await getPipelineStages(actor.organization.id);
   const stageById = new Map(pipelineStages.map((s) => [s.stageKey, s]));
+  const tags = await listTags(actor.organization.id);
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -22,11 +25,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       ...(sp.stage ? { stage: sp.stage as never } : {}),
       ...(sp.category ? { category: sp.category as never } : {}),
       ...(sp.city ? { city: { equals: sp.city, mode: "insensitive" } } : {}),
+      ...(sp.tag ? { tagsRelation: { some: { id: sp.tag } } } : {}),
       ...(sp.q
         ? { OR: [{ establishmentName: { contains: sp.q, mode: "insensitive" } }, { city: { contains: sp.q, mode: "insensitive" } }] }
         : {}),
     },
-    include: { scores: { orderBy: { computedAt: "desc" }, take: 1 }, contacts: true },
+    include: { scores: { orderBy: { computedAt: "desc" }, take: 1 }, contacts: true, tagsRelation: true },
     orderBy: { createdAt: "desc" },
     take: 300,
   });
@@ -84,6 +88,15 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           <label className="label">Score minimum</label>
           <input className="input w-24" type="number" name="minScore" defaultValue={sp.minScore} min={0} max={100} />
         </div>
+        <div>
+          <label className="label">Tag</label>
+          <select className="input" name="tag" defaultValue={sp.tag ?? ""}>
+            <option value="">Tous</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
         <button type="submit" className="btn-secondary">Filtrer</button>
         <div className="ml-auto flex gap-1">
           <Link href={`/leads?${cleanParams({ view: "table" })}`} className={clsx("btn-secondary", view === "table" && "bg-p360-lavender-light")}>Tableau</Link>
@@ -91,6 +104,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           <Link href="/map" className="btn-secondary">Carte</Link>
         </div>
       </form>
+
+      <TagManager tags={tags} />
 
       <p className="text-sm text-p360-muted">{filtered.length} prospect(s)</p>
 
@@ -105,6 +120,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 <th className="text-left px-4 py-2">Étape</th>
                 <th className="text-left px-4 py-2">Score</th>
                 <th className="text-left px-4 py-2">Contact</th>
+                <th className="text-left px-4 py-2">Tags</th>
               </tr>
             </thead>
             <tbody>
@@ -125,10 +141,15 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   </td>
                   <td className="px-4 py-2"><ScoreBadge value={lead.scores[0]?.value} /></td>
                   <td className="px-4 py-2 text-p360-muted">{lead.contacts[0]?.fullName ?? lead.contacts[0]?.email ?? "—"}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {lead.tagsRelation.map((t) => <TagBadge key={t.id} tag={t} />)}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-p360-muted">Aucun prospect. Importez un CSV ou ajoutez-en un manuellement.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-p360-muted">Aucun prospect. Importez un CSV ou ajoutez-en un manuellement.</td></tr>
               )}
             </tbody>
           </table>

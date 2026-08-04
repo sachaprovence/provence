@@ -76,6 +76,15 @@ export const contactLinkSchema = z.object({
   role: z.string().max(80).optional().nullable(),
 });
 
+// Tags (v1.1, AR-0163) — le modèle existe depuis v0.9, sans aucune UI jusqu'ici.
+export const tagCreateSchema = z.object({
+  name: z.string().min(1).max(60),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Couleur attendue au format hexadécimal (#rrggbb).")
+    .optional(),
+});
+
 export const attachmentCreateSchema = z.object({
   workspaceId: z.string().optional().nullable(),
   entityType: attachmentEntityTypeSchema,
