@@ -27,6 +27,9 @@ const BUILT_IN_AUTOMATION_TRIGGER_TYPES = [
   { key: "email.received", name: "Email reçu", description: "Une réponse entrante a été reçue.", category: "communication", kind: "event" },
   { key: "lead.created", name: "Lead créé", description: "Un prospect (Lead) vient d'être créé.", category: "crm", kind: "event" },
   { key: "lead.updated", name: "Lead modifié", description: "Un prospect (Lead) vient d'être modifié.", category: "crm", kind: "event" },
+  // v1.1, AR-0165 — granulaire (contrairement à `lead.updated`, générique) : payload `{leadId, previousStage, newStage}`,
+  // permet de s'abonner à UNE transition précise (ex. condition `{{event.newStage}} == "WON"`) sans revérifier l'état.
+  { key: "lead.stage_changed", name: "Étape du pipeline changée", description: "Un prospect vient de changer d'étape dans le pipeline commercial (payload : leadId, previousStage, newStage).", category: "crm", kind: "event" },
   { key: "lead.deleted", name: "Lead supprimé", description: "Un prospect (Lead) vient d'être supprimé.", category: "crm", kind: "event" },
   { key: "customer.created", name: "Client créé", description: "Un client (Customer) vient d'être créé.", category: "crm", kind: "event" },
   { key: "payment.received", name: "Paiement reçu", description: "Un paiement a été confirmé.", category: "finance", kind: "event" },

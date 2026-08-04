@@ -1,9 +1,30 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { getPipelineStages, updatePipelineStage, reorderPipelineStages } from "@/lib/crm/pipeline-service";
+import { getPipelineStages, updatePipelineStage, reorderPipelineStages, buildStageChangedEventPayload } from "@/lib/crm/pipeline-service";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { LeadStage, PipelineStageCategory } from "@/generated/prisma/enums";
 import { PIPELINE_STAGES } from "@/lib/labels";
+
+/**
+ * `buildStageChangedEventPayload` (v1.1, AR-0165) — fonction pure, testée
+ * sans base de données : décide seule si `PUT /api/leads/[id]` doit publier
+ * `lead.stage_changed` (route non testable directement, dépend de
+ * `next/headers` via `requireActorApi`).
+ */
+describe("CRM v1.1 — buildStageChangedEventPayload", () => {
+  it("construit le payload quand l'étape change réellement", () => {
+    const payload = buildStageChangedEventPayload("org-1", "lead-1", LeadStage.NEW, LeadStage.QUALIFIED);
+    expect(payload).toEqual({ organizationId: "org-1", leadId: "lead-1", previousStage: LeadStage.NEW, newStage: LeadStage.QUALIFIED });
+  });
+
+  it("ne publie rien si la nouvelle étape est identique à l'ancienne", () => {
+    expect(buildStageChangedEventPayload("org-1", "lead-1", LeadStage.NEGOTIATION, LeadStage.NEGOTIATION)).toBeNull();
+  });
+
+  it("ne publie rien si `stage` n'était pas fourni dans la mise à jour", () => {
+    expect(buildStageChangedEventPayload("org-1", "lead-1", LeadStage.NEGOTIATION, undefined)).toBeNull();
+  });
+});
 
 /**
  * `PipelineStage` (v0.9, ADR 0038) : personnalisation d'affichage du

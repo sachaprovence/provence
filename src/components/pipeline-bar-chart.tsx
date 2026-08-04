@@ -2,20 +2,21 @@
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+// Versions courtes de STAGE_LABEL (src/lib/labels.ts, v1.1 AR-0165) pour l'affichage compact du graphique.
 const STAGE_LABEL: Record<string, string> = {
-  NEW: "Nouveau",
+  NEW: "Prospect",
   TO_ANALYZE: "À analyser",
   QUALIFIED: "Qualifié",
   MESSAGE_TO_VALIDATE: "Message à valider",
-  CONTACTED: "Contacté",
-  FOLLOW_UP_SCHEDULED: "Relance programmée",
+  CONTACTED: "1er contact",
+  FOLLOW_UP_SCHEDULED: "Relance",
   REPLIED: "Réponse reçue",
   INTERESTED: "Intéressé",
-  APPOINTMENT_SCHEDULED: "RDV prévu",
+  APPOINTMENT_SCHEDULED: "Rendez-vous",
   QUOTE_SENT: "Devis envoyé",
   NEGOTIATION: "Négociation",
-  WON: "Client gagné",
-  LOST: "Client perdu",
+  WON: "Accepté",
+  LOST: "Perdu",
   TO_RECONTACT_LATER: "À recontacter",
   UNSUBSCRIBED: "Désinscrit",
 };

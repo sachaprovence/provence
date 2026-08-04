@@ -5,9 +5,9 @@ import { publishAutomationEvent, subscribeAutomationEvent } from "@/lib/automati
 import { clearAllDomainEventListeners } from "@/lib/events/domain-events";
 
 describe("Automation Trigger Engine", () => {
-  it("enregistre les 26 types de déclencheurs du brief, plus les évènements métier v0.9 (task #91)", () => {
+  it("enregistre les 26 types de déclencheurs du brief, plus les évènements métier v0.9 (task #91) et v1.1 (AR-0165)", () => {
     registerBuiltInAutomationTriggers();
-    expect(listAutomationTriggerTypes().length).toBe(37);
+    expect(listAutomationTriggerTypes().length).toBe(38);
     const keys = listAutomationTriggerTypes().map((t) => t.key);
     expect(keys).toContain("schedule.cron");
     expect(keys).toContain("lead.created");
@@ -16,6 +16,7 @@ describe("Automation Trigger Engine", () => {
     expect(keys).toContain("quote.sent");
     expect(keys).toContain("invoice.paid");
     expect(keys).toContain("virtual_tour.published");
+    expect(keys).toContain("lead.stage_changed");
   });
 
   it("Event Dispatcher : réutilise le bus d'évènements générique, un abonné isolé n'empêche pas les autres", async () => {
