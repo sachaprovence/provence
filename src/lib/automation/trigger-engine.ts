@@ -153,6 +153,7 @@ const REAL_EMISSION_EVENT_KEYS = [
   "invoice.created",
   "invoice.sent",
   "invoice.paid",
+  "invoice.overdue",
   "virtual_tour.created",
   "virtual_tour.shooting_done",
   "virtual_tour.published",

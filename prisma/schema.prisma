@@ -102,6 +102,7 @@ model Organization {
   quotes               Quote[]
   quoteVersions        QuoteVersion[]
   invoices             Invoice[]
+  invoicePayments      InvoicePayment[]
   customers            Customer[]
   missions             Mission[]
   services_            Service[]
@@ -1407,17 +1408,39 @@ model Invoice {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
-  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  quote        Quote?        @relation(fields: [quoteId], references: [id])
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?       @relation(fields: [workspaceId], references: [id])
+  lead         Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quote        Quote?           @relation(fields: [quoteId], references: [id])
   lines        InvoiceLine[]
   virtualTours VirtualTour[]
+  payments     InvoicePayment[]
 
   @@unique([organizationId, reference])
   @@index([leadId])
   @@index([quoteId])
   @@index([workspaceId])
+}
+
+/// Paiement partiel ou complet d'une facture (v1.1, AR-0169) — plusieurs paiements possibles par
+/// facture ; la somme détermine le statut PAID dès qu'elle atteint `Invoice.totalAmount` (voir
+/// `recordInvoicePayment()`). `InvoiceStatus` reste la source de vérité affichée, ce modèle n'est
+/// qu'un historique des règlements individuels.
+model InvoicePayment {
+  id             String   @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  amount         Int
+  paidAt         DateTime @default(now())
+  method         String
+  note           String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([invoiceId])
 }
 
 model InvoiceLine {

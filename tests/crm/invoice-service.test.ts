@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { createQuote, sendQuote, requestQuoteSignature, recordSignatureResult } from "@/lib/crm/quote-service";
-import { convertQuoteToInvoice, listInvoices, getInvoice, updateInvoiceStatus } from "@/lib/crm/invoice-service";
+import { convertQuoteToInvoice, listInvoices, getInvoice, updateInvoiceStatus, recordInvoicePayment, listInvoicePayments } from "@/lib/crm/invoice-service";
 import { generateInvoicePdf } from "@/lib/crm/invoice-pdf";
-import { ConflictError, NotFoundError } from "@/lib/errors";
+import { processOverdueInvoices } from "@/lib/jobs/process-overdue-invoices";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { QuoteStatus, InvoiceStatus } from "@/generated/prisma/enums";
 
 /**
@@ -110,6 +111,80 @@ runIfDatabase("CRM v0.9 — Invoice service (conversion depuis un devis)", () =>
 
     const paid = await updateInvoiceStatus(organization.id, invoice.id, InvoiceStatus.PAID);
     expect(paid.paidAt).not.toBeNull();
+  });
+
+  it("un paiement partiel ne fait pas passer la facture à PAID ; la somme des paiements le fait (v1.1, AR-0169)", async () => {
+    const { organization, user, quote } = await createAcceptedQuote("partial-payment");
+    const invoice = await convertQuoteToInvoice(organization.id, quote.id, user.id);
+    await updateInvoiceStatus(organization.id, invoice.id, InvoiceStatus.SENT);
+    expect(invoice.totalAmount).toBe(27000);
+
+    const first = await recordInvoicePayment(organization.id, invoice.id, { amount: 10000, method: "Virement" }, user.id);
+    expect(first.amount).toBe(10000);
+    const afterFirst = await getInvoice(organization.id, invoice.id);
+    expect(afterFirst.status).toBe(InvoiceStatus.SENT);
+
+    const second = await recordInvoicePayment(organization.id, invoice.id, { amount: 17000, method: "Chèque" }, user.id);
+    expect(second.amount).toBe(17000);
+    const afterSecond = await getInvoice(organization.id, invoice.id);
+    expect(afterSecond.status).toBe(InvoiceStatus.PAID);
+    expect(afterSecond.paidAt).not.toBeNull();
+
+    const payments = await listInvoicePayments(organization.id, invoice.id);
+    expect(payments).toHaveLength(2);
+  });
+
+  it("rejette un paiement qui dépasse le solde restant dû", async () => {
+    const { organization, user, quote } = await createAcceptedQuote("overpayment");
+    const invoice = await convertQuoteToInvoice(organization.id, quote.id, user.id);
+    await updateInvoiceStatus(organization.id, invoice.id, InvoiceStatus.SENT);
+
+    await expect(
+      recordInvoicePayment(organization.id, invoice.id, { amount: 27001, method: "Virement" }, user.id)
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("rejette un paiement sur une facture déjà entièrement payée ou annulée", async () => {
+    const { organization, user, quote } = await createAcceptedQuote("payment-status-guard");
+    const invoice = await convertQuoteToInvoice(organization.id, quote.id, user.id);
+    await updateInvoiceStatus(organization.id, invoice.id, InvoiceStatus.SENT);
+    await updateInvoiceStatus(organization.id, invoice.id, InvoiceStatus.PAID);
+
+    await expect(
+      recordInvoicePayment(organization.id, invoice.id, { amount: 1000, method: "Virement" }, user.id)
+    ).rejects.toThrow(ConflictError);
+
+    const { organization: orgB, user: userB, quote: quoteB } = await createAcceptedQuote("payment-cancelled-guard");
+    const invoiceB = await convertQuoteToInvoice(orgB.id, quoteB.id, userB.id);
+    await updateInvoiceStatus(orgB.id, invoiceB.id, InvoiceStatus.CANCELLED);
+
+    await expect(
+      recordInvoicePayment(orgB.id, invoiceB.id, { amount: 1000, method: "Virement" }, userB.id)
+    ).rejects.toThrow(ConflictError);
+  });
+
+  it("processOverdueInvoices bascule SENT -> OVERDUE uniquement après échéance ET solde restant dû", async () => {
+    const { organization, user, quote } = await createAcceptedQuote("overdue-job");
+    const invoice = await convertQuoteToInvoice(organization.id, quote.id, user.id);
+    await updateInvoiceStatus(organization.id, invoice.id, InvoiceStatus.SENT);
+
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { dueAt: past } });
+
+    const future = new Date(Date.now() + 60 * 60 * 1000);
+    const { organization: orgFuture, user: userFuture, quote: quoteFuture } = await createAcceptedQuote("overdue-job-future");
+    const invoiceFuture = await convertQuoteToInvoice(orgFuture.id, quoteFuture.id, userFuture.id);
+    await updateInvoiceStatus(orgFuture.id, invoiceFuture.id, InvoiceStatus.SENT);
+    await prisma.invoice.update({ where: { id: invoiceFuture.id }, data: { dueAt: future } });
+
+    const result = await processOverdueInvoices();
+    expect(result.markedOverdue).toBeGreaterThanOrEqual(1);
+
+    const refreshed = await prisma.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
+    expect(refreshed.status).toBe(InvoiceStatus.OVERDUE);
+
+    const refreshedFuture = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceFuture.id } });
+    expect(refreshedFuture.status).toBe(InvoiceStatus.SENT);
   });
 
   it("génère un PDF valide pour une facture", async () => {

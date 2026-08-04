@@ -1,9 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { NotFoundError, ConflictError } from "@/lib/errors";
+import { NotFoundError, ConflictError, ValidationError } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
 import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
 import { InvoiceStatus, QuoteStatus } from "@/generated/prisma/enums";
+import type { invoicePaymentCreateSchema } from "@/lib/validations/invoice";
+import type { z } from "zod";
 
 /**
  * Facturation (brief v0.9 : "Transformation en facture (préparer
@@ -26,7 +28,7 @@ export async function listInvoices(organizationId: string, filters: { leadId?: s
 export async function getInvoice(organizationId: string, id: string) {
   const invoice = await prisma.invoice.findFirst({
     where: { id, organizationId },
-    include: { lines: true, lead: true, quote: true },
+    include: { lines: true, lead: true, quote: true, payments: { orderBy: { paidAt: "desc" } } },
   });
   if (!invoice) throw new NotFoundError("Facture introuvable.");
   return invoice;
@@ -165,4 +167,70 @@ export async function updateInvoiceStatus(organizationId: string, id: string, st
   }
 
   return invoice;
+}
+
+export async function listInvoicePayments(organizationId: string, invoiceId: string) {
+  const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, organizationId }, select: { id: true } });
+  if (!invoice) throw new NotFoundError("Facture introuvable.");
+  return prisma.invoicePayment.findMany({ where: { invoiceId, organizationId }, orderBy: { paidAt: "desc" } });
+}
+
+/**
+ * Enregistre un paiement, partiel ou complet (v1.1, AR-0169) — `InvoiceStatus`
+ * reste binaire côté affichage : le statut passe à `PAID` (et `invoice.paid`
+ * n'est publié) que lorsque la SOMME des paiements atteint `totalAmount`,
+ * jamais sur un seul paiement partiel. Rejette un paiement sur une facture
+ * déjà soldée ou annulée (jamais de sur-paiement silencieux).
+ */
+export async function recordInvoicePayment(
+  organizationId: string,
+  invoiceId: string,
+  data: z.infer<typeof invoicePaymentCreateSchema>,
+  actorUserId: string
+) {
+  const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, organizationId }, include: { payments: true } });
+  if (!invoice) throw new NotFoundError("Facture introuvable.");
+  if (invoice.status === InvoiceStatus.PAID) throw new ConflictError("Cette facture est déjà entièrement payée.");
+  if (invoice.status === InvoiceStatus.CANCELLED) throw new ConflictError("Cette facture est annulée.");
+
+  const alreadyPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
+  if (alreadyPaid + data.amount > invoice.totalAmount) {
+    throw new ValidationError(
+      `Le paiement dépasse le solde restant dû (${((invoice.totalAmount - alreadyPaid) / 100).toFixed(2)} €).`
+    );
+  }
+
+  const payment = await prisma.invoicePayment.create({
+    data: {
+      organizationId,
+      invoiceId,
+      amount: data.amount,
+      paidAt: data.paidAt ?? new Date(),
+      method: data.method,
+      note: data.note || undefined,
+    },
+  });
+
+  const totalPaid = alreadyPaid + data.amount;
+  const newlyPaidInFull = totalPaid >= invoice.totalAmount;
+
+  if (newlyPaidInFull) {
+    await prisma.invoice.update({ where: { id: invoiceId }, data: { status: InvoiceStatus.PAID, paidAt: new Date() } });
+  }
+
+  await writeAuditLog({
+    organizationId,
+    userId: actorUserId,
+    leadId: invoice.leadId,
+    action: "invoice.payment_recorded",
+    entityType: "Invoice",
+    entityId: invoiceId,
+    metadata: { paymentId: payment.id, amount: data.amount, totalPaid },
+  });
+
+  if (newlyPaidInFull) {
+    await publishAutomationEvent("invoice.paid", { organizationId, leadId: invoice.leadId, invoiceId });
+  }
+
+  return payment;
 }
