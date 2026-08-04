@@ -7,9 +7,11 @@ import {
   sendQuote,
   requestQuoteSignature,
   recordSignatureResult,
+  getQuote,
+  listQuoteVersions,
 } from "@/lib/crm/quote-service";
 import { generateQuotePdf } from "@/lib/crm/quote-pdf";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import { QuoteStatus, QuoteSignatureStatus } from "@/generated/prisma/enums";
 
 /**
@@ -107,6 +109,37 @@ runIfDatabase("CRM v0.9 — Quote service (remise/TVA/versionnement/signature)",
     expect(refreshedLead?.stage).toBe("QUOTE_SENT");
 
     await expect(sendQuote(organization.id, quote.id, user.id)).rejects.toThrow(ConflictError);
+  });
+
+  it("expose l'historique des versions, vide avant tout envoi puis peuplé après chaque envoi (v1.1, AR-0168)", async () => {
+    const { organization, lead, user } = await createOrgWithLead("versions-history");
+    const quote = await createQuote(organization.id, {
+      leadId: lead.id,
+      lines: [{ label: "Visite virtuelle", quantity: 1, unitPrice: 15000 }],
+    });
+
+    expect(await listQuoteVersions(organization.id, quote.id)).toHaveLength(0);
+
+    await sendQuote(organization.id, quote.id, user.id);
+    const versions = await listQuoteVersions(organization.id, quote.id);
+    expect(versions).toHaveLength(1);
+    expect(versions[0].versionNumber).toBe(1);
+    const snapshot = versions[0].snapshot as unknown as { lines: { label: string }[] };
+    expect(snapshot.lines[0].label).toBe("Visite virtuelle");
+  });
+
+  it("getQuote/listQuoteVersions sont isolés par organisation", async () => {
+    const { organization, lead } = await createOrgWithLead("isolation");
+    const quote = await createQuote(organization.id, { leadId: lead.id, lines: [{ label: "X", quantity: 1, unitPrice: 1000 }] });
+
+    const otherOrg = await prisma.organization.create({ data: { name: "Org quote isolation autre" } });
+    organizationIds.push(otherOrg.id);
+
+    await expect(getQuote(otherOrg.id, quote.id)).rejects.toThrow(NotFoundError);
+    await expect(listQuoteVersions(otherOrg.id, quote.id)).rejects.toThrow(NotFoundError);
+
+    const fetched = await getQuote(organization.id, quote.id);
+    expect(fetched.id).toBe(quote.id);
   });
 
   it("le flux de signature électronique (abstraction démo) passe par PENDING puis SIGNED, et fait passer le devis à ACCEPTED", async () => {

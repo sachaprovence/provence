@@ -4,13 +4,26 @@ import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { toApiErrorResponse } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
-import { sendQuote } from "@/lib/crm/quote-service";
+import { sendQuote, getQuote } from "@/lib/crm/quote-service";
 
 const updateSchema = z.object({
   status: z.enum(["DRAFT", "SENT", "ACCEPTED", "DECLINED", "EXPIRED"]).optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
+
+export async function GET(_request: Request, { params }: Params) {
+  const actor = await requireActorApi();
+  if (isActorResponse(actor)) return actor;
+  const { id } = await params;
+
+  try {
+    const quote = await getQuote(actor.organization.id, id);
+    return NextResponse.json({ quote });
+  } catch (error) {
+    return toApiErrorResponse(error, { route: "GET /api/quotes/[id]" });
+  }
+}
 
 export async function PATCH(request: Request, { params }: Params) {
   const actor = await requireActorApi();
