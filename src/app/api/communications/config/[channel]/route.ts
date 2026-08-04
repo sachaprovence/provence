@@ -3,9 +3,27 @@ import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { toApiErrorResponse } from "@/lib/errors";
 import { isAdmin } from "@/lib/permissions";
 import { communicationChannelSchema, communicationConfigUpdateSchema } from "@/lib/validations/communication";
-import { updateChannelConfig } from "@/lib/communication/hub-service";
+import { updateChannelConfig, getChannelConfigPreview } from "@/lib/communication/hub-service";
 
 type Params = { params: Promise<{ channel: string }> };
+
+export async function GET(_request: Request, { params }: Params) {
+  const actor = await requireActorApi();
+  if (isActorResponse(actor)) return actor;
+  const { channel } = await params;
+
+  const parsedChannel = communicationChannelSchema.safeParse(channel);
+  if (!parsedChannel.success) {
+    return NextResponse.json({ error: "Canal de communication inconnu." }, { status: 400 });
+  }
+
+  try {
+    const config = await getChannelConfigPreview(actor.organization.id, parsedChannel.data);
+    return NextResponse.json({ config });
+  } catch (error) {
+    return toApiErrorResponse(error, { route: "GET /api/communications/config/[channel]" });
+  }
+}
 
 export async function PUT(request: Request, { params }: Params) {
   const actor = await requireActorApi();

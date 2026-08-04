@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPut, ApiError } from "@/lib/api-client";
 
 type EmailConfigPreview = {
+  provider: string;
   smtpHost: string;
   smtpPort?: number;
   smtpUser: string;
@@ -12,16 +13,29 @@ type EmailConfigPreview = {
   hasApiKey: boolean;
 };
 
+const PROVIDER_OPTIONS = [
+  { value: "demo", label: "Démo (aucun envoi réel)" },
+  { value: "smtp", label: "SMTP" },
+  { value: "resend", label: "Resend" },
+  { value: "postmark", label: "Postmark" },
+  { value: "brevo", label: "Brevo" },
+  { value: "gmail", label: "Gmail (OAuth)" },
+  { value: "outlook", label: "Outlook (OAuth)" },
+];
+
 /**
- * Réglages email (task #92) — identifiants du fournisseur réel actif
- * (`EMAIL_PROVIDER`, voir `src/lib/email/index.ts`), stockés par
- * organisation (`Integration.config`, voir `resolveEmailConfig`). Les
- * champs secrets ne sont JAMAIS préremplis avec la valeur enregistrée
- * (seulement "déjà enregistré ?") — un champ laissé vide au moment
- * d'enregistrer ne l'efface pas (fusion côté serveur).
+ * Réglages email (task #92, étendu v1.1 AR-0171) — le fournisseur ACTIF
+ * est désormais choisi PAR ORGANISATION (`Integration.config.provider`),
+ * avec repli sur la variable de déploiement `EMAIL_PROVIDER` tant
+ * qu'aucun choix n'a été fait ici. Identifiants stockés par organisation
+ * (`Integration.config`, voir `resolveEmailConfig`). Les champs secrets ne
+ * sont JAMAIS préremplis avec la valeur enregistrée (seulement "déjà
+ * enregistré ?") — un champ laissé vide au moment d'enregistrer ne
+ * l'efface pas (fusion côté serveur).
  */
 export function EmailSettingsForm() {
   const [loading, setLoading] = useState(true);
+  const [provider, setProvider] = useState("demo");
   const [smtpHost, setSmtpHost] = useState("");
   const [smtpPort, setSmtpPort] = useState("");
   const [smtpUser, setSmtpUser] = useState("");
@@ -37,6 +51,7 @@ export function EmailSettingsForm() {
   useEffect(() => {
     apiGet<{ config: EmailConfigPreview }>("/api/settings/integrations/email")
       .then(({ config }) => {
+        setProvider(config.provider || "demo");
         setSmtpHost(config.smtpHost);
         setSmtpPort(config.smtpPort ? String(config.smtpPort) : "");
         setSmtpUser(config.smtpUser);
@@ -54,6 +69,7 @@ export function EmailSettingsForm() {
     setSaved(false);
     try {
       const { config } = await apiPut<{ config: EmailConfigPreview }>("/api/settings/integrations/email", {
+        provider,
         smtpHost,
         smtpPort: smtpPort ? Number(smtpPort) : undefined,
         smtpUser,
@@ -77,6 +93,17 @@ export function EmailSettingsForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="label">Fournisseur actif de cette organisation</label>
+        <select className="input max-w-sm" value={provider} onChange={(e) => setProvider(e.target.value)}>
+          {PROVIDER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <p className="text-xs text-p360-muted mt-1">
+          Prime sur la variable d&apos;environnement <code>EMAIL_PROVIDER</code> du déploiement dès qu&apos;un choix est fait ici.
+        </p>
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="label">Hôte SMTP</label>
