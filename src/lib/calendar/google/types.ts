@@ -28,6 +28,8 @@ export interface CalendarEventInput {
   startAt: Date;
   endAt: Date;
   attendeeEmails?: string[];
+  /** Minutes avant l'évènement pour le rappel (notification popup). Omis = aucun rappel. */
+  reminderMinutesBefore?: number;
 }
 
 export interface CalendarEventResult {
