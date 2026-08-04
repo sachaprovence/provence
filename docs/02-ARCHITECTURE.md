@@ -239,8 +239,7 @@ utilisent désormais ce kit au lieu de balises HTML brutes.
   load balancer sans le redémarrer si cet endpoint échoue.
 - `GET /api/health` (historique, conservé pour compatibilité) : même
   évaluation de readiness que `/ready`, forme de réponse `{status}`
-  inchangée. Utilisé par le `HEALTHCHECK` du `Dockerfile` et de
-  `docker-compose.yml`. Toutes ces routes sont publiques (exclues de
+  inchangée. Toutes ces routes sont publiques (exclues de
   l'authentification dans `src/proxy.ts`).
 
 ### CI/CD
@@ -276,7 +275,8 @@ utilisent désormais ce kit au lieu de balises HTML brutes.
 - `.dockerignore` ajouté (le `Dockerfile` faisait un `COPY . .` sans
   exclusion : risque de copier `.env` dans l'image).
   `HEALTHCHECK` ajouté au `Dockerfile` et à `docker-compose.yml`,
-  s'appuyant sur `GET /api/health`.
+  s'appuyant sur `GET /api/health/ready` (v1.2, AR-0169 — voir
+  `docs/operations/DEPLOYMENT.md`).
 
 ## 9. Multi-tenant : Organization/Workspace (v0.2 — `ROADMAP.md` MOD-21)
 

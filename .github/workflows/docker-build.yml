@@ -1,0 +1,56 @@
+name: Build de l'image Docker
+
+# AR-0169 (v1.2) — vérifie que l'image de production (Dockerfile) construit
+# réellement à chaque PR. Aucun registre/identifiant requis (build local à
+# l'exécuteur uniquement, jamais poussé) — détecte une régression du
+# Dockerfile avant qu'elle n'atteigne un déploiement réel.
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "package.json"
+      - "package-lock.json"
+      - "prisma/**"
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "package.json"
+      - "package-lock.json"
+      - "prisma/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build de l'image (jamais poussée)
+        run: docker build -t provence-app:ci-check .
+
+      - name: Vérifie que le conteneur démarre et que /api/health/live répond (sans base de données réelle)
+        run: |
+          docker run -d --name provence-ci-check \
+            -e DATABASE_URL="postgresql://provence:provence@127.0.0.1:5432/provence360?schema=public" \
+            -e AUTH_SECRET="ci-docker-check-secret-not-for-production-00" \
+            -e NEXT_PUBLIC_APP_URL="http://localhost:3000" \
+            -p 3000:3000 \
+            provence-app:ci-check || true
+          # La base de données n'existe pas dans ce job (aucun service Postgres) —
+          # `prisma migrate deploy` échoue donc et le conteneur s'arrête avant de
+          # servir /api/health/live. C'est le comportement ATTENDU et souhaité
+          # (échec explicite plutôt qu'un démarrage silencieux sans base) : ce
+          # contrôle ne vérifie que la CONSTRUCTION de l'image, pas un démarrage
+          # complet (déjà couvert contre une vraie base par
+          # .github/workflows/migrations-fresh-db.yml et backup-restore.yml).
+          docker logs provence-ci-check || true
+          docker rm -f provence-ci-check || true

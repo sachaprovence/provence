@@ -33,8 +33,16 @@ services:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
     ports:
       - "3000:3000"
+    volumes:
+      # Persistance du stockage démo (v1.2, AR-0169) — sans ce volume, les
+      # fichiers écrits par STORAGE_PROVIDER=demo sont perdus à chaque
+      # recréation du conteneur (voir l'alerte non bloquante documentée en
+      # AR-0164 : le stockage démo n'est de toute façon jamais recommandé
+      # en production réelle, voir STORAGE_PROVIDER=s3 dans .env.example —
+      # ce volume réduit seulement le risque pour un usage démo/interne).
+      - provence_storage_demo:/app/storage-demo
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health/ready"]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -42,3 +50,4 @@ services:
 
 volumes:
   provence_db_data:
+  provence_storage_demo:

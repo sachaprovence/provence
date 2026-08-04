@@ -268,6 +268,49 @@ système déjà correct :
   pour que toute route l'adopte au fil de l'eau sans changement
   d'architecture supplémentaire.
 
+### AR-0169 — Durcissement du déploiement : renforcé, jamais remplacé (contrainte explicite)
+
+Conformément à la contrainte explicite ("ne remplace pas l'architecture
+existante sans justification technique documentée"), audit d'abord :
+l'utilisateur non-root (`nextjs`, uid 1001), le `chown` complet de
+`/app`, les migrations exécutées avant le démarrage du serveur
+(`prisma migrate deploy && … next start`), et les cookies de session
+(`httpOnly`, `secure` en production, `sameSite: lax`) étaient DÉJÀ
+corrects — non retouchés. Trois gaps réels corrigés :
+
+- **Arrêt non propre** : `CMD ["sh", "-c", "cmd1 && cmd2"]` ne relaie PAS
+  `SIGTERM` à `cmd2` par défaut (`sh` lance `cmd2` comme un enfant, pas un
+  remplacement de process) — `docker stop` attendait le délai de grâce
+  complet puis `SIGKILL`ait `next start` en pleine requête. Corrigé par
+  `tini` en PID 1 (relais de signal + réclamation de zombies) ET `exec`
+  avant `next start` (remplace le shell par le process Node.js, qui reçoit
+  alors directement `SIGTERM` et peut drainer ses requêtes en cours).
+- **Aucun en-tête de sécurité HTTP** : ni CSP, ni `X-Frame-Options`, ni
+  `Referrer-Policy`, et `X-Powered-By: Next.js` renseignait gratuitement
+  la pile technique à un attaquant. Corrigé via `next.config.ts#headers()`
+  (appliqué à TOUTES les réponses, pages et API, plus tôt dans le pipeline
+  Next.js que `src/proxy.ts`) — délibérément SANS Content-Security-Policy
+  stricte : câbler une CSP par nonce sans casser l'hydratation React/
+  l'éditeur de workflow/les visites 3D exige une vérification page par
+  page hors budget de cette passe ; documenté comme travail futur plutôt
+  que livré à moitié ou en mode `unsafe-inline` (qui annulerait l'essentiel
+  du bénéfice d'une CSP).
+- **Aucune validation CI de la construction de l'image** : un Dockerfile
+  cassé n'aurait été découvert qu'au déploiement réel. Ajouté
+  `.github/workflows/docker-build.yml` (construit l'image à chaque PR
+  touchant `Dockerfile`/`.dockerignore`/dépendances/migrations — jamais
+  poussée vers un registre).
+
+**Limite assumée et documentée** : `docker build`/`docker run` n'ont pas
+pu être exécutés directement dans cet environnement de développement
+(absence de démon Docker) — les changements du Dockerfile ont donc été
+vérifiés statiquement (relecture attentive de chaque instruction, usage
+connu et documenté de `tini`/`exec` dans l'écosystème Docker) et seront
+validés réellement par `docker-build.yml` au prochain déclenchement CI,
+pas simplement affirmés corrects sans preuve. Les en-têtes de sécurité
+HTTP et `X-Request-Id`, eux, ONT été vérifiés contre un vrai serveur de
+production démarré localement (`next start`, hors conteneur).
+
 ## Conséquences
 
 - Toute future entité avec pièce jointe/fichier stocké doit suivre le même

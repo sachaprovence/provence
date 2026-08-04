@@ -16,3 +16,7 @@ docs
 provence360-squarespace
 *.md
 !README.md
+
+# stockage local du fournisseur démo / sauvegardes locales (v1.2, AR-0166/AR-0169) — jamais dans une image Docker
+storage-demo
+backups
