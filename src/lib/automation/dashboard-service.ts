@@ -12,6 +12,30 @@ function toPlainNumberOrNull(value: unknown): number | null {
 const ACTIVE_WORKER_WINDOW_MS = 60_000;
 
 /**
+ * Estimation du temps manuel économisé par job réussi, en minutes, par
+ * type de job (v1.1, AR-0178) — heuristique déclarée, jamais mesurée
+ * réellement (aucun chronométrage humain de référence n'existe) : une
+ * délégation à un agent IA (`agent.call`) économise typiquement plus de
+ * temps qu'une simple mise à jour de variable. Valeur par défaut
+ * raisonnable pour tout type de job non listé ci-dessous.
+ */
+const DEFAULT_MINUTES_SAVED_PER_JOB_TYPE: Record<string, number> = {
+  "agent.call": 12,
+  "email.send": 5,
+  "notification.create": 1,
+  "lead.create": 3,
+  "lead.update": 2,
+  "lead.delete": 1,
+  "http.request": 2,
+  "knowledge.index": 2,
+  "memory.set": 1,
+  "variable.set": 0.5,
+  "workflow.call": 5,
+  "automation.call": 5,
+};
+const DEFAULT_MINUTES_SAVED_FALLBACK = 3;
+
+/**
  * Tableau de bord d'observabilité de l'Automation Engine (v0.8, voir brief
  * "OBSERVABILITÉ") : automatisations, jobs, historique, temps d'exécution
  * (moyen/minimal/maximal), erreurs, retries, files, workers, Dead Letter
@@ -29,6 +53,7 @@ export async function getAutomationDashboard(workspaceId: string) {
     jobsByStatus,
     jobDurationAgg,
     jobTypeBreakdown,
+    succeededByJobType,
     retryAgg,
     activeWorkersAgg,
     queueDepth,
@@ -68,6 +93,7 @@ export async function getAutomationDashboard(workspaceId: string) {
       ORDER BY avg_ms DESC NULLS LAST
       LIMIT 10
     `,
+    prisma.automationJob.groupBy({ by: ["jobType"], where: { workspaceId, status: "SUCCEEDED" }, _count: { _all: true } }),
     prisma.$queryRaw<{ total_retries: number }[]>`
       SELECT COALESCE(SUM(GREATEST(attempt - 1, 0)), 0)::int AS total_retries
       FROM "AutomationJob"
@@ -94,6 +120,12 @@ export async function getAutomationDashboard(workspaceId: string) {
   const succeededJobs = jobCounts.SUCCEEDED ?? 0;
   const deadLetteredJobs = jobCounts.DEAD_LETTERED ?? 0;
   const failedJobs = (jobCounts.FAILED ?? 0) + (jobCounts.TIMED_OUT ?? 0) + deadLetteredJobs;
+
+  const timeSavedByJobType = succeededByJobType.map((row) => {
+    const minutesPerJob = DEFAULT_MINUTES_SAVED_PER_JOB_TYPE[row.jobType] ?? DEFAULT_MINUTES_SAVED_FALLBACK;
+    return { jobType: row.jobType, succeededCount: row._count._all, minutesSaved: row._count._all * minutesPerJob };
+  });
+  const totalMinutesSaved = timeSavedByJobType.reduce((sum, row) => sum + row.minutesSaved, 0);
 
   return {
     automations: {
@@ -152,6 +184,12 @@ export async function getAutomationDashboard(workspaceId: string) {
         failureRate: row.total > 0 ? row.failed / row.total : 0,
         averageDurationMs: toPlainNumberOrNull(row.avg_ms),
       })),
+    },
+    /** Métrique "Temps gagné" (v1.1, AR-0178) — estimation, jamais une mesure réelle (voir la constante ci-dessus). */
+    timeSaved: {
+      totalMinutes: totalMinutesSaved,
+      totalHours: Math.round((totalMinutesSaved / 60) * 10) / 10,
+      byJobType: timeSavedByJobType,
     },
     queue: {
       dueNow: queueDepth,

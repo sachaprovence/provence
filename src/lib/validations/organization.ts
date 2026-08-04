@@ -28,6 +28,8 @@ export const organizationSettingsSchema = z.object({
 });
 
 export const emailIntegrationConfigUpdateSchema = z.object({
+  // Fournisseur choisi par l'organisation (v1.1, AR-0171) — prime sur EMAIL_PROVIDER.
+  provider: z.enum(["demo", "smtp", "resend", "postmark", "brevo", "gmail", "outlook"]).optional(),
   smtpHost: z.string().max(255).optional().or(z.literal("")),
   smtpPort: z.coerce.number().int().min(1).max(65535).optional(),
   smtpUser: z.string().max(255).optional().or(z.literal("")),

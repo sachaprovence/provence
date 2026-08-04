@@ -5,6 +5,7 @@ import { leadUpdateSchema } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
 import { isAdmin } from "@/lib/permissions";
 import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
+import { buildStageChangedEventPayload } from "@/lib/crm/pipeline-service";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -84,6 +85,11 @@ export async function PUT(request: Request, { params }: Params) {
     metadata: { fields: Object.keys(body ?? {}) },
   });
   await publishAutomationEvent("lead.updated", { organizationId: actor.organization.id, leadId: lead.id });
+
+  // v1.1, AR-0165 — évènement granulaire dédié, publié UNIQUEMENT si l'étape a réellement changé
+  // (jamais sur les autres champs), pour que les automatisations puissent s'abonner à une transition précise.
+  const stageChangedPayload = buildStageChangedEventPayload(actor.organization.id, lead.id, existing.stage, data.stage);
+  if (stageChangedPayload) await publishAutomationEvent("lead.stage_changed", stageChangedPayload);
 
   return NextResponse.json({ lead });
 }

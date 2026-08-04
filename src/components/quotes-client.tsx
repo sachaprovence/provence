@@ -65,7 +65,9 @@ export function QuotesClient({ quotes }: { quotes: Quote[] }) {
         <tbody>
           {quotes.map((q) => (
             <tr key={q.id} className="border-t border-p360-lavender-light">
-              <td className="px-4 py-2 text-p360-ink">{q.reference}</td>
+              <td className="px-4 py-2">
+                <Link href={`/quotes/${q.id}`} className="text-p360-blue hover:underline">{q.reference}</Link>
+              </td>
               <td className="px-4 py-2"><Link href={`/leads/${q.lead.id}`} className="text-p360-blue hover:underline">{q.lead.establishmentName}</Link></td>
               <td className="px-4 py-2 text-p360-ink">{formatEuros(q.totalAmount)}</td>
               <td className="px-4 py-2"><span className="badge bg-p360-lavender-light text-p360-blue">{STATUS_LABEL[q.status]}</span></td>

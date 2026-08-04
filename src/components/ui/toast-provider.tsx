@@ -66,7 +66,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             key={toast.id}
             role="status"
             className={clsx(
-              "pointer-events-auto w-full max-w-sm rounded-lg bg-white px-4 py-3 shadow-lg",
+              "pointer-events-auto w-full max-w-sm rounded-lg bg-p360-surface px-4 py-3 shadow-lg",
               VARIANT_CLASS[toast.variant ?? "info"]
             )}
           >

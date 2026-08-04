@@ -31,6 +31,13 @@ async function getAttendeeEmails(leadId: string): Promise<string[]> {
   return contacts.map((c) => c.email).filter((email): email is string => Boolean(email));
 }
 
+/**
+ * Rappel par défaut (minutes avant l'évènement) appliqué à chaque évènement
+ * synchronisé (v1.1, AR-0172) — codé en dur en attendant le réglage
+ * configurable par organisation (`AR-0179`, paramètres d'agenda).
+ */
+const DEFAULT_REMINDER_MINUTES_BEFORE = 60;
+
 /** Crée ou met à jour l'évènement Google Calendar correspondant à un rendez-vous — idempotent. */
 export async function syncAppointmentToGoogle(organizationId: string, appointment: AppointmentModel): Promise<void> {
   const client = await getAuthorizedClient(organizationId);
@@ -43,6 +50,7 @@ export async function syncAppointmentToGoogle(organizationId: string, appointmen
     startAt: appointment.startAt,
     endAt: appointment.endAt,
     attendeeEmails,
+    reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
   };
 
   const result = appointment.googleEventId

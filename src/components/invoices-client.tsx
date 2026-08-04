@@ -61,7 +61,9 @@ export function InvoicesClient({ invoices }: { invoices: Invoice[] }) {
         <tbody>
           {invoices.map((invoice) => (
             <tr key={invoice.id} className="border-t border-p360-lavender-light">
-              <td className="px-4 py-2 text-p360-ink">{invoice.reference}</td>
+              <td className="px-4 py-2">
+                <Link href={`/invoices/${invoice.id}`} className="text-p360-blue hover:underline">{invoice.reference}</Link>
+              </td>
               <td className="px-4 py-2"><Link href={`/leads/${invoice.lead.id}`} className="text-p360-blue hover:underline">{invoice.lead.establishmentName}</Link></td>
               <td className="px-4 py-2 text-p360-ink">{formatEuros(invoice.totalAmount)}</td>
               <td className="px-4 py-2 text-p360-muted">{invoice.dueAt ? new Date(invoice.dueAt).toLocaleDateString("fr-FR") : "—"}</td>

@@ -28,6 +28,10 @@ export class GoogleCalendarClient {
       start: { dateTime: event.startAt.toISOString() },
       end: { dateTime: event.endAt.toISOString() },
       attendees: event.attendeeEmails?.map((email) => ({ email })),
+      reminders:
+        event.reminderMinutesBefore !== undefined
+          ? { useDefault: false, overrides: [{ method: "popup", minutes: event.reminderMinutesBefore }] }
+          : undefined,
     };
   }
 

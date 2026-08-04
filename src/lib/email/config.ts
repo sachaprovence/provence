@@ -11,6 +11,14 @@ import { prisma } from "@/lib/prisma";
  * ignore les clés des autres.
  */
 export interface EmailIntegrationConfig {
+  /**
+   * Fournisseur actif de l'organisation (v1.1, AR-0171) — prime sur la
+   * variable d'environnement globale `EMAIL_PROVIDER` quand renseigné (voir
+   * `getEmailProviderForOrganization`). Absent par défaut : le déploiement
+   * garde son comportement historique (un seul fournisseur pour toutes les
+   * organisations) tant qu'aucune organisation n'a fait ce choix.
+   */
+  provider?: string;
   /** SMTP */
   smtpHost?: string;
   smtpPort?: number;
@@ -69,6 +77,7 @@ export async function updateEmailIntegrationConfig(
 export async function getEmailConfigPreview(organizationId: string) {
   const config = await resolveEmailConfig(organizationId);
   return {
+    provider: typeof config.provider === "string" ? config.provider : "",
     smtpHost: typeof config.smtpHost === "string" ? config.smtpHost : "",
     smtpPort: typeof config.smtpPort === "number" ? config.smtpPort : undefined,
     smtpUser: typeof config.smtpUser === "string" ? config.smtpUser : "",

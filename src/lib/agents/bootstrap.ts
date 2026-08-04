@@ -14,9 +14,11 @@ import { planningTools } from "@/lib/agents/tools/planning-tools";
 import { socialTools } from "@/lib/agents/tools/social-tools";
 import { supportTools } from "@/lib/agents/tools/support-tools";
 import { analyseTools } from "@/lib/agents/tools/analyse-tools";
+import { visitesTools } from "@/lib/agents/tools/visites-tools";
 import { diagnosticAgentRuntime, DIAGNOSTIC_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/diagnostic-agent";
 import { directorAgentRuntime, DIRECTOR_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/director-agent";
 import { commercialAgentRuntime, COMMERCIAL_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/commercial-agent";
+import { qualificationAgentRuntime, QUALIFICATION_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/qualification-agent";
 import { prospectionAgentRuntime, PROSPECTION_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/prospection-agent";
 import { relanceAgentRuntime, RELANCE_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/relance-agent";
 import { devisAgentRuntime, DEVIS_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/devis-agent";
@@ -24,6 +26,7 @@ import { planningAgentRuntime, PLANNING_AGENT_RUNTIME_KEY } from "@/lib/agents/d
 import { socialAgentRuntime, SOCIAL_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/social-agent";
 import { supportAgentRuntime, SUPPORT_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/support-agent";
 import { analyseAgentRuntime, ANALYSE_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/analyse-agent";
+import { visitesAgentRuntime, VISITES_AGENT_RUNTIME_KEY } from "@/lib/agents/definitions/visites-agent";
 import { FUTURE_AGENT_CONTRACTS } from "@/lib/agents/director/capability-contracts";
 import { registerBuiltInScoringFactors } from "@/lib/agents/commercial/scoring-engine";
 import { registerBuiltInLlmProviders } from "@/lib/agents/llm";
@@ -249,6 +252,25 @@ export const AGENT_TOOL_CATALOG = [
     description: "Liste les prospects sans progression depuis un certain délai (lecture seule).",
     category: "analyse",
   },
+  // Agent Visites (v1.1, AR-0174) — surveille le pipeline des visites 3D lui-même.
+  {
+    key: "visites.detect_stalled_tours",
+    name: "Détecter les visites bloquées",
+    description: "Liste les visites 3D bloquées trop longtemps à un statut (lecture seule).",
+    category: "visites",
+  },
+  {
+    key: "visites.request_technician_followup",
+    name: "Relancer un technicien",
+    description: "Crée une notification de relance pour une visite 3D bloquée.",
+    category: "visites",
+  },
+  {
+    key: "visites.advance_status",
+    name: "Changer le statut d'une visite",
+    description: "Fait avancer le statut d'une visite 3D (mêmes règles que /visits).",
+    category: "visites",
+  },
 ] as const;
 
 let registered = false;
@@ -276,10 +298,12 @@ export function registerBuiltInAgentComponents() {
   for (const tool of socialTools) registerToolHandler(tool);
   for (const tool of supportTools) registerToolHandler(tool);
   for (const tool of analyseTools) registerToolHandler(tool);
+  for (const tool of visitesTools) registerToolHandler(tool);
 
   registerAgentRuntime(diagnosticAgentRuntime);
   registerAgentRuntime(directorAgentRuntime);
   registerAgentRuntime(commercialAgentRuntime);
+  registerAgentRuntime(qualificationAgentRuntime);
   registerAgentRuntime(prospectionAgentRuntime);
   registerAgentRuntime(relanceAgentRuntime);
   registerAgentRuntime(devisAgentRuntime);
@@ -287,6 +311,7 @@ export function registerBuiltInAgentComponents() {
   registerAgentRuntime(socialAgentRuntime);
   registerAgentRuntime(supportAgentRuntime);
   registerAgentRuntime(analyseAgentRuntime);
+  registerAgentRuntime(visitesAgentRuntime);
 
   registerBuiltInScoringFactors();
   registerBuiltInLlmProviders();
@@ -484,6 +509,27 @@ export async function syncAgentCatalog() {
     defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
   });
 
+  // Agent Qualification (v1.1, AR-0173) — extrait de l'Agent Commercial pour
+  // être orchestrable indépendamment (workflow/automatisation), sans
+  // dupliquer le moteur de scoring : réutilise directement les outils
+  // `commercial.score_prospect`/`commercial.qualify_prospect` déjà déclarés
+  // ci-dessus.
+  await ensureGlobalAgentDefinition({
+    key: "qualification-agent",
+    name: "Agent Qualification",
+    description:
+      "Qualifie un prospect existant (score + étape du pipeline) sans lancer tout le cycle commercial — mêmes outils et même moteur de scoring que l'Agent Commercial, orchestrable indépendamment par un workflow ou une automatisation.",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "commercial",
+    icon: "🎓",
+    runtimeKey: QUALIFICATION_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["commercial.score_prospect", "commercial.qualify_prospect"],
+    declaredPermissions: ["MANAGE_LEADS", "VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
   // 7 agents métier v0.9 (ADR 0038) — opèrent sur les VRAIES données CRM
   // (Lead/Quote/Appointment/VirtualTour/Conversation), jamais un modèle
   // séparé de démonstration comme `CommercialProspect`. Support et Analyse
@@ -600,6 +646,25 @@ export async function syncAgentCatalog() {
     runtimeKey: ANALYSE_AGENT_RUNTIME_KEY,
     declaredToolKeys: ["analyse.generate_report", "analyse.detect_stalled_leads"],
     declaredPermissions: ["VIEW_WORKSPACE"],
+    defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
+  });
+
+  // Agent Visites (v1.1, AR-0174) — surveille le pipeline des visites 3D
+  // lui-même, complémentaire de l'Agent Réseaux sociaux (qui n'agit
+  // qu'APRÈS publication).
+  await ensureGlobalAgentDefinition({
+    key: "visites-agent",
+    name: "Agent Visites",
+    description:
+      "Détecte les visites 3D bloquées trop longtemps à un statut (planifiée non tournée, tournée non traitée, en traitement non publiée) et peut proposer une relance technicien ou déclencher un changement de statut.",
+    version: "0.1.0",
+    status: AgentDefinitionStatus.PUBLISHED,
+    author: "Autorun Framework",
+    category: "visites",
+    icon: "🎥",
+    runtimeKey: VISITES_AGENT_RUNTIME_KEY,
+    declaredToolKeys: ["visites.detect_stalled_tours", "visites.request_technician_followup", "visites.advance_status"],
+    declaredPermissions: ["EXECUTE_MISSIONS", "VIEW_WORKSPACE"],
     defaultLimits: { maxRunsPerDay: 200, maxConcurrentRuns: 3 },
   });
 

@@ -36,6 +36,7 @@ type Dashboard = {
     byJobType: { jobType: string; total: number; failed: number; failureRate: number; averageDurationMs: number | null }[];
   };
   queue: { dueNow: number; workerPoolSize: number; activeWorkers: number };
+  timeSaved: { totalMinutes: number; totalHours: number; byJobType: { jobType: string; succeededCount: number; minutesSaved: number }[] };
 };
 
 const STATUS_VARIANT: Record<string, "neutral" | "success" | "warning" | "danger" | "info"> = {
@@ -126,6 +127,11 @@ export function AutomationsListClient({
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile label="Automatisations actives" value={String(dashboard.automations.counts.active)} />
+        <StatTile
+          label="Temps gagné (estimation)"
+          value={`${dashboard.timeSaved.totalHours} h`}
+          sub={`${dashboard.jobs.counts.succeeded} action(s) automatisée(s)`}
+        />
         <StatTile label="Jobs en file" value={String(dashboard.jobs.counts.queued)} sub={`${dashboard.queue.dueNow} prêt(s) maintenant`} />
         <StatTile label="Jobs en cours" value={String(dashboard.jobs.counts.running)} />
         <StatTile label="Workers actifs" value={`${dashboard.queue.activeWorkers} / ${dashboard.queue.workerPoolSize}`} />

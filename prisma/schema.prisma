@@ -72,6 +72,8 @@ model Organization {
   billingSubscriptionId    String?
   subscriptionStatus       SubscriptionStatus @default(TRIALING)
   subscriptionCanceledAt   DateTime?
+  /// Capacité par créneau : nombre de rendez-vous/visites simultanés max (v1.1, AR-0179). `1` = comportement inchangé pour les organisations existantes (un seul créneau à la fois).
+  appointmentSlotCapacity  Int                @default(1)
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
@@ -102,6 +104,7 @@ model Organization {
   quotes               Quote[]
   quoteVersions        QuoteVersion[]
   invoices             Invoice[]
+  invoicePayments      InvoicePayment[]
   customers            Customer[]
   missions             Mission[]
   services_            Service[]
@@ -115,9 +118,12 @@ model Organization {
   integrations         Integration[]
   webhookEvents        WebhookEvent[]
   loginEvents          LoginEvent[]
-  pipelineStages       PipelineStage[]
+  pipelineStages         PipelineStage[]
+  businessHours          BusinessHours[]
+  notificationPreferences NotificationPreference[]
   companies            Company[]
   properties           Property[]
+  contacts             Contact[]
   attachments          Attachment[]
   virtualTours         VirtualTour[]
   apiRequestMetrics    ApiRequestMetric[]
@@ -171,6 +177,7 @@ model User {
   tasksAssigned               Task[]                     @relation("TaskAssignee")
   appointments                Appointment[]              @relation("AppointmentOwner")
   notifications               Notification[]
+  notificationPreferences     NotificationPreference[]
   messagesValidated           Message[]                  @relation("MessageValidatedBy")
   notesAuthored               LeadNote[]
   attachmentsUploaded         Attachment[]
@@ -220,6 +227,7 @@ model Workspace {
   automationTriggerBindings AutomationTriggerBinding[]
   companies                 Company[]
   properties                Property[]
+  contacts                  Contact[]
   attachments               Attachment[]
   virtualTours              VirtualTour[]
   quoteVersions             QuoteVersion[]
@@ -485,6 +493,31 @@ model PipelineStage {
   @@index([organizationId, order])
 }
 
+/// Horaires d'ouverture par jour de la semaine (v1.1, AR-0179) — consommé par
+/// `src/lib/agents/tools/planning-tools.ts#suggestSlotsTool` pour ne proposer que des créneaux
+/// réellement disponibles. Absence de ligne pour un jour donné = aucune restriction (comportement
+/// inchangé pour les organisations qui n'ont rien configuré). Horaires exprimés en UTC
+/// ("HH:mm") — aucune conversion de fuseau horaire par organisation (simplification assumée,
+/// voir ADR correspondant).
+model BusinessHours {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// 0 = dimanche ... 6 = samedi (convention `Date.prototype.getUTCDay()`).
+  dayOfWeek      Int
+  isOpen         Boolean  @default(true)
+  /// Heure d'ouverture au format "HH:mm" (UTC) — `null` si `isOpen` est `false`, ou si aucune restriction d'horaire n'est fixée pour ce jour ouvert.
+  opensAt        String?
+  /// Heure de fermeture au format "HH:mm" (UTC).
+  closesAt       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, dayOfWeek])
+  @@index([organizationId])
+}
+
 // ---------------------------------------------------------------------------
 // Entreprises (regroupement multi-établissements) & biens immobiliers (v0.9)
 // ---------------------------------------------------------------------------
@@ -506,13 +539,76 @@ model Company {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?               @relation(fields: [workspaceId], references: [id])
   leads        Lead[]
   properties   Property[]
+  contactLinks CompanyContactRelation[]
 
   @@index([organizationId])
   @@index([workspaceId])
+}
+
+/// Personne physique (v1.1, AR-0160) — SCOPÉE organisation/workspace, jamais à un seul `Lead` : peut être
+/// liée à plusieurs `Lead`/`Company` (gérant de plusieurs établissements, prescripteur lié à plusieurs
+/// prospects). Distincte et additive par rapport à `LeadContact` (contact opérationnel de messagerie,
+/// scopé à un seul Lead, inchangé — voir ADR 0043 : migrer/retirer LeadContact aurait cassé 15+ points
+/// d'appel de résolution d'email/téléphone pour un bénéfice disproportionné).
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  fullName       String
+  jobTitle       String?
+  email          String?
+  phone          String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?               @relation(fields: [workspaceId], references: [id])
+  leadLinks    LeadContactRelation[]
+  companyLinks CompanyContactRelation[]
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([email])
+}
+
+/// Liaison N:N `Contact`↔`Lead` avec rôle optionnel (v1.1, AR-0160) — clés étrangères réelles
+/// (contrairement à la convention polymorphe `entityType`/`entityId` d'`Attachment`, jugée trop faible
+/// en intégrité référentielle pour une notion aussi centrale, voir ADR 0043).
+model LeadContactRelation {
+  id        String   @id @default(cuid())
+  contactId String
+  leadId    String
+  role      String?
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, leadId])
+  @@index([leadId])
+  @@index([contactId])
+}
+
+/// Liaison N:N `Contact`↔`Company` avec rôle optionnel (v1.1, AR-0160) — même patron que
+/// `LeadContactRelation`.
+model CompanyContactRelation {
+  id        String   @id @default(cuid())
+  contactId String
+  companyId String
+  role      String?
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, companyId])
+  @@index([companyId])
+  @@index([contactId])
 }
 
 /// Type physique d'un bien immobilier ("Bien immobilier" du brief v0.9) — distinct de `LeadCategory`
@@ -611,23 +707,32 @@ enum VirtualTourStatus {
 /// `Invoice` (optionnelle, jamais générée automatiquement), historique via
 /// `src/lib/crm/timeline-service.ts` (task #81).
 model VirtualTour {
-  id             String            @id @default(cuid())
-  organizationId String
-  workspaceId    String?
-  leadId         String
-  missionId      String
-  propertyId     String?
-  invoiceId      String?
-  type           PropertyType      @default(OTHER)
-  address        String?
-  surfaceM2      Float?
-  scheduledAt    DateTime?
-  status         VirtualTourStatus @default(DRAFT)
-  matterportUrl  String?
-  tourUrl        String?
-  notes          String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                       String            @id @default(cuid())
+  organizationId           String
+  workspaceId              String?
+  leadId                   String
+  missionId                String
+  propertyId               String?
+  invoiceId                String?
+  type                     PropertyType      @default(OTHER)
+  address                  String?
+  latitude                 Float?
+  longitude                Float?
+  surfaceM2                Float?
+  scheduledAt              DateTime?
+  /// Durée prévue de la prise de vue, en minutes (v1.1, AR-0166).
+  scheduledDurationMinutes Int?
+  /// Matériel utilisé pour la prise de vue — texte libre (v1.1, AR-0166), ex. "Matterport Pro3, drone DJI Mini".
+  equipmentUsed            String?
+  status                   VirtualTourStatus @default(DRAFT)
+  matterportUrl            String?
+  tourUrl                  String?
+  notes                    String?
+  /// Livraison client (v1.1, AR-0167) — distinct du statut `PUBLISHED` : une visite peut être publiée en
+  /// interne avant d'être formellement livrée/acceptée par le client (déclenche `virtual_tour.delivered`).
+  deliveredAt              DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
@@ -721,6 +826,7 @@ model Lead {
   company      Company?              @relation(fields: [companyId], references: [id])
 
   contacts      LeadContact[]
+  contactLinks  LeadContactRelation[]
   analyses      LeadAnalysis[]
   scores        LeadScore[]
   notes         LeadNote[]
@@ -1332,17 +1438,39 @@ model Invoice {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
-  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  quote        Quote?        @relation(fields: [quoteId], references: [id])
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?       @relation(fields: [workspaceId], references: [id])
+  lead         Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quote        Quote?           @relation(fields: [quoteId], references: [id])
   lines        InvoiceLine[]
   virtualTours VirtualTour[]
+  payments     InvoicePayment[]
 
   @@unique([organizationId, reference])
   @@index([leadId])
   @@index([quoteId])
   @@index([workspaceId])
+}
+
+/// Paiement partiel ou complet d'une facture (v1.1, AR-0169) — plusieurs paiements possibles par
+/// facture ; la somme détermine le statut PAID dès qu'elle atteint `Invoice.totalAmount` (voir
+/// `recordInvoicePayment()`). `InvoiceStatus` reste la source de vérité affichée, ce modèle n'est
+/// qu'un historique des règlements individuels.
+model InvoicePayment {
+  id             String   @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  amount         Int
+  paidAt         DateTime @default(now())
+  method         String
+  note           String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([invoiceId])
 }
 
 model InvoiceLine {
@@ -1441,6 +1569,34 @@ model Notification {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
 
+  @@index([organizationId, userId])
+}
+
+enum NotificationChannel {
+  APP
+  EMAIL
+}
+
+/// Préférences de notification par utilisateur (v1.1, AR-0180) — canal (application/email) x
+/// évènement, vérifiées avant émission par `notification.create` (Automation Engine ET Workflow
+/// Engine, voir `notification-action.ts` des deux modules). Absence de ligne pour une combinaison
+/// (utilisateur, évènement, canal) = activé par défaut (comportement inchangé pour tout
+/// utilisateur qui n'a rien configuré) — jamais un opt-in silencieux.
+model NotificationPreference {
+  id             String              @id @default(cuid())
+  organizationId String
+  userId         String
+  /// Clé d'évènement (ex. "lead.created", "quote.signed", "invoice.paid", "invoice.overdue") — voir `NOTIFICATION_PREFERENCE_EVENTS`.
+  eventKey       String
+  channel        NotificationChannel
+  enabled        Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventKey, channel])
   @@index([organizationId, userId])
 }
 

@@ -27,6 +27,9 @@ const BUILT_IN_AUTOMATION_TRIGGER_TYPES = [
   { key: "email.received", name: "Email reçu", description: "Une réponse entrante a été reçue.", category: "communication", kind: "event" },
   { key: "lead.created", name: "Lead créé", description: "Un prospect (Lead) vient d'être créé.", category: "crm", kind: "event" },
   { key: "lead.updated", name: "Lead modifié", description: "Un prospect (Lead) vient d'être modifié.", category: "crm", kind: "event" },
+  // v1.1, AR-0165 — granulaire (contrairement à `lead.updated`, générique) : payload `{leadId, previousStage, newStage}`,
+  // permet de s'abonner à UNE transition précise (ex. condition `{{event.newStage}} == "WON"`) sans revérifier l'état.
+  { key: "lead.stage_changed", name: "Étape du pipeline changée", description: "Un prospect vient de changer d'étape dans le pipeline commercial (payload : leadId, previousStage, newStage).", category: "crm", kind: "event" },
   { key: "lead.deleted", name: "Lead supprimé", description: "Un prospect (Lead) vient d'être supprimé.", category: "crm", kind: "event" },
   { key: "customer.created", name: "Client créé", description: "Un client (Customer) vient d'être créé.", category: "crm", kind: "event" },
   { key: "payment.received", name: "Paiement reçu", description: "Un paiement a été confirmé.", category: "finance", kind: "event" },
@@ -49,9 +52,13 @@ const BUILT_IN_AUTOMATION_TRIGGER_TYPES = [
   { key: "invoice.created", name: "Facture créée", description: "Une facture vient d'être créée à partir d'un devis accepté.", category: "finance", kind: "event" },
   { key: "invoice.sent", name: "Facture envoyée", description: "Une facture vient d'être envoyée.", category: "finance", kind: "event" },
   { key: "invoice.paid", name: "Paiement reçu", description: "Une facture vient d'être marquée payée.", category: "finance", kind: "event" },
+  // v1.1, AR-0169 — publié par le job process-overdue-invoices (échéance dépassée sans paiement complet).
+  { key: "invoice.overdue", name: "Facture en retard", description: "Une facture vient de passer en retard de paiement (échéance dépassée).", category: "finance", kind: "event" },
   { key: "virtual_tour.created", name: "Visite 3D créée", description: "Une visite 3D vient d'être créée.", category: "production", kind: "event" },
   { key: "virtual_tour.shooting_done", name: "Visite terminée", description: "La prise de vue d'une visite 3D vient d'être marquée terminée.", category: "production", kind: "event" },
   { key: "virtual_tour.published", name: "Visite 3D publiée", description: "Une visite 3D vient d'être publiée.", category: "production", kind: "event" },
+  // v1.1, AR-0167 — distinct de `virtual_tour.published` (livraison client formelle, jamais republié deux fois pour la même visite).
+  { key: "virtual_tour.delivered", name: "Visite 3D livrée", description: "Une visite 3D vient d'être marquée comme livrée au client.", category: "production", kind: "event" },
   { key: "property.created", name: "Bien immobilier créé", description: "Un bien immobilier vient d'être créé.", category: "crm", kind: "event" },
 ] as const;
 

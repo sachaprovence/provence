@@ -1,6 +1,7 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { resolveEmailConfig, updateEmailIntegrationConfig, getEmailConfigPreview } from "@/lib/email/config";
+import { resolveEmailProviderForOrganization } from "@/lib/email";
 
 /**
  * Réglages email (task #92) — le formulaire de Paramètres écrit dans
@@ -64,5 +65,67 @@ runIfDatabase("Réglages email — updateEmailIntegrationConfig / getEmailConfig
 
     const configB = await resolveEmailConfig(orgB.id);
     expect(configB.smtpHost).toBeUndefined();
+  });
+});
+
+/**
+ * Résolution du fournisseur PAR ORGANISATION (v1.1, AR-0171) —
+ * `resolveEmailProviderForOrganization` privilégie
+ * `Integration.config.provider` sur `EMAIL_PROVIDER` (variable globale de
+ * déploiement), sans jamais faire disparaître le mode démo par défaut, et
+ * sans qu'une organisation n'affecte le choix d'une autre.
+ */
+runIfDatabase("Résolution du fournisseur email par organisation (AR-0171)", () => {
+  const organizationIds: string[] = [];
+  const originalEmailProviderEnv = process.env.EMAIL_PROVIDER;
+
+  afterAll(async () => {
+    await prisma.organization.deleteMany({ where: { id: { in: organizationIds } } });
+  });
+
+  afterEach(() => {
+    if (originalEmailProviderEnv === undefined) delete process.env.EMAIL_PROVIDER;
+    else process.env.EMAIL_PROVIDER = originalEmailProviderEnv;
+  });
+
+  async function createOrg(suffix: string) {
+    const organization = await prisma.organization.create({ data: { name: `Org résolution email ${suffix}` } });
+    organizationIds.push(organization.id);
+    return organization;
+  }
+
+  it("sans configuration ni variable d'environnement, reste en mode démo par défaut", async () => {
+    delete process.env.EMAIL_PROVIDER;
+    const organization = await createOrg("default-demo");
+    const provider = await resolveEmailProviderForOrganization(organization.id);
+    expect(provider.name).toBe("demo");
+  });
+
+  it("le choix de l'organisation prime sur EMAIL_PROVIDER (variable globale)", async () => {
+    process.env.EMAIL_PROVIDER = "resend";
+    const organization = await createOrg("org-choice-wins");
+    await updateEmailIntegrationConfig(organization.id, { provider: "smtp" });
+
+    const provider = await resolveEmailProviderForOrganization(organization.id);
+    expect(provider.name).toBe("smtp");
+  });
+
+  it("sans choix par l'organisation, replie sur EMAIL_PROVIDER (variable globale)", async () => {
+    process.env.EMAIL_PROVIDER = "postmark";
+    const organization = await createOrg("fallback-to-env");
+    const provider = await resolveEmailProviderForOrganization(organization.id);
+    expect(provider.name).toBe("postmark");
+  });
+
+  it("isolation multi-tenant : deux organisations peuvent utiliser des fournisseurs différents sans interférence", async () => {
+    const orgA = await createOrg("tenant-a-provider");
+    const orgB = await createOrg("tenant-b-provider");
+    await updateEmailIntegrationConfig(orgA.id, { provider: "smtp" });
+    await updateEmailIntegrationConfig(orgB.id, { provider: "brevo" });
+
+    const providerA = await resolveEmailProviderForOrganization(orgA.id);
+    const providerB = await resolveEmailProviderForOrganization(orgB.id);
+    expect(providerA.name).toBe("smtp");
+    expect(providerB.name).toBe("brevo");
   });
 });

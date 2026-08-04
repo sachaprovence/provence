@@ -1592,3 +1592,135 @@ Provence 360 est câblé en dur). `/register` ne propose donc que le choix
 du plan, pas du vertical — un sélecteur factice aurait été trompeur sans
 `MOD-20` réellement livré derrière. Voir ADR 0042 pour la discussion
 complète des deux écarts.
+
+## 20. v1.1 — Provence 360 Production (`ROADMAP.md` MOD-29, `BACKLOG.md` AR-0160 à AR-0185)
+
+Contrairement aux jalons précédents (fonctionnalité ou sécurité), `v1.1`
+part d'un brief produit direct du fondateur de Provence 360 : Autorun
+cesse d'être développé comme un SaaS générique pour devenir le logiciel
+métier quotidien réel de sa propre entreprise. Voir `docs/adr/0043`
+(décisions prises en amont) et `docs/adr/0044` (décisions affinées
+pendant l'implémentation) pour le détail complet ; voir
+`docs/release/v1.1-recette.md` pour la recette finale.
+
+### CRM production : `Contact` de premier niveau, `Company`/`Property`, fiche 360°
+
+`Contact` (`AR-0160`) est un modèle additif scopé organisation/workspace,
+jamais rattaché à un seul `Lead` — une table de liaison (`LeadContact`
+existant, inchangé) relie toujours un contact à ses fiches, mais un même
+`Contact` peut désormais être partagé entre plusieurs `Lead`/`Company`
+(un gérant présent chez plusieurs établissements, par exemple). `Company`
+et `Property` (`AR-0161`) reçoivent leur propre interface de liste/détail
+(le modèle de données existait déjà depuis `v0.9`, seule l'UI manquait).
+La fiche 360° (`AR-0164`) n'introduit aucun nouveau modèle : elle
+assemble sur une seule page des données déjà agrégées par les services
+existants (timeline, documents, tags, visites, devis, factures) plutôt
+que de dupliquer leur logique de requête.
+
+### Pipeline et devis/factures : `lead.stage_changed`, versions de devis, paiements partiels
+
+Chaque changement d'étape du pipeline (`AR-0165`) publie l'évènement de
+domaine `lead.stage_changed` (réutilise le bus d'évènements de `v0.4`),
+déclenchable par l'Automation Engine ET le Workflow Engine sans code
+spécifique à chacun. `QuoteVersion` (`AR-0168`) devient consultable dans
+l'interface (le modèle existait depuis `v0.9`, jamais exposé). Les
+factures (`AR-0169`) gagnent un suivi de paiement au-delà du binaire
+payé/non payé : paiements partiels cumulés, échéance calculée
+automatiquement à partir des conditions de paiement de l'organisation.
+
+### Visites 3D : cycle complet jusqu'à la livraison et la facturation directe
+
+`AR-0166` ajoute les champs GPS/équipement/technicien/durée sur
+`VirtualTour` et un lien Google Maps direct. `AR-0167` ajoute un statut
+de livraison et un bouton "Créer la facture" qui appelle directement le
+service de facturation existant (`AR-0084`, v0.9) — pas de nouvelle
+logique de facturation, seulement un nouveau point d'entrée. La livraison
+déclenche l'automatisation "Livraison effectuée" (`AR-0175`, nouveau
+modèle seedé dans le catalogue de templates existant) qui envoie une
+notification de demande d'avis Google, sans jamais re-déclencher au
+second appel de `markVirtualTourDelivered` (idempotence par évènement de
+domaine, pas par verrou applicatif).
+
+### Communication réelle et agenda
+
+Le fournisseur Twilio réel (`AR-0170`) s'insère dans le registre de
+canaux du Communication Hub (`v0.9`) sans modifier son interface. La
+sélection de fournisseur par organisation (`AR-0171`) suit la même
+précédence à 3 niveaux que partout ailleurs dans le code (config
+`Integration` de l'organisation → variable d'environnement globale →
+fournisseur démo). Les rappels Google Calendar (`AR-0172`) ajoutent un
+champ optionnel `reminderMinutesBefore` au client existant, avec une
+valeur par défaut de 60 minutes côté service de synchronisation. Les
+paramètres d'agenda (`AR-0179`) introduisent `BusinessHours` (un modèle
+par jour de semaine, même patron que `PipelineStage` pour un `upsert`
+ciblé) et une capacité par créneau, appliquée par généralisation par
+balayage (`computeFullRanges`, `src/lib/agents/tools/planning-tools.ts`)
+de l'algorithme de fusion de créneaux occupés déjà existant — capacité 1
+(valeur par défaut) reproduit exactement le comportement historique,
+vérifié par la régression existante.
+
+### Agent Qualification et Agent Visites (`AR-0173`/`AR-0174`)
+
+L'Agent Qualification est extrait de l'Agent Commercial mais **réutilise
+directement ses outils déclaratifs** (`commercial.score_prospect`/
+`commercial.qualify_prospect`) plutôt que de dupliquer une surface
+`qualification.*` autour de la même implémentation — seule la logique de
+décision de seuil (score → `TO_QUALIFY` vs `QUALIFIED`) lui est propre.
+Conséquence assumée : il ne peut qualifier que des `CommercialProspect`
+rattachés à sa propre installation (`installationId`), acceptable car ce
+modèle reste une démonstration du Framework des Agents, jamais le CRM
+réel (`Lead`). L'Agent Visites surveille le cycle de vie des visites 3D
+(détection de visites bloquées par seuil de statut, relance technicien
+via notification réelle, avancement de statut réutilisant le service
+existant), sans introduire de nouveau modèle de données.
+
+### Tableaux de bord Planning/Financier et métrique "Temps gagné"
+
+`getPlanningDashboard`/`getFinancialDashboard` (`AR-0176`/`AR-0177`,
+`src/lib/dashboards/dashboard-service.ts`) suivent le même patron
+d'agrégation Prisma parallèle (`Promise.all`) que les 9 tableaux de bord
+existants depuis `v0.9`. La métrique "Temps gagné" (`AR-0178`) étend le
+tableau de bord Automatisations déjà existant (`v0.9`) avec une table de
+minutes économisées par type de job, plutôt que d'introduire un nouveau
+tableau de bord dédié.
+
+### Préférences de notification : `APP` seul réellement filtré
+
+`NotificationPreference` (`AR-0180`) modélise deux canaux (`APP`/
+`EMAIL`), mais seul `APP` est vérifié (`isNotificationEnabled`) au point
+d'émission réel (`notification.create`, Automation Engine et Workflow
+Engine) — absence de ligne de préférence = activé par défaut, jamais un
+opt-in silencieux surprenant. Le canal `EMAIL` reste un contrat déclaré
+et exposé dans les réglages, volontairement pas encore appliqué (aucun
+job `email.send` n'y est encore réactif).
+
+### UX transverse : recherche, Command Palette, Kanban, mode sombre, raccourcis, responsive
+
+`globalSearch` (`AR-0181`, `src/lib/search/global-search-service.ts`) est
+la seule implémentation de recherche multi-entités (Lead/Company/
+Contact/Quote/Invoice/VirtualTour), réutilisée à l'identique par
+`/api/search` et par la Command Palette (`AR-0182`, `cmdk`, `cmd+k`) —
+nouvelle dépendance justifiée dans `docs/adr/0043`. Le glisser-déposer du
+pipeline (`AR-0183`, `@dnd-kit/core`, nouvelle dépendance) appelle la
+même route `PUT /api/leads/:id` que le sélecteur d'étape existant, avec
+mise à jour optimiste et annulation en cas d'échec. Le mode sombre
+(`AR-0184`) initialise toujours `theme` à `"system"` côté React (jamais
+une lecture directe de `localStorage` dans l'initialiseur, pour éviter
+un mismatch d'hydratation), corrigé après montage via un `useEffect`, et
+combat le flash de thème incorrect avec un script bloquant inline dans
+`<head>` scopé au seul attribut `data-theme` de `<html>`. Les raccourcis
+clavier globaux et l'affinement responsive (`AR-0185`) ajoutent
+`AppShell` (tiroir mobile en dessous du point de rupture `md`) et
+`KeyboardShortcutsProvider` (navigation `g`+lettre façon Gmail/Linear,
+`n` nouveau prospect, `?` aide), tous deux désactivés quand le focus est
+dans un champ de saisie ou qu'un modificateur clavier est actif.
+
+### Validation finale
+
+Lint (0 erreur), typecheck (0 erreur), build de production, suite
+complète (**678 tests, 122 fichiers**, zéro régression), 4 suites E2E
+(`golden-path`, `two-organizations-isolation`, `automation-golden-path`,
+`self-service-onboarding`), audit `npm audit` (5 vulnérabilités "high"
+préexistantes et transitives de `next` lui-même, confirmé sans nouvelle
+vulnérabilité introduite par `cmdk`/`@dnd-kit/core` via comparaison
+`git stash`). Détail complet : `docs/release/v1.1-recette.md`.

@@ -61,6 +61,42 @@ runIfDatabase("Automation Engine — registre de jobs/actions (plugins)", () => 
     expect(row.organizationId).toBe(fixture.organization.id);
   });
 
+  it("notification.create respecte une préférence désactivée pour l'utilisateur ciblé, sans affecter les diffusions sans utilisateur (v1.1, AR-0180)", async () => {
+    const fixture = await createWorkflowTestFixture("automation-action-notification-preference");
+    organizationIds.push(fixture.organization.id);
+    userIds.push(fixture.user.id);
+
+    await prisma.notificationPreference.create({
+      data: { organizationId: fixture.organization.id, userId: fixture.user.id, eventKey: "quote.signed", channel: "APP", enabled: false },
+    });
+
+    const action = getAutomationJobHandler("notification.create")!;
+
+    // Utilisateur ciblé avec préférence désactivée : aucune notification créée.
+    const blocked = (await action.execute(
+      { userId: fixture.user.id, type: "quote.signed", title: "Devis signé" },
+      testContext({ organizationId: fixture.organization.id, workspaceId: fixture.workspace.id })
+    )) as { id: string | null };
+    expect(blocked.id).toBeNull();
+
+    // Même utilisateur, évènement différent (non désactivé) : notification créée normalement.
+    const allowed = (await action.execute(
+      { userId: fixture.user.id, type: "invoice.paid", title: "Paiement reçu" },
+      testContext({ organizationId: fixture.organization.id, workspaceId: fixture.workspace.id })
+    )) as { id: string };
+    expect(allowed.id).not.toBeNull();
+
+    // Diffusion sans utilisateur ciblé : jamais bloquée, même pour "quote.signed".
+    const broadcast = (await action.execute(
+      { type: "quote.signed", title: "Diffusion large" },
+      testContext({ organizationId: fixture.organization.id, workspaceId: fixture.workspace.id })
+    )) as { id: string };
+    expect(broadcast.id).not.toBeNull();
+
+    const notifications = await prisma.notification.findMany({ where: { organizationId: fixture.organization.id } });
+    expect(notifications).toHaveLength(2);
+  });
+
   it("email.send utilise le fournisseur email configuré (demo)", async () => {
     const fixture = await createWorkflowTestFixture("automation-action-email-send");
     organizationIds.push(fixture.organization.id);

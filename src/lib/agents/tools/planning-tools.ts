@@ -7,6 +7,7 @@ import { onAppointmentBooked } from "@/lib/automation-engine";
 import { stopEnrollmentsForLead } from "@/lib/sequence-engine";
 import { writeAuditLog } from "@/lib/audit";
 import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
+import { getBusinessHoursConfig, isWithinBusinessHours } from "@/lib/settings/business-hours-service";
 import { EnrollmentStopReason } from "@/generated/prisma/enums";
 import type { ToolHandler } from "@/lib/agents/types";
 
@@ -87,7 +88,46 @@ export const bookAppointmentTool: ToolHandler<
   },
 };
 
-/** Créneaux libres = plage demandée moins les créneaux occupés déjà fournis (calcul déterministe, pas de génération IA). */
+/**
+ * Réduit les créneaux occupés à des plages "pleines" (le nombre de
+ * créneaux occupés se chevauchant atteint la capacité) — pour une
+ * capacité de 1 (défaut), équivaut exactement à fusionner les créneaux
+ * occupés bruts (comportement inchangé). Sweep-line déterministe : les
+ * fins de créneaux sont traitées avant les débuts à un même instant, pour
+ * qu'un enchaînement dos-à-dos ne soit jamais compté comme un chevauchement.
+ */
+function computeFullRanges(busyRanges: { start: number; end: number }[], capacity: number): { start: number; end: number }[] {
+  if (busyRanges.length === 0 || capacity <= 0) return [];
+
+  const events = busyRanges.flatMap((b) => [
+    { time: b.start, delta: 1 },
+    { time: b.end, delta: -1 },
+  ]);
+  events.sort((a, b) => a.time - b.time || a.delta - b.delta);
+
+  const fullRanges: { start: number; end: number }[] = [];
+  let count = 0;
+  let fullStart: number | null = null;
+  for (const event of events) {
+    count += event.delta;
+    if (count >= capacity && fullStart === null) {
+      fullStart = event.time;
+    } else if (count < capacity && fullStart !== null) {
+      fullRanges.push({ start: fullStart, end: event.time });
+      fullStart = null;
+    }
+  }
+  return fullRanges;
+}
+
+/**
+ * Créneaux libres = plage demandée moins les créneaux occupés déjà fournis
+ * (calcul déterministe, pas de génération IA), en tenant compte de la
+ * capacité par créneau (v1.1, AR-0179 — plusieurs occupations simultanées
+ * tolérées jusqu'à `appointmentSlotCapacity`) et des horaires d'ouverture
+ * configurés par l'organisation (un créneau qui déborde des horaires
+ * d'un jour ouvert, ou qui tombe un jour fermé, n'est jamais proposé).
+ */
 export const suggestSlotsTool: ToolHandler<
   { fromIso: string; toIso: string; durationMinutes: number; busy: { start: string; end: string }[] },
   { slots: { start: string; end: string }[] }
@@ -102,22 +142,29 @@ export const suggestSlotsTool: ToolHandler<
       .map((b) => ({ start: new Date(b.start).getTime(), end: new Date(b.end).getTime() }))
       .sort((a, b) => a.start - b.start);
 
-    const slots: { start: string; end: string }[] = [];
+    const { appointmentSlotCapacity, hours } = await getBusinessHoursConfig(installation.organizationId);
+    const fullRanges = computeFullRanges(busyRanges, appointmentSlotCapacity);
+
+    const rawSlots: { start: number; end: number }[] = [];
     let cursor = new Date(input.fromIso).getTime();
     const rangeEnd = new Date(input.toIso).getTime();
 
     function fillGapWithSlots(gapEnd: number) {
       while (gapEnd - cursor >= durationMs) {
-        slots.push({ start: new Date(cursor).toISOString(), end: new Date(cursor + durationMs).toISOString() });
+        rawSlots.push({ start: cursor, end: cursor + durationMs });
         cursor += durationMs;
       }
     }
 
-    for (const busy of busyRanges) {
-      fillGapWithSlots(busy.start);
-      cursor = Math.max(cursor, busy.end);
+    for (const full of fullRanges) {
+      fillGapWithSlots(full.start);
+      cursor = Math.max(cursor, full.end);
     }
     fillGapWithSlots(rangeEnd);
+
+    const slots = rawSlots
+      .filter((slot) => isWithinBusinessHours(hours, new Date(slot.start), new Date(slot.end)))
+      .map((slot) => ({ start: new Date(slot.start).toISOString(), end: new Date(slot.end).toISOString() }));
 
     return { slots };
   },

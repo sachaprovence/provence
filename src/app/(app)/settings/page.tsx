@@ -8,6 +8,9 @@ import { ServicesManager } from "@/components/services-manager";
 import { IcpManager } from "@/components/icp-manager";
 import { PipelineStagesManager } from "@/components/pipeline-stages-manager";
 import { EmailSettingsForm } from "@/components/email-settings-form";
+import { CommunicationSettingsForm } from "@/components/communication-settings-form";
+import { BusinessHoursForm } from "@/components/business-hours-form";
+import { NotificationPreferencesForm } from "@/components/notification-preferences-form";
 import { DEFAULT_SCORING_RULES, type ScoringRule } from "@/lib/scoring";
 import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { listRegisteredLlmProviderKeys, registerBuiltInLlmProviders } from "@/lib/agents/llm";
@@ -83,9 +86,33 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <section className="card p-6">
         <h2 className="text-lg font-semibold text-p360-ink mb-2">Email</h2>
         <p className="text-sm text-p360-muted mb-4">
-          Identifiants du fournisseur d&apos;envoi réel actif (choisi par la variable de déploiement <code>EMAIL_PROVIDER</code> : smtp/resend/postmark/brevo). Sans identifiant renseigné ici ni en variable d&apos;environnement, l&apos;envoi échoue explicitement (aucune simulation).
+          Fournisseur d&apos;envoi actif choisi par cette organisation (prime sur la variable de déploiement <code>EMAIL_PROVIDER</code>), et identifiants associés. Sans identifiant renseigné ici ni en variable d&apos;environnement, l&apos;envoi échoue explicitement (aucune simulation).
         </p>
         <EmailSettingsForm />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">SMS, WhatsApp, Téléphone</h2>
+        <p className="text-sm text-p360-muted mb-4">
+          Fournisseur actif par canal pour cette organisation (Twilio couvre les trois canaux avec un seul compte). Sans configuration, ces canaux restent en mode démo (aucun envoi réel).
+        </p>
+        <CommunicationSettingsForm />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Agenda</h2>
+        <p className="text-sm text-p360-muted mb-4">
+          Horaires d&apos;ouverture par jour et capacité par créneau (nombre de rendez-vous/visites simultanés max) — consommés par l&apos;Agent Planning pour ne proposer que des créneaux réellement disponibles.
+        </p>
+        <BusinessHoursForm />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Préférences de notification</h2>
+        <p className="text-sm text-p360-muted mb-4">
+          Réglages personnels — choisissez, par évènement, les canaux (application/email) sur lesquels vous souhaitez être notifié·e.
+        </p>
+        <NotificationPreferencesForm />
       </section>
 
       <section className="card p-6">
@@ -135,7 +162,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
 async function IntegrationsList({ organizationId }: { organizationId: string }) {
   const integrations = await prisma.integration.findMany({ where: { organizationId } });
-  const emailProvider = process.env.EMAIL_PROVIDER ?? "demo";
+  // v1.1, AR-0171 : le choix par organisation (Integration.config.provider, kind EMAIL) prime sur EMAIL_PROVIDER.
+  const emailIntegration = integrations.find((i) => i.kind === "EMAIL");
+  const emailConfig = (emailIntegration?.config as { provider?: string } | null) ?? {};
+  const emailProvider = emailConfig.provider || process.env.EMAIL_PROVIDER || "demo";
   return (
     <ul className="divide-y divide-p360-lavender-light text-sm">
       {integrations.map((i) => (
@@ -158,7 +188,7 @@ async function IntegrationsList({ organizationId }: { organizationId: string }) 
         </li>
       ))}
       <li className="pt-3 text-xs text-p360-muted">
-        Variable d&apos;environnement <code>EMAIL_PROVIDER</code> (choix du fournisseur — identifiants ci-dessus, ou <code>gmail</code>/<code>outlook</code> puis bouton « Connecter » ci-dessus), <code>GOOGLE_OAUTH_CLIENT_ID</code>/<code>GOOGLE_OAUTH_CLIENT_SECRET</code>/<code>GOOGLE_OAUTH_REDIRECT_URI</code> pour Google Calendar, <code>GMAIL_OAUTH_CLIENT_ID</code>/<code>GMAIL_OAUTH_CLIENT_SECRET</code>/<code>GMAIL_OAUTH_REDIRECT_URI</code> pour Gmail, <code>MICROSOFT_OAUTH_CLIENT_ID</code>/<code>MICROSOFT_OAUTH_CLIENT_SECRET</code>/<code>MICROSOFT_OAUTH_REDIRECT_URI</code> pour Outlook.
+        Fournisseur email choisi ci-dessus (section « Email »), ou variable d&apos;environnement <code>EMAIL_PROVIDER</code> par défaut pour tout le déploiement — <code>gmail</code>/<code>outlook</code> nécessitent le bouton « Connecter » ci-dessus. <code>GOOGLE_OAUTH_CLIENT_ID</code>/<code>GOOGLE_OAUTH_CLIENT_SECRET</code>/<code>GOOGLE_OAUTH_REDIRECT_URI</code> pour Google Calendar, <code>GMAIL_OAUTH_CLIENT_ID</code>/<code>GMAIL_OAUTH_CLIENT_SECRET</code>/<code>GMAIL_OAUTH_REDIRECT_URI</code> pour Gmail, <code>MICROSOFT_OAUTH_CLIENT_ID</code>/<code>MICROSOFT_OAUTH_CLIENT_SECRET</code>/<code>MICROSOFT_OAUTH_REDIRECT_URI</code> pour Outlook.
       </li>
     </ul>
   );

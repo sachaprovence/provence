@@ -79,7 +79,7 @@ export function DirectorPlanGraph({ nodes, edges }: { nodes: PlanGraphNode[]; ed
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-p360-lavender-light bg-white p-4">
+    <div className="overflow-x-auto rounded-lg border border-p360-lavender-light bg-p360-surface p-4">
       <svg width={width} height={height} role="img" aria-label="Graphe du plan d'exécution">
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">

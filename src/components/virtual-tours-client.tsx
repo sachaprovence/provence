@@ -31,6 +31,8 @@ export function VirtualToursClient({ virtualTours, missions }: { virtualTours: V
   const [type, setType] = useState("OTHER");
   const [address, setAddress] = useState("");
   const [surfaceM2, setSurfaceM2] = useState("");
+  const [scheduledDurationMinutes, setScheduledDurationMinutes] = useState("");
+  const [equipmentUsed, setEquipmentUsed] = useState("");
   const [matterportUrl, setMatterportUrl] = useState("");
   const [tourUrl, setTourUrl] = useState("");
 
@@ -45,11 +47,15 @@ export function VirtualToursClient({ virtualTours, missions }: { virtualTours: V
         type,
         address: address || undefined,
         surfaceM2: surfaceM2 ? Number(surfaceM2) : undefined,
+        scheduledDurationMinutes: scheduledDurationMinutes ? Number(scheduledDurationMinutes) : undefined,
+        equipmentUsed: equipmentUsed || undefined,
         matterportUrl: matterportUrl || undefined,
         tourUrl: tourUrl || undefined,
       });
       setAddress("");
       setSurfaceM2("");
+      setScheduledDurationMinutes("");
+      setEquipmentUsed("");
       setMatterportUrl("");
       setTourUrl("");
       router.refresh();
@@ -101,6 +107,14 @@ export function VirtualToursClient({ virtualTours, missions }: { virtualTours: V
           <input type="number" className="input w-24" value={surfaceM2} onChange={(e) => setSurfaceM2(e.target.value)} min={0} />
         </div>
         <div>
+          <label className="label">Durée prévue (min)</label>
+          <input type="number" className="input w-28" value={scheduledDurationMinutes} onChange={(e) => setScheduledDurationMinutes(e.target.value)} min={0} />
+        </div>
+        <div>
+          <label className="label">Équipement</label>
+          <input className="input" value={equipmentUsed} onChange={(e) => setEquipmentUsed(e.target.value)} placeholder="Matterport Pro3, drone…" />
+        </div>
+        <div>
           <label className="label">Lien Matterport</label>
           <input className="input" value={matterportUrl} onChange={(e) => setMatterportUrl(e.target.value)} placeholder="https://my.matterport.com/show/?m=..." />
         </div>
@@ -121,6 +135,7 @@ export function VirtualToursClient({ virtualTours, missions }: { virtualTours: V
               <th className="text-left px-4 py-2">Surface</th>
               <th className="text-left px-4 py-2">Statut</th>
               <th className="text-left px-4 py-2">Liens</th>
+              <th className="text-left px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -146,10 +161,13 @@ export function VirtualToursClient({ virtualTours, missions }: { virtualTours: V
                   {tour.matterportUrl && <a className="text-xs text-p360-blue hover:underline" href={tour.matterportUrl} target="_blank" rel="noreferrer">Matterport</a>}
                   {tour.tourUrl && <a className="text-xs text-p360-blue hover:underline" href={tour.tourUrl} target="_blank" rel="noreferrer">Visite</a>}
                 </td>
+                <td className="px-4 py-2">
+                  <Link href={`/visits/${tour.id}`} className="text-xs text-p360-blue hover:underline">Détail</Link>
+                </td>
               </tr>
             ))}
             {virtualTours.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-p360-muted">Aucune visite 3D. Créez-en une à partir d&apos;une mission existante.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-p360-muted">Aucune visite 3D. Créez-en une à partir d&apos;une mission existante.</td></tr>
             )}
           </tbody>
         </table>

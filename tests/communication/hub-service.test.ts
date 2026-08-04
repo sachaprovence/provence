@@ -94,6 +94,32 @@ runIfDatabase("Communication Hub — résolution par organisation (Integration.c
     expect(auditLogs).toHaveLength(1);
   });
 
+  it("isolation multi-tenant : deux organisations peuvent utiliser des fournisseurs SMS différents sans interférence (v1.1, AR-0171)", async () => {
+    const orgA = await createOrg("provider-isolation-a");
+    const orgB = await createOrg("provider-isolation-b");
+    await updateChannelConfig(orgA.id, "SMS", { provider: "twilio", config: { accountSid: "AC-a" } });
+    // orgB ne configure rien : doit rester sur le fournisseur démo par défaut.
+
+    const providerA = await resolveChannelProvider(orgA.id, "SMS");
+    const providerB = await resolveChannelProvider(orgB.id, "SMS");
+    expect(providerA.key).toBe("twilio");
+    expect(providerB.key).toBe("demo");
+  });
+
+  it("updateChannelConfig fusionne avec la configuration existante : un secret non fourni n'est jamais effacé (v1.1, AR-0171)", async () => {
+    const organization = await createOrg("merge-preserves-secret");
+    await updateChannelConfig(organization.id, "SMS", { provider: "twilio", config: { accountSid: "AC-1", authToken: "original-token" } });
+
+    // Deuxième appel : change seulement le numéro d'envoi, ne fournit pas authToken (comme un champ de formulaire laissé vide).
+    await updateChannelConfig(organization.id, "SMS", { provider: "twilio", config: { fromNumber: "+33600000000" } });
+
+    const stored = await prisma.integration.findFirst({ where: { organizationId: organization.id, kind: "SMS" } });
+    const config = stored?.config as { accountSid?: string; authToken?: string; fromNumber?: string } | null;
+    expect(config?.accountSid).toBe("AC-1");
+    expect(config?.authToken).toBe("original-token");
+    expect(config?.fromNumber).toBe("+33600000000");
+  });
+
   it("updateChannelConfig ne renvoie jamais un secret en clair (v0.10, AR-0154)", async () => {
     const organization = await createOrg("secret-masking");
     const integration = await updateChannelConfig(organization.id, "WHATSAPP", {

@@ -859,6 +859,49 @@ et de la facturation client (`v0.4`/`v0.5`).
 
 ---
 
+## v1.1 — Provence 360 Production (nouveau cycle de planification)
+
+> **Statut : ✅ livrée** (démarrée et livrée le 2026-08-04). `v1.0` a clos la
+> roadmap initiale ; `v1.1` ouvre un nouveau cycle défini directement par
+> le fondateur de Provence 360, pas par le plan `MOD-00`→`MOD-19`
+> d'origine : Autorun cesse d'être développé comme un SaaS générique pour
+> devenir le logiciel métier quotidien réel de sa propre entreprise. Voir
+> `BACKLOG.md` §Version 1.1 et `docs/adr/0043`/`docs/adr/0044`.
+
+- **Objectif du jalon** : qu'un prospect puisse parcourir tout son cycle
+  de vie — prospection, qualification, premier contact, rendez-vous,
+  visite virtuelle, devis, signature, facturation, paiement, suivi,
+  fidélisation — sans quitter Autorun.
+- **Modules** : MOD-29.
+- **Tâches** : AR-0160 à AR-0185 (26 tâches).
+- **Critères de sortie** :
+  - [x] chaque fiche prospect/client (CRM production) affiche réellement
+    timeline, documents, notes, historique, automatisations, agents IA,
+    visites, devis, factures, paiements, GPS/Google Maps, statistiques,
+    tags, pipeline, relations entre fiches ;
+  - [x] le pipeline commercial reflète le vocabulaire Provence 360 et
+    chaque transition d'étape peut déclencher une automatisation
+    granulaire ;
+  - [x] le module Visites 3D couvre le cycle complet jusqu'à la livraison
+    client et la facturation directe ;
+  - [x] les devis/factures ont un historique de versions consultable et
+    un suivi de paiement au-delà du binaire payé/non payé ;
+  - [x] SMS, WhatsApp et téléphone ont un fournisseur réel (plus
+    seulement démo) ;
+  - [x] les 8 agents IA de la cible du brief existent, dont Qualification
+    et Visites (nouveaux) ;
+  - [x] les 10 automatisations prêtes à l'emploi couvrent les 10
+    déclencheurs cibles, y compris la livraison ;
+  - [x] les tableaux de bord Planning et Financier existent ;
+  - [x] recherche globale, palette de commandes, glisser-déposer sur le
+    pipeline, mode sombre et raccourcis clavier sont fonctionnels ;
+  - [x] recette finale (`docs/release/v1.1-recette.md`) passée.
+- **État fonctionnel visé** : Autorun devient réellement utilisable au
+  quotidien pour piloter l'intégralité de l'activité de Provence 360,
+  sans recours à un autre logiciel lorsque cela est évitable.
+
+---
+
 ## Tableau récapitulatif
 
 | Jalon | Nature | Visible utilisateur ? | Bloquant pour la suite ? |
@@ -880,7 +923,8 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.9 | Fonctionnalité (système d'exploitation Provence 360) | Oui (CRM étendu, devis/factures, visites 3D, tableaux de bord, 7 agents métier, automatisations, réglages) | Non (chaque extension reste additive) |
 | v0.9 bis | Fonctionnalité + ops (observabilité, quota IA dur, Gmail/Outlook réels) | Oui (métriques, quota IA, email Gmail/Outlook) | Non |
 | v0.10 | Sécurité | Non | **Oui, bloquant pour v1.0** |
-| v1.0 | Ouverture SaaS | Oui | — (fin de cycle) |
+| v1.0 | Ouverture SaaS | Oui | — (fin de cycle initial) |
+| v1.1 | Provence 360 Production (nouveau cycle) | Oui | Non (extension continue) |
 
 ---
 

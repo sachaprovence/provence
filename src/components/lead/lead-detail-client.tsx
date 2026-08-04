@@ -4,17 +4,27 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import clsx from "clsx";
-import { apiPost, apiPut, apiPatch, ApiError } from "@/lib/api-client";
+import { apiPost, apiPut, apiPatch, apiDelete, ApiError } from "@/lib/api-client";
 import type { LeadDetail } from "@/app/(app)/leads/[id]/page";
-import { CATEGORY_LABEL, MESSAGE_TYPE_LABEL, INTENT_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, MESSAGE_TYPE_LABEL, INTENT_LABEL, VIRTUAL_TOUR_STATUS_LABEL } from "@/lib/labels";
 import { ScoreBadge } from "@/components/score-badge";
-import type { SequenceModel, SequenceStepModel, ServiceModel, PipelineStageModel } from "@/generated/prisma/models";
+import { TagBadge } from "@/components/tag-manager";
+import { AttachmentGallery } from "@/components/attachment-gallery";
+import type { SequenceModel, SequenceStepModel, ServiceModel, PipelineStageModel, TagModel } from "@/generated/prisma/models";
+import type { TimelineEvent, TimelineEventType } from "@/lib/crm/timeline-service";
+import type { listAttachments } from "@/lib/crm/attachment-service";
+import type { listContactsForLead, listContacts } from "@/lib/crm/contact-service";
 
 type Props = {
   lead: LeadDetail;
   sequences: (SequenceModel & { steps: SequenceStepModel[] })[];
   services: ServiceModel[];
   pipelineStages: PipelineStageModel[];
+  allTags: TagModel[];
+  timeline: TimelineEvent[];
+  attachments: Awaited<ReturnType<typeof listAttachments>>;
+  contactLinks: Awaited<ReturnType<typeof listContactsForLead>>;
+  allContacts: Awaited<ReturnType<typeof listContacts>>;
   canValidate: boolean;
 };
 
@@ -24,14 +34,23 @@ function formatDate(d: Date | string) {
 function formatEuros(cents: number) {
   return (cents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 }
+function googleMapsUrl(lead: LeadDetail): string | null {
+  if (lead.latitude != null && lead.longitude != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${lead.latitude},${lead.longitude}`;
+  }
+  const parts = [lead.address, lead.city, lead.country].filter(Boolean);
+  if (parts.length === 0) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(", "))}`;
+}
 
-export function LeadDetailClient({ lead, sequences, services, pipelineStages, canValidate }: Props) {
+export function LeadDetailClient({ lead, sequences, services, pipelineStages, allTags, timeline, attachments, contactLinks, allContacts, canValidate }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const analysis = lead.analyses[0];
   const score = lead.scores[0];
   const primaryContact = lead.contacts[0];
+  const mapsUrl = googleMapsUrl(lead);
 
   async function run(key: string, fn: () => Promise<unknown>) {
     setBusy(key);
@@ -99,15 +118,24 @@ export function LeadDetailClient({ lead, sequences, services, pipelineStages, ca
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          <TimelinePanel timeline={timeline} />
           <AnalysisPanel analysis={analysis} />
           <MessagesPanel lead={lead} canValidate={canValidate} />
           <SequencePanel lead={lead} sequences={sequences} />
           <InboxPanel lead={lead} />
           <AppointmentsPanel lead={lead} />
+          <VisitsPanel lead={lead} />
           <OpportunitiesPanel lead={lead} services={services} />
+          <InvoicesPanel lead={lead} />
+          <TasksPanel lead={lead} />
         </div>
         <div className="space-y-6">
+          <LocationPanel lead={lead} mapsUrl={mapsUrl} />
+          <TagsPanel lead={lead} allTags={allTags} run={run} busy={busy} />
           <ContactPanel contact={primaryContact} lead={lead} />
+          <ContactsPanel lead={lead} contactLinks={contactLinks} allContacts={allContacts} run={run} busy={busy} />
+          <RelationsPanel lead={lead} />
+          <AttachmentGallery entityType="Lead" entityId={lead.id} attachments={attachments} />
           <NotesPanel lead={lead} />
         </div>
       </div>
@@ -424,7 +452,7 @@ function InboxPanel({ lead }: { lead: LeadDetail }) {
           <li key={c.id} className={clsx("text-sm rounded-lg p-3", c.direction === "inbound" ? "bg-p360-lavender-light/40" : "bg-gray-50")}>
             <div className="flex justify-between items-center mb-1">
               <span className="text-xs font-semibold text-p360-blue">{c.direction === "inbound" ? "Reçu" : "Envoyé"}</span>
-              {c.intent && <span className="badge bg-white border border-p360-lavender text-p360-blue">{INTENT_LABEL[c.intent] ?? c.intent}</span>}
+              {c.intent && <span className="badge bg-p360-surface border border-p360-lavender text-p360-blue">{INTENT_LABEL[c.intent] ?? c.intent}</span>}
             </div>
             <p className="text-p360-ink whitespace-pre-wrap">{c.body}</p>
             <div className="text-xs text-p360-muted mt-1">{formatDate(c.createdAt)}</div>
@@ -630,6 +658,294 @@ function OpportunitiesPanel({ lead, services }: { lead: LeadDetail; services: Se
       <div className="mt-3">
         <Link href="/quotes" className="text-xs text-p360-blue hover:underline">Voir tous les devis</Link>
       </div>
+    </Section>
+  );
+}
+
+const TIMELINE_TYPE_LABEL: Record<TimelineEventType, string> = {
+  note: "Note",
+  message: "Message",
+  conversation: "Échange",
+  appointment: "Rendez-vous",
+  task: "Tâche",
+  quote: "Devis",
+  audit: "Action",
+  attachment: "Pièce jointe",
+};
+
+function TimelinePanel({ timeline }: { timeline: TimelineEvent[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? timeline : timeline.slice(0, 8);
+
+  return (
+    <Section
+      title="Chronologie"
+      action={timeline.length > 8 && (
+        <button className="text-xs text-p360-blue hover:underline" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Réduire" : `Tout voir (${timeline.length})`}
+        </button>
+      )}
+    >
+      <ul className="space-y-3">
+        {visible.map((event) => (
+          <li key={`${event.type}-${event.id}`} className="flex gap-3 text-sm">
+            <span className="badge shrink-0 bg-p360-lavender-light text-p360-blue">{TIMELINE_TYPE_LABEL[event.type]}</span>
+            <div className="min-w-0">
+              <div className="text-p360-ink font-medium truncate">{event.title}</div>
+              {event.description && <div className="text-p360-muted text-xs truncate">{event.description}</div>}
+              <div className="text-xs text-p360-muted">{formatDate(event.occurredAt)}</div>
+            </div>
+          </li>
+        ))}
+        {timeline.length === 0 && <p className="text-sm text-p360-muted">Aucun évènement pour l&apos;instant.</p>}
+      </ul>
+    </Section>
+  );
+}
+
+function VisitsPanel({ lead }: { lead: LeadDetail }) {
+  return (
+    <Section title="Visites 3D" action={<Link href="/visits" className="text-xs text-p360-blue hover:underline">Toutes les visites</Link>}>
+      <ul className="space-y-2">
+        {lead.virtualTours.map((tour) => (
+          <li key={tour.id} className="text-sm border border-p360-lavender-light rounded-lg px-3 py-2">
+            <div className="flex items-center justify-between">
+              <div className="text-p360-ink font-medium">{tour.address ?? tour.mission.title}</div>
+              <span className="badge bg-p360-lavender-light text-p360-blue">{VIRTUAL_TOUR_STATUS_LABEL[tour.status] ?? tour.status}</span>
+            </div>
+            <div className="text-xs text-p360-muted mt-0.5">
+              {tour.scheduledAt ? formatDate(tour.scheduledAt) : "Non planifiée"}
+              {tour.surfaceM2 ? ` — ${tour.surfaceM2} m²` : ""}
+            </div>
+            {(tour.matterportUrl || tour.tourUrl) && (
+              <div className="flex gap-3 mt-1">
+                {tour.matterportUrl && <a className="text-xs text-p360-blue hover:underline" href={tour.matterportUrl} target="_blank" rel="noreferrer">Matterport</a>}
+                {tour.tourUrl && <a className="text-xs text-p360-blue hover:underline" href={tour.tourUrl} target="_blank" rel="noreferrer">Visite en ligne</a>}
+              </div>
+            )}
+          </li>
+        ))}
+        {lead.virtualTours.length === 0 && <p className="text-sm text-p360-muted">Aucune visite 3D.</p>}
+      </ul>
+    </Section>
+  );
+}
+
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Brouillon",
+  SENT: "Envoyée",
+  PAID: "Payée",
+  OVERDUE: "En retard",
+  CANCELLED: "Annulée",
+};
+
+function InvoicesPanel({ lead }: { lead: LeadDetail }) {
+  return (
+    <Section title="Factures" action={<Link href="/invoices" className="text-xs text-p360-blue hover:underline">Toutes les factures</Link>}>
+      <ul className="space-y-2">
+        {lead.invoices.map((invoice) => (
+          <li key={invoice.id} className="text-sm border border-p360-lavender-light rounded-lg px-3 py-2 flex items-center justify-between">
+            <div>
+              <div className="text-p360-ink font-medium">{invoice.reference} — {formatEuros(invoice.totalAmount)}</div>
+              <div className="text-xs text-p360-muted">
+                Statut : {INVOICE_STATUS_LABEL[invoice.status] ?? invoice.status}
+                {invoice.dueAt ? ` — échéance ${formatDate(invoice.dueAt)}` : ""}
+              </div>
+            </div>
+            <a className="text-xs text-p360-muted hover:underline" href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>
+          </li>
+        ))}
+        {lead.invoices.length === 0 && <p className="text-sm text-p360-muted">Aucune facture.</p>}
+      </ul>
+    </Section>
+  );
+}
+
+function TasksPanel({ lead }: { lead: LeadDetail }) {
+  return (
+    <Section title="Tâches" action={<Link href="/tasks" className="text-xs text-p360-blue hover:underline">Toutes les tâches</Link>}>
+      <ul className="space-y-2">
+        {lead.tasks.map((task) => (
+          <li key={task.id} className="text-sm border border-p360-lavender-light rounded-lg px-3 py-2 flex items-center justify-between">
+            <div>
+              <div className="text-p360-ink font-medium">{task.title}</div>
+              <div className="text-xs text-p360-muted">{task.dueAt ? formatDate(task.dueAt) : "Sans échéance"}</div>
+            </div>
+            <span className="badge bg-p360-lavender-light text-p360-blue">{task.status}</span>
+          </li>
+        ))}
+        {lead.tasks.length === 0 && <p className="text-sm text-p360-muted">Aucune tâche.</p>}
+      </ul>
+    </Section>
+  );
+}
+
+function LocationPanel({ lead, mapsUrl }: { lead: LeadDetail; mapsUrl: string | null }) {
+  return (
+    <Section title="Localisation">
+      <p className="text-sm text-p360-ink">
+        {[lead.address, lead.city, lead.region, lead.country].filter(Boolean).join(", ") || "Adresse non renseignée."}
+      </p>
+      {mapsUrl && (
+        <a className="text-xs text-p360-blue hover:underline mt-2 inline-block" href={mapsUrl} target="_blank" rel="noreferrer">
+          Ouvrir dans Google Maps
+        </a>
+      )}
+    </Section>
+  );
+}
+
+function TagsPanel({
+  lead,
+  allTags,
+  run,
+  busy,
+}: {
+  lead: LeadDetail;
+  allTags: TagModel[];
+  run: (key: string, fn: () => Promise<unknown>) => Promise<void>;
+  busy: string | null;
+}) {
+  const [selected, setSelected] = useState("");
+  const assignedIds = new Set(lead.tagsRelation.map((t) => t.id));
+  const available = allTags.filter((t) => !assignedIds.has(t.id));
+
+  return (
+    <Section title="Tags">
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {lead.tagsRelation.map((tag) => (
+          <span key={tag.id} className="inline-flex items-center gap-1">
+            <TagBadge tag={tag} />
+            <button
+              type="button"
+              className="text-xs text-p360-muted hover:text-p360-danger"
+              disabled={busy === tag.id}
+              onClick={() => run(tag.id, () => apiDelete(`/api/leads/${lead.id}/tags/${tag.id}`))}
+              aria-label={`Retirer le tag ${tag.name}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {lead.tagsRelation.length === 0 && <p className="text-sm text-p360-muted">Aucun tag assigné.</p>}
+      </div>
+      {available.length > 0 && (
+        <div className="flex gap-2">
+          <select className="input" value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <option value="">Choisir un tag…</option>
+            {available.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <button
+            className="btn-secondary text-sm shrink-0"
+            disabled={!selected || busy === "assign-tag"}
+            onClick={() => {
+              const tagId = selected;
+              setSelected("");
+              run("assign-tag", () => apiPost(`/api/leads/${lead.id}/tags`, { tagId }));
+            }}
+          >
+            Assigner
+          </button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function ContactsPanel({
+  lead,
+  contactLinks,
+  allContacts,
+  run,
+  busy,
+}: {
+  lead: LeadDetail;
+  contactLinks: Awaited<ReturnType<typeof listContactsForLead>>;
+  allContacts: Awaited<ReturnType<typeof listContacts>>;
+  run: (key: string, fn: () => Promise<unknown>) => Promise<void>;
+  busy: string | null;
+}) {
+  const [selected, setSelected] = useState("");
+  const linkedIds = new Set(contactLinks.map((l) => l.contactId));
+  const available = allContacts.filter((c) => !linkedIds.has(c.id));
+
+  return (
+    <Section title="Personnes liées" action={<Link href="/companies" className="text-xs text-p360-blue hover:underline">Gérer les contacts</Link>}>
+      <ul className="space-y-2 mb-3">
+        {contactLinks.map((link) => (
+          <li key={link.id} className="text-sm border border-p360-lavender-light rounded-lg px-3 py-2 flex items-center justify-between">
+            <div>
+              <div className="text-p360-ink font-medium">{link.contact.fullName}{link.role ? ` — ${link.role}` : ""}</div>
+              <div className="text-xs text-p360-muted">{link.contact.email ?? link.contact.phone ?? "—"}</div>
+            </div>
+            <button
+              className="text-xs text-p360-muted hover:text-p360-danger"
+              disabled={busy === link.contactId}
+              onClick={() => run(link.contactId, () => apiDelete(`/api/leads/${lead.id}/contacts/${link.contactId}`))}
+            >
+              Retirer
+            </button>
+          </li>
+        ))}
+        {contactLinks.length === 0 && <p className="text-sm text-p360-muted">Aucune personne liée.</p>}
+      </ul>
+      {available.length > 0 && (
+        <div className="flex gap-2">
+          <select className="input" value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <option value="">Choisir une personne…</option>
+            {available.map((c) => <option key={c.id} value={c.id}>{c.fullName}</option>)}
+          </select>
+          <button
+            className="btn-secondary text-sm shrink-0"
+            disabled={!selected || busy === "link-contact"}
+            onClick={() => {
+              const contactId = selected;
+              setSelected("");
+              run("link-contact", () => apiPost(`/api/leads/${lead.id}/contacts`, { contactId }));
+            }}
+          >
+            Lier
+          </button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function RelationsPanel({ lead }: { lead: LeadDetail }) {
+  const hasAny = lead.company || lead.properties.length > 0;
+  if (!hasAny) {
+    return (
+      <Section title="Entreprise & biens">
+        <p className="text-sm text-p360-muted">Aucune entreprise ni bien lié à ce prospect.</p>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="Entreprise & biens">
+      {lead.company && (
+        <div className="mb-3">
+          <div className="text-xs font-semibold text-p360-muted mb-1">Entreprise</div>
+          <Link href={`/companies/${lead.company.id}`} className="text-sm text-p360-blue hover:underline">
+            {lead.company.name}
+          </Link>
+        </div>
+      )}
+      {lead.properties.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-p360-muted mb-1">Biens</div>
+          <ul className="space-y-1">
+            {lead.properties.map((property) => (
+              <li key={property.id}>
+                <Link href={`/properties/${property.id}`} className="text-sm text-p360-blue hover:underline">
+                  {property.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Section>
   );
 }

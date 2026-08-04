@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getAIProviderForOrganization } from "@/lib/ai";
-import { getEmailProvider, assertEmailQuotaAvailable } from "@/lib/email";
+import { resolveEmailProviderForOrganization, assertEmailQuotaAvailable } from "@/lib/email";
 import { QuotaExceededError } from "@/lib/errors";
 import { unsubscribeUrl } from "@/lib/unsubscribe-token";
 import { isSuppressed } from "@/lib/suppression";
@@ -245,7 +245,6 @@ export async function sendMessageNow(messageId: string) {
   });
 
   const primaryEmail = message.lead.contacts.find((c) => c.email)?.email;
-  const emailProvider = getEmailProvider();
 
   if (message.lead.isSuppressed || (await isSuppressed(message.lead.organizationId, primaryEmail))) {
     await prisma.message.update({ where: { id: message.id }, data: { status: MessageStatus.FAILED } });
@@ -276,6 +275,8 @@ export async function sendMessageNow(messageId: string) {
       throw error;
     }
 
+    // Résolu par organisation (v1.1, AR-0171) — jamais un fournisseur unique partagé par tout le déploiement.
+    const emailProvider = await resolveEmailProviderForOrganization(message.lead.organizationId);
     const result = await emailProvider.send({
       fromName: emailAccount?.fromName ?? message.lead.organization.name,
       fromEmail: emailAccount?.fromEmail ?? "contact@demo.provence360.local",

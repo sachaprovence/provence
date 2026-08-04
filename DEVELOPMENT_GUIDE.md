@@ -556,6 +556,74 @@ connaître pour tout nouveau code touchant ce périmètre :
   exécutée en CI sur chaque pull request au même titre que les 3
   précédentes — la mettre à jour si le parcours d'inscription change.
 
+## 0 ter decies. État de v1.1 (Provence 360 Production)
+
+Voir `docs/adr/0043` (décisions prises en amont) et `docs/adr/0044`
+(décisions affinées pendant l'implémentation) pour le détail complet.
+Points à connaître pour tout nouveau code touchant ce périmètre :
+
+- **Extraire un agent qui a besoin des mêmes capacités qu'un agent
+  existant doit réutiliser directement ses outils déclaratifs**, jamais
+  dupliquer une surface d'outils autour de la même implémentation
+  sous-jacente — voir `qualification-agent.ts`
+  (`src/lib/agents/definitions/`) qui appelle
+  `commercial.score_prospect`/`commercial.qualify_prospect` sans jamais
+  redéclarer de `qualification.*` équivalent. C'est le patron par défaut
+  pour toute future extraction similaire dans le Framework des Agents.
+- **`computeFullRanges` (`src/lib/agents/tools/planning-tools.ts`) est la
+  SEULE façon de calculer des plages "pleines" à partir de créneaux
+  occupés avec une capacité > 1** — généralisation par balayage de
+  l'ancien algorithme de fusion (capacité 1 = comportement historique
+  inchangé, vérifié par régression). Ne jamais réécrire un second
+  algorithme de comptage de chevauchements ailleurs ; réutiliser cette
+  fonction pour tout futur besoin similaire (ex. réservation de salle).
+- **`BusinessHours` est un modèle Prisma dédié (une ligne par jour de la
+  semaine), jamais un champ JSON** — même patron que `PipelineStage` : un
+  `upsert` ciblé par `@@unique([organizationId, dayOfWeek])` plutôt qu'un
+  remplacement complet d'un blob JSON à chaque changement d'un seul jour.
+- **`NotificationPreference` modélise deux canaux (`APP`/`EMAIL`) mais
+  seul `APP` est aujourd'hui réellement filtré** au point d'émission
+  (`notification.create`, Automation Engine et Workflow Engine) — ne
+  jamais supposer qu'une préférence `EMAIL` bloque déjà un envoi d'email
+  réel ; aucun job `email.send` ne la consulte encore.
+- **Un `useState` qui doit refléter une valeur lue depuis `localStorage`
+  (ou toute autre source absente côté serveur) ne doit JAMAIS lire cette
+  source dans son initialiseur paresseux** — cela cause un mismatch
+  d'hydratation React (erreur #418) entre le rendu serveur et le premier
+  rendu client. Toujours initialiser à une valeur par défaut sûre et
+  corriger dans un `useEffect` après montage (voir
+  `src/components/theme-provider.tsx`), avec le blocage FOUC géré par un
+  script bloquant inline dans `<head>` + `suppressHydrationWarning`
+  scopé au seul attribut concerné (`<html data-theme>`), jamais à tout un
+  sous-arbre.
+- **Le linter `react-hooks/set-state-in-effect` doit être respecté sans
+  contournement systématique** : déplacer l'appel `setState` dans un
+  gestionnaire d'évènement quand c'est possible (voir `handleOpenChange`
+  de `command-palette.tsx`) ; ne suppriment avec un
+  `eslint-disable-next-line` justifié en commentaire que lorsque l'effet
+  synchronise réellement avec un système externe (routeur,
+  `localStorage`, `matchMedia`).
+- **La recherche globale (`src/lib/search/global-search-service.ts`) est
+  la SEULE implémentation de recherche multi-entités** — réutilisée à
+  l'identique par `/api/search` (AR-0181) et par la Command Palette
+  (AR-0182) ; ne jamais dupliquer une requête de recherche ad hoc
+  ailleurs, étendre cette fonction si une nouvelle entité doit devenir
+  cherchable.
+- **`cmdk` (Command Palette) et `@dnd-kit/core` (glisser-déposer Kanban)
+  sont les deux seules nouvelles dépendances npm de `v1.1`**, chacune
+  justifiée dans `docs/adr/0043` — ne pas ajouter de bibliothèque
+  supplémentaire pour un besoin déjà couvert par l'une des deux (ex. tout
+  futur glisser-déposer de liste doit réutiliser `@dnd-kit/core`, jamais
+  une bibliothèque distincte).
+- **`tests/e2e/*.mjs` restent les 4 mêmes suites** (`golden-path`,
+  `two-organizations-isolation`, `automation-golden-path`,
+  `self-service-onboarding`) — `v1.1` n'en ajoute pas de nouvelle ;
+  les fonctionnalités UI de la piste UX (glisser-déposer, mode sombre,
+  raccourcis clavier) sont vérifiées manuellement via des scripts
+  Playwright jetables (créés puis supprimés), documentés dans
+  `docs/release/v1.1-recette.md` plutôt qu'ajoutés en dette de
+  maintenance E2E permanente.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)

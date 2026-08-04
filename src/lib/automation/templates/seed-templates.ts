@@ -197,6 +197,27 @@ const TEMPLATES: { key: string; name: string; description: string; category: str
       edges: [edge("e1", "t1", "draft"), edge("e2", "draft", "end1")],
     },
   },
+  {
+    // v1.1, AR-0175 — 11ᵉ modèle : "livraison" n'avait pas d'évènement dédié
+    // (le plus proche, `invoice.sent`, n'est pas une livraison). Déclenché
+    // par `virtual_tour.delivered` (AR-0167), distinct de `virtual_tour.published`.
+    key: "template-livraison-effectuee",
+    name: "Livraison effectuée",
+    description: "Visite 3D livrée au client → notifier l'équipe et suggérer une demande d'avis Google (aucun envoi automatique).",
+    category: "production",
+    graph: {
+      nodes: [
+        trigger("t1", "virtual_tour.delivered"),
+        action("notify", 1, "notification.create", {
+          title: "Visite 3D livrée au client",
+          body: "Livraison confirmée — pensez à demander un avis Google au client.",
+          link: "/visits/{{ context.virtualTourId }}",
+        }),
+        end("end1", 2),
+      ],
+      edges: [edge("e1", "t1", "notify"), edge("e2", "notify", "end1")],
+    },
+  },
 ];
 
 /** Idempotent : recherche par `key` (workspaceId nul), crée si absent — ne modifie jamais un template déjà seedé (l'utilisateur a pu le cloner et le personnaliser). */

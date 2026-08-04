@@ -27,6 +27,26 @@ function toPricingInput(lines: QuoteLineDraft[]): QuoteLineInput[] {
   return lines.map((l) => ({ quantity: l.quantity, unitPrice: l.unitPrice }));
 }
 
+export async function getQuote(organizationId: string, id: string) {
+  const quote = await prisma.quote.findFirst({
+    where: { id, organizationId },
+    include: { lines: true, lead: { select: { id: true, establishmentName: true } } },
+  });
+  if (!quote) throw new NotFoundError("Devis introuvable.");
+  return quote;
+}
+
+/**
+ * Historique des versions figées (v1.1, AR-0168) — `QuoteVersion` capture
+ * déjà un instantané JSON à chaque passage `DRAFT`→`SENT` (`sendQuote()`
+ * ci-dessous) mais n'était exposé par aucune route ni aucune UI jusqu'ici.
+ */
+export async function listQuoteVersions(organizationId: string, quoteId: string) {
+  const quote = await prisma.quote.findFirst({ where: { id: quoteId, organizationId }, select: { id: true } });
+  if (!quote) throw new NotFoundError("Devis introuvable.");
+  return prisma.quoteVersion.findMany({ where: { quoteId, organizationId }, orderBy: { versionNumber: "asc" } });
+}
+
 export async function createQuote(
   organizationId: string,
   data: {

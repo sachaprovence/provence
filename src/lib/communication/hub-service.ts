@@ -85,19 +85,50 @@ function toChannelConfigPreview(integration: {
   };
 }
 
-/** Configure le fournisseur actif d'un canal pour une organisation (brief v0.9 : réglages SMS/agenda/IA...). */
+/** Aperçu SANS secrets du canal (v1.1, AR-0171) — pour l'UI de réglages ; renvoie un aperçu "démo" par défaut si l'organisation n'a encore rien configuré. */
+export async function getChannelConfigPreview(organizationId: string, channel: CommunicationChannel): Promise<ChannelConfigPreview> {
+  const integration = await prisma.integration.findFirst({ where: { organizationId, kind: channel } });
+  if (!integration) {
+    return {
+      id: "",
+      kind: channel,
+      name: CHANNEL_DEFAULT_NAME[channel],
+      status: "DEMO",
+      provider: DEFAULT_PROVIDER_KEY[channel],
+      configuredKeys: [],
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+    };
+  }
+  return toChannelConfigPreview(integration);
+}
+
+/**
+ * Configure le fournisseur actif d'un canal pour une organisation (brief
+ * v0.9 : réglages SMS/agenda/IA...) — FUSIONNE avec la configuration
+ * existante plutôt que de la remplacer (v1.1, AR-0171, corrigé à
+ * l'occasion du premier formulaire de réglages qui consomme réellement
+ * cette route) : un champ secret (`authToken`) laissé vide/absent ne doit
+ * jamais effacer un identifiant déjà enregistré — même principe que
+ * `email/config.ts#updateEmailIntegrationConfig`.
+ */
 export async function updateChannelConfig(
   organizationId: string,
   channel: CommunicationChannel,
   data: { provider: string; config?: Record<string, unknown> }
 ): Promise<ChannelConfigPreview> {
   const existing = await prisma.integration.findFirst({ where: { organizationId, kind: channel } });
-  const config = { ...(data.config ?? {}), provider: data.provider };
+  const previous = (existing?.config as Record<string, unknown> | null) ?? {};
+  const config: Record<string, unknown> = { ...previous, provider: data.provider };
+  for (const [key, value] of Object.entries(data.config ?? {})) {
+    if (value === undefined || value === "") continue;
+    config[key] = value;
+  }
 
   const integration = existing
-    ? await prisma.integration.update({ where: { id: existing.id }, data: { config, status: "CONNECTED" } })
+    ? await prisma.integration.update({ where: { id: existing.id }, data: { config: config as never, status: "CONNECTED" } })
     : await prisma.integration.create({
-        data: { organizationId, kind: channel, name: CHANNEL_DEFAULT_NAME[channel], status: "CONNECTED", config },
+        data: { organizationId, kind: channel, name: CHANNEL_DEFAULT_NAME[channel], status: "CONNECTED", config: config as never },
       });
 
   return toChannelConfigPreview(integration);

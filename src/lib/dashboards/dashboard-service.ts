@@ -121,6 +121,99 @@ export async function getAiActivityDashboard(organizationId: string) {
   };
 }
 
+/**
+ * Tableau de bord Planning (v1.1, AR-0176) — charge par technicien
+ * (missions actives), rendez-vous à venir, visites 3D programmées sur les
+ * 7 prochains jours. Absent jusqu'ici : seul un KPI "rendez-vous" isolé
+ * existait dans `getAppointmentsDashboard` (agrégats globaux, jamais une
+ * vue agenda).
+ */
+export async function getPlanningDashboard(organizationId: string) {
+  const now = new Date();
+  const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const [providers, upcomingAppointments, toursThisWeek] = await Promise.all([
+    prisma.provider.findMany({
+      where: { organizationId, isActive: true },
+      include: { _count: { select: { missions: { where: { status: { in: ["ACCEPTED", "IN_PROGRESS"] } } } } } },
+      orderBy: { name: "asc" },
+    }),
+    prisma.appointment.findMany({
+      where: { organizationId, status: "SCHEDULED", startAt: { gte: now } },
+      orderBy: { startAt: "asc" },
+      take: 10,
+      include: { lead: { select: { establishmentName: true } } },
+    }),
+    prisma.virtualTour.findMany({
+      where: { organizationId, scheduledAt: { gte: now, lte: weekEnd } },
+      orderBy: { scheduledAt: "asc" },
+      include: { lead: { select: { establishmentName: true } } },
+    }),
+  ]);
+
+  return {
+    providerLoad: providers.map((p) => ({ id: p.id, name: p.name, activeMissionsCount: p._count.missions })),
+    upcomingAppointments: upcomingAppointments.map((a) => ({
+      id: a.id,
+      title: a.title,
+      startAt: a.startAt,
+      leadEstablishmentName: a.lead.establishmentName,
+    })),
+    toursThisWeek: toursThisWeek.map((t) => ({
+      id: t.id,
+      scheduledAt: t.scheduledAt,
+      status: t.status,
+      leadEstablishmentName: t.lead.establishmentName,
+    })),
+  };
+}
+
+/**
+ * Tableau de bord Financier (v1.1, AR-0177) — CA réellement encaissé dans
+ * le temps (factures `PAID`, jamais l'estimation d'opportunité déjà
+ * utilisée par `/dashboard`), factures en attente/en retard (repose sur
+ * `processOverdueInvoices`, AR-0169), devis en cours, prévisionnel simple
+ * (CA encaissé + devis acceptés pas encore facturés).
+ */
+export async function getFinancialDashboard(organizationId: string) {
+  const twelveMonthsAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+
+  const [paidInvoices, pendingInvoices, overdueInvoices, quotesInProgress, quotesAcceptedNotInvoiced] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { organizationId, status: "PAID", paidAt: { gte: twelveMonthsAgo } },
+      select: { totalAmount: true, paidAt: true },
+    }),
+    prisma.invoice.aggregate({ where: { organizationId, status: "SENT" }, _sum: { totalAmount: true }, _count: { _all: true } }),
+    prisma.invoice.aggregate({ where: { organizationId, status: "OVERDUE" }, _sum: { totalAmount: true }, _count: { _all: true } }),
+    prisma.quote.aggregate({ where: { organizationId, status: "SENT" }, _sum: { totalAmount: true }, _count: { _all: true } }),
+    prisma.quote.aggregate({
+      where: { organizationId, status: "ACCEPTED", invoices: { none: {} } },
+      _sum: { totalAmount: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const revenueByMonth = new Map<string, number>();
+  for (const invoice of paidInvoices) {
+    if (!invoice.paidAt) continue;
+    const key = `${invoice.paidAt.getFullYear()}-${String(invoice.paidAt.getMonth() + 1).padStart(2, "0")}`;
+    revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + invoice.totalAmount);
+  }
+  const totalRevenue = paidInvoices.reduce((sum, i) => sum + i.totalAmount, 0);
+  const forecastedRevenue = totalRevenue + (quotesAcceptedNotInvoiced._sum.totalAmount ?? 0);
+
+  return {
+    totalRevenue,
+    revenueByMonth: Array.from(revenueByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, amount]) => ({ month, amount })),
+    pendingInvoices: { count: pendingInvoices._count._all, totalAmount: pendingInvoices._sum.totalAmount ?? 0 },
+    overdueInvoices: { count: overdueInvoices._count._all, totalAmount: overdueInvoices._sum.totalAmount ?? 0 },
+    quotesInProgress: { count: quotesInProgress._count._all, totalAmount: quotesInProgress._sum.totalAmount ?? 0 },
+    forecastedRevenue,
+  };
+}
+
 export async function getPerformanceDashboard(organizationId: string) {
   const users = await prisma.membership.findMany({
     where: { organizationId },

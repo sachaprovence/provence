@@ -92,6 +92,24 @@ export async function updatePipelineStage(
   });
 }
 
+/**
+ * Décide si une transition d'étape justifie la publication de l'évènement
+ * granulaire `lead.stage_changed` (v1.1, AR-0165) — JAMAIS si l'étape
+ * n'a pas réellement changé (`PUT /api/leads/[id]` peut être appelée avec
+ * `stage` identique à l'existant, ou sans `stage` du tout). Extrait en
+ * fonction pure testable car la route appelante (`requireActorApi`) dépend
+ * de `next/headers` et n'est pas directement testable en Vitest.
+ */
+export function buildStageChangedEventPayload(
+  organizationId: string,
+  leadId: string,
+  previousStage: LeadStage,
+  newStage: LeadStage | undefined
+): { organizationId: string; leadId: string; previousStage: LeadStage; newStage: LeadStage } | null {
+  if (newStage === undefined || newStage === previousStage) return null;
+  return { organizationId, leadId, previousStage, newStage };
+}
+
 /** Réordonne les étapes : `orderedStageKeys` doit contenir exactement les 15 valeurs de `LeadStage`. */
 export async function reorderPipelineStages(organizationId: string, orderedStageKeys: LeadStage[]) {
   await getPipelineStages(organizationId);

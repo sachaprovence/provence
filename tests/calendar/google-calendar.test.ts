@@ -128,11 +128,13 @@ describe("OAuth + Calendar API — contre un vrai serveur HTTP local simulant Go
       startAt: new Date("2026-02-01T10:00:00Z"),
       endAt: new Date("2026-02-01T11:00:00Z"),
       attendeeEmails: ["client@example.test"],
+      reminderMinutesBefore: 60,
     });
     expect(created.googleEventId).toBe("event-abc");
     expect(requestLog[0].method).toBe("POST");
     expect(requestLog[0].headers.authorization).toBe("Bearer access-token-1");
     expect(JSON.parse(requestLog[0].body).attendees).toEqual([{ email: "client@example.test" }]);
+    expect(JSON.parse(requestLog[0].body).reminders).toEqual({ useDefault: false, overrides: [{ method: "popup", minutes: 60 }] });
 
     const updated = await client.updateEvent("event-abc", {
       summary: "Visite virtuelle (reportée)",
@@ -148,6 +150,17 @@ describe("OAuth + Calendar API — contre un vrai serveur HTTP local simulant Go
     const busy = await client.freeBusy("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z");
     expect(busy).toHaveLength(1);
     expect(busy[0].start).toBe("2026-01-01T10:00:00Z");
+  });
+
+  it("n'envoie aucun champ reminders quand reminderMinutesBefore est omis (v1.1, AR-0172)", async () => {
+    nextEventId = "event-no-reminder";
+    const client = new GoogleCalendarClient("access-token-1", "primary", baseUrl);
+    await client.createEvent({
+      summary: "Sans rappel",
+      startAt: new Date("2026-02-01T10:00:00Z"),
+      endAt: new Date("2026-02-01T11:00:00Z"),
+    });
+    expect(JSON.parse(requestLog[0].body).reminders).toBeUndefined();
   });
 });
 
@@ -238,6 +251,7 @@ runIfDatabase("Google Calendar — config par organisation, OAuth flow et synchr
     expect(stillUnsynced.googleEventId).toBeNull();
 
     // Connecté à un faux Google local : syncAppointmentToGoogle doit réellement créer l'évènement.
+    const eventRequestBodies: string[] = [];
     const server = http.createServer((req, res) => {
       let body = "";
       req.on("data", (chunk) => (body += chunk));
@@ -252,9 +266,9 @@ runIfDatabase("Google Calendar — config par organisation, OAuth flow et synchr
           res.end(JSON.stringify({ calendars: { primary: { busy: [] } } }));
           return;
         }
+        eventRequestBodies.push(body);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ id: "created-event-1" }));
-        void body;
       });
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -274,6 +288,8 @@ runIfDatabase("Google Calendar — config par organisation, OAuth flow et synchr
     const synced = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
     expect(synced.googleEventId).toBe("created-event-1");
     expect(synced.googleSyncedAt).not.toBeNull();
+    // v1.1, AR-0172 : chaque évènement synchronisé embarque un rappel par défaut (60 minutes avant).
+    expect(JSON.parse(eventRequestBodies[0]).reminders).toEqual({ useDefault: false, overrides: [{ method: "popup", minutes: 60 }] });
 
     await deleteGoogleEventForAppointment(organization.id, synced);
     const deleted = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } });

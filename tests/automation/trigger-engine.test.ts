@@ -48,6 +48,34 @@ runIfDatabase("Automation Engine — Trigger Engine (évènements/cron/webhook)"
     expect((run.input as { leadId: string }).leadId).toBe("lead-123");
   });
 
+  it("fireAutomationsForEvent propage previousStage/newStage pour lead.stage_changed (v1.1, AR-0165)", async () => {
+    const fixture = await createWorkflowTestFixture("trigger-engine-stage-changed");
+    organizationIds.push(fixture.organization.id);
+    userIds.push(fixture.user.id);
+
+    const { automation, version } = await createAutomationDefinition(fixture.actor, {
+      key: "on-lead-stage-changed",
+      name: "Sur transition de pipeline",
+      category: "test",
+      graph: graphWithTrigger("lead.stage_changed"),
+    });
+    await activateAutomationVersion(fixture.actor, automation.id, version.id);
+
+    const result = await fireAutomationsForEvent("lead.stage_changed", {
+      organizationId: fixture.organization.id,
+      leadId: "lead-abc",
+      previousStage: "NEW",
+      newStage: "WON",
+    });
+    expect(result.triggered).toBe(1);
+
+    const run = await prisma.automationRun.findFirstOrThrow({ where: { automationId: automation.id } });
+    expect(run.triggerKey).toBe("lead.stage_changed");
+    const input = run.input as { previousStage: string; newStage: string };
+    expect(input.previousStage).toBe("NEW");
+    expect(input.newStage).toBe("WON");
+  });
+
   it("fireAutomationsForEvent isole strictement par organisation : un évènement d'une autre organisation ne déclenche rien", async () => {
     const fixtureA = await createWorkflowTestFixture("trigger-engine-tenant-a");
     organizationIds.push(fixtureA.organization.id);

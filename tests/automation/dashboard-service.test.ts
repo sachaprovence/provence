@@ -106,5 +106,13 @@ runIfDatabase("Automation Engine dashboard", () => {
 
     expect(dashboard.queue.workerPoolSize).toBeGreaterThan(0);
     expect(dashboard.queue.dueNow).toBeGreaterThanOrEqual(0);
+
+    // Métrique "Temps gagné" (v1.1, AR-0178) : un seul job notification.create réussi (5 minutes estimées), aucun temps compté pour le job en échec.
+    expect(dashboard.timeSaved.totalMinutes).toBeGreaterThanOrEqual(1);
+    const notificationEntry = dashboard.timeSaved.byJobType.find((row) => row.jobType === "notification.create");
+    expect(notificationEntry?.succeededCount).toBeGreaterThanOrEqual(1);
+    expect(notificationEntry?.minutesSaved).toBe((notificationEntry?.succeededCount ?? 0) * 1);
+    expect(dashboard.timeSaved.byJobType.some((row) => row.jobType === "file.write")).toBe(false);
+    expect(dashboard.timeSaved.totalHours).toBe(Math.round((dashboard.timeSaved.totalMinutes / 60) * 10) / 10);
   });
 });

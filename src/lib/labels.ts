@@ -1,17 +1,32 @@
+/**
+ * Intitulés par défaut du pipeline commercial (v1.1, AR-0165) — repris du
+ * vocabulaire du brief Provence 360 ("Prospect / Premier contact / Relance /
+ * Rendez-vous / Visite programmée / Visite réalisée / Devis envoyé /
+ * Négociation / Accepté / Facturé / Payé / Fidélisation"). `LeadStage` reste
+ * un enum fixe de 15 valeurs (voir ADR 0043 — décision volontairement
+ * conservée, une refonte en étapes libres casserait les automatisations déjà
+ * câblées sur ces valeurs) : là où le brief est plus grossier que l'enum
+ * interne, un qualificatif entre parenthèses distingue les colonnes du
+ * Kanban sans dévier de la terminologie du brief. La facturation/le paiement/
+ * la fidélisation post-vente sont suivis via `Invoice`/`Customer` (pas des
+ * étapes de pipeline distinctes) ; "Visite programmée"/"Visite réalisée"
+ * sont suivies via `VirtualTour.status` (voir AR-0166/0167). Ces libellés
+ * restent personnalisables par organisation (`PipelineStage.label`).
+ */
 export const STAGE_LABEL: Record<string, string> = {
-  NEW: "Nouveau prospect",
-  TO_ANALYZE: "À analyser",
-  QUALIFIED: "Qualifié",
-  MESSAGE_TO_VALIDATE: "Message à valider",
-  CONTACTED: "Contacté",
+  NEW: "Prospect",
+  TO_ANALYZE: "Prospect (à analyser)",
+  QUALIFIED: "Prospect qualifié",
+  MESSAGE_TO_VALIDATE: "Premier contact (à valider)",
+  CONTACTED: "Premier contact",
   FOLLOW_UP_SCHEDULED: "Relance programmée",
-  REPLIED: "Réponse reçue",
+  REPLIED: "Relance (réponse reçue)",
   INTERESTED: "Intéressé",
-  APPOINTMENT_SCHEDULED: "Rendez-vous prévu",
+  APPOINTMENT_SCHEDULED: "Rendez-vous",
   QUOTE_SENT: "Devis envoyé",
   NEGOTIATION: "Négociation",
-  WON: "Client gagné",
-  LOST: "Client perdu",
+  WON: "Accepté",
+  LOST: "Perdu",
   TO_RECONTACT_LATER: "À recontacter plus tard",
   UNSUBSCRIBED: "Désinscrit",
 };

@@ -144,6 +144,7 @@ const REAL_EMISSION_EVENT_KEYS = [
   "lead.created",
   "lead.updated",
   "lead.deleted",
+  "lead.stage_changed",
   "import.completed",
   "appointment.created",
   "quote.sent",
@@ -152,9 +153,11 @@ const REAL_EMISSION_EVENT_KEYS = [
   "invoice.created",
   "invoice.sent",
   "invoice.paid",
+  "invoice.overdue",
   "virtual_tour.created",
   "virtual_tour.shooting_done",
   "virtual_tour.published",
+  "virtual_tour.delivered",
   "property.created",
 ] as const;
 
