@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { createWorkflowDefinition, activateVersion } from "@/lib/workflows/workflow-service";
 import { createAutomationDefinition, activateAutomationVersion } from "@/lib/automation/registry/automation-service";
-import { ensureWebhookTriggerConfig, timingSafeStringEqual } from "@/lib/security/webhook-secret";
+import { ensureWebhookTriggerConfig, timingSafeStringEqual, isValidCronRequest } from "@/lib/security/webhook-secret";
 import { POST as workflowWebhook } from "@/app/api/webhooks/workflows/[workspaceId]/[workflowKey]/route";
 import { POST as automationWebhook } from "@/app/api/webhooks/automations/[workspaceId]/[automationKey]/route";
 import { createWorkflowTestFixture, cleanupWorkflowTestFixtures } from "../helpers/workflow-fixtures";
@@ -44,6 +44,41 @@ describe("timingSafeStringEqual", () => {
     expect(timingSafeStringEqual("abc", "abc")).toBe(true);
     expect(timingSafeStringEqual("abc", "abd")).toBe(false);
     expect(timingSafeStringEqual("abc", "abcd")).toBe(false);
+  });
+});
+
+describe("isValidCronRequest (v1.3, AR-0176)", () => {
+  const ORIGINAL_CRON_SECRET = process.env.CRON_SECRET;
+  afterEach(() => {
+    if (ORIGINAL_CRON_SECRET === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = ORIGINAL_CRON_SECRET;
+  });
+
+  function cronRequest(authorization?: string): Request {
+    return new Request("http://localhost/api/cron/process-sequences", {
+      method: "POST",
+      headers: authorization ? { authorization } : undefined,
+    });
+  }
+
+  it("refuse toujours si CRON_SECRET n'est pas configuré, même avec un en-tête présent", () => {
+    delete process.env.CRON_SECRET;
+    expect(isValidCronRequest(cronRequest("Bearer whatever"))).toBe(false);
+  });
+
+  it("refuse une requête sans en-tête Authorization", () => {
+    process.env.CRON_SECRET = "le-vrai-secret";
+    expect(isValidCronRequest(cronRequest())).toBe(false);
+  });
+
+  it("refuse un secret incorrect", () => {
+    process.env.CRON_SECRET = "le-vrai-secret";
+    expect(isValidCronRequest(cronRequest("Bearer mauvais-secret"))).toBe(false);
+  });
+
+  it("accepte le bon secret sous la forme Bearer <secret>", () => {
+    process.env.CRON_SECRET = "le-vrai-secret";
+    expect(isValidCronRequest(cronRequest("Bearer le-vrai-secret"))).toBe(true);
   });
 });
 

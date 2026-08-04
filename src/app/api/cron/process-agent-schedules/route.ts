@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth";
+import { isValidCronRequest } from "@/lib/security/webhook-secret";
 import { processDueAgentSchedules } from "@/lib/agents/scheduler";
 
 /** Traitement planifié des planifications d'agent (ONE_OFF/RECURRING) — voir ADR 0008. */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
+  const isCron = isValidCronRequest(request);
 
   if (!isCron) {
     const actor = await getCurrentActor();

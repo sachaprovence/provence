@@ -75,15 +75,13 @@ défensive dont le report est raisonnable pour livrer la v1.0 à temps.
   avertissements ne font pas actuellement échouer le build. À activer une
   fois les avertissements préexistants résorbés (aucun avertissement
   actuel n'est lié à une faille de sécurité).
-- **Aucun scan de secrets automatisé en CI** (type gitleaks/trufflehog) —
-  aucune fuite de secret n'a été détectée dans l'historique du dépôt lors
-  de cette revue, mais l'absence de garde-fou automatisé est un risque
-  latent à combler.
-- **Comparaison non constante (`!==`) pour `CRON_SECRET`** dans les 5
-  routes `/api/cron/*` — ces routes sont protégées par ailleurs (secret
-  long, appelées uniquement par l'infrastructure de cron, jamais par un
-  navigateur), mais harmoniser avec `timingSafeStringEqual` (déjà utilisé
-  pour les secrets de webhook, AR-0156) serait cohérent.
+- ~~**Aucun scan de secrets automatisé en CI**~~ — **fermé en v1.3
+  (AR-0176)**, voir `docs/security/security-review-v1.3-2026-08-04.md` §3 :
+  `scripts/scan-secrets.ts`, câblé dans `.github/workflows/ci.yml`.
+- ~~**Comparaison non constante (`!==`) pour `CRON_SECRET`**~~ — **fermé en
+  v1.3 (AR-0176)** : `isValidCronRequest()`
+  (`src/lib/security/webhook-secret.ts`), `timingSafeStringEqual` sur les
+  7 routes `/api/cron/*` (5 à l'origine, 2 ajoutées depuis).
 
 ## Constats P2 — peuvent attendre après la v1.0
 

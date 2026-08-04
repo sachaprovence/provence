@@ -29,6 +29,7 @@
     "backup:metrics-report": "tsx scripts/backup-metrics-report.ts",
     "backup:scheduled": "tsx scripts/run-scheduled-backup.ts",
     "backup:prune": "tsx scripts/prune-old-backups.ts",
+    "security:scan-secrets": "tsx scripts/scan-secrets.ts",
     "integrations:validate": "NODE_OPTIONS=--require=./prisma/seed-server-only-cjs-hook.cjs tsx scripts/validate-integrations.ts",
     "verify:graceful-shutdown": "node scripts/verify-graceful-shutdown.mjs"
   },
