@@ -190,6 +190,34 @@ jamais par le script de sauvegarde lui-même — empêche par construction
 qu'une sauvegarde corrompue/tronquée soit considérée exploitable sur la
 seule foi d'un code de sortie 0 de `pg_dump`/du téléchargement S3.
 
+### AR-0167 — Liveness/readiness : `/api/health` conservé tel quel, deux nouvelles routes plutôt qu'une réécriture
+
+Alternative envisagée : remplacer `GET /api/health` par une redirection
+vers `/ready` ou changer sa forme de réponse pour inclure le détail
+structuré. Écartée : cette route est déjà consommée par plusieurs
+appelants existants qui n'attendent qu'un `{status}` minimal
+(`Dockerfile`, `docker-compose.yml`, `scripts/test-migrations-fresh-db.ts`,
+documentation) — la faire évoluer aurait cassé des intégrations externes
+pour un bénéfice nul. Décision : `GET /api/health` délègue désormais à la
+même évaluation (`evaluateReadiness()`, partagée) que le nouveau
+`GET /api/health/ready`, mais conserve sa forme de réponse `{status}`
+d'origine ; `GET /api/health/ready` (détail structuré par vérification)
+et `GET /api/health/live` (aucune vérification, prouve seulement que le
+processus répond) sont les points d'entrée recommandés pour un futur
+déploiement orchestré (`readinessProbe`/`livenessProbe` Kubernetes ou
+équivalent) — voir docs/02-ARCHITECTURE.md.
+
+`evaluateReadiness()` ne vérifie que 3 choses, délibérément : connexion
+base de données, migrations Prisma appliquées (compte de dossiers sur
+disque vs `_prisma_migrations`, même technique que
+`verify-database-backup.ts`, AR-0166), configuration d'environnement
+(`loadEnv()`, déjà validée au boot par `instrumentation.ts` — revérifiée
+ici en défense en profondeur, pas en confiance aveugle que le boot a eu
+lieu récemment). AUCUNE intégration optionnelle (IA/email/SMS/facturation/
+stockage, toutes avec repli "demo" non bloquant par construction) n'est
+vérifiée — cohérent avec l'architecture existante où seules ces 3 choses
+empêcheraient réellement l'application de fonctionner.
+
 ## Conséquences
 
 - Toute future entité avec pièce jointe/fichier stocké doit suivre le même
