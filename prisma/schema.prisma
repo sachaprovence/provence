@@ -3286,3 +3286,38 @@ model ApiRequestMetric {
   @@index([organizationId, createdAt])
   @@index([route])
 }
+
+// ---------------------------------------------------------------------------
+// Métriques de sauvegarde (v1.3, AR-0174) — historique durable des
+// exécutions de `scripts/backup-database.ts`/`verify-database-backup.ts`/
+// `backup-s3-objects.ts`/`verify-s3-backup.ts`, jusqu'ici seulement
+// consignées dans un fichier `.meta.json` local au répertoire de sauvegarde
+// (perdu si ce répertoire n'est pas conservé entre exécutions/instances).
+// Réglage de DÉPLOIEMENT (une seule base par instance), jamais par
+// organisation — voir `scripts/backup-metrics-report.ts` (CLI, pas
+// d'endpoint web : la sauvegarde est une préoccupation d'exploitation,
+// pas une métrique consultable par un administrateur d'organisation client,
+// pour éviter toute fuite d'information inter-tenant).
+// ---------------------------------------------------------------------------
+
+enum BackupRunKind {
+  DATABASE_DUMP
+  DATABASE_RESTORE_VERIFY
+  S3_BACKUP
+  S3_RESTORE_VERIFY
+}
+
+model BackupRun {
+  id           String        @id @default(cuid())
+  kind         BackupRunKind
+  success      Boolean
+  startedAt    DateTime
+  finishedAt   DateTime
+  durationMs   Int
+  sizeBytes    Int?
+  sha256       String?
+  errorMessage String?
+  createdAt    DateTime      @default(now())
+
+  @@index([kind, createdAt])
+}

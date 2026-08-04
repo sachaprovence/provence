@@ -68,10 +68,11 @@ export default async function MetricsPage() {
           <CardTitle>Latence API (routes instrumentées)</CardTitle>
         </CardHeader>
         <div className="p-6 pt-0 space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <StatTile label="Requêtes mesurées" value={String(metrics.apiLatency.requestCount)} />
             <StatTile label="Latence moyenne" value={formatMs(metrics.apiLatency.avgDurationMs)} />
             <StatTile label="Erreurs (5xx)" value={String(metrics.apiLatency.errorCount)} />
+            <StatTile label="Taux d'erreur" value={metrics.apiLatency.errorRate === null ? "—" : formatPercent(metrics.apiLatency.errorRate)} />
           </div>
           {Object.keys(metrics.apiLatency.byRoute).length > 0 && (
             <table className="w-full text-sm">
@@ -93,6 +94,21 @@ export default async function MetricsPage() {
               </tbody>
             </table>
           )}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>File d&apos;attente et workers (Automation Engine)</CardTitle>
+        </CardHeader>
+        <div className="p-6 pt-0 grid grid-cols-2 gap-4">
+          <StatTile label="En attente maintenant" value={String(metrics.queue.dueNow)} />
+          <StatTile label="Workers actifs" value={`${metrics.workers.active} / ${metrics.workers.poolSize}`} />
+          <StatTile label="Jobs en échec" value={String(metrics.queue.counts.failed)} />
+          <StatTile
+            label="Taux d'échec des jobs"
+            value={metrics.queue.failureRate === null ? "—" : formatPercent(metrics.queue.failureRate)}
+          />
         </div>
       </Card>
     </div>

@@ -14,6 +14,7 @@ import {
 } from "./lib/temp-db-guardrails";
 import { createTempDatabase, dropTempDatabase } from "./lib/temp-db";
 import { readBackupMetadata, verifyBackupIntegrity, writeBackupMetadata } from "./lib/db-backup";
+import { recordBackupRun } from "@/lib/observability/backup-metrics";
 
 /**
  * Vérification de sauvegarde PostgreSQL par restauration RÉELLE (v1.2,
@@ -68,10 +69,26 @@ async function countRow(connectionUrl: string, sql: string): Promise<number> {
 }
 
 async function main() {
+  const startedAt = new Date();
   const dumpPath = process.argv[2];
   if (!dumpPath) fail("Usage : npx tsx scripts/verify-database-backup.ts <fichier.dump>");
   if (!fs.existsSync(dumpPath)) fail(`Fichier de sauvegarde introuvable : ${dumpPath}`);
 
+  try {
+    await verifyAndRestore(dumpPath, startedAt);
+  } catch (err) {
+    await recordBackupRun({
+      kind: "DATABASE_RESTORE_VERIFY",
+      success: false,
+      startedAt,
+      finishedAt: new Date(),
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+async function verifyAndRestore(dumpPath: string, startedAt: Date): Promise<void> {
   console.log(`→ Vérification de l'intégrité (empreinte SHA-256) de "${dumpPath}"...`);
   const metadata = readBackupMetadata(dumpPath);
   verifyBackupIntegrity(dumpPath, metadata);
@@ -121,6 +138,7 @@ async function main() {
     console.log("\n✅ Restauration réussie et contenu vérifié — sauvegarde déclarée valide.");
     writeBackupMetadata(dumpPath, { ...metadata, restoreVerified: true, restoreVerifiedAt: new Date().toISOString() });
     console.log(`   Métadonnées mises à jour : ${dumpPath}.meta.json`);
+    await recordBackupRun({ kind: "DATABASE_RESTORE_VERIFY", success: true, startedAt, finishedAt: new Date(), sizeBytes: metadata.sizeBytes, sha256: metadata.sha256 });
   } finally {
     console.log(`\n→ suppression de la base temporaire "${tempDbName}"`);
     guardTempDbName(tempDbName, realDbName);

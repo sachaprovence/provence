@@ -2,6 +2,7 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import { requireS3BackupConfig, listAllObjects, getObject, sha256HexOf } from "./lib/s3-backup-client";
+import { recordBackupRun } from "@/lib/observability/backup-metrics";
 
 /**
  * Sauvegarde des objets S3 (v1.2, AR-0166) — télécharge une copie de TOUS
@@ -36,6 +37,22 @@ export interface S3BackupManifest {
 }
 
 async function main() {
+  const startedAt = new Date();
+  try {
+    await runBackup(startedAt);
+  } catch (err) {
+    await recordBackupRun({
+      kind: "S3_BACKUP",
+      success: false,
+      startedAt,
+      finishedAt: new Date(),
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+async function runBackup(startedAt: Date): Promise<void> {
   const outputDir = process.argv[2] || process.env.BACKUP_S3_DIR || "./backups/s3";
   const config = requireS3BackupConfig();
 
@@ -85,6 +102,7 @@ async function main() {
   console.log(
     `\n⚠️  Cette sauvegarde n'est PAS encore déclarée valide. Exécutez :\n   npx tsx scripts/verify-s3-backup.ts "${manifestPath}"\n   pour la confirmer par un aller-retour réel écriture/lecture sur le bucket.`
   );
+  await recordBackupRun({ kind: "S3_BACKUP", success: true, startedAt, finishedAt: new Date(), sizeBytes: totalSizeBytes });
 }
 
 main().catch((err) => {

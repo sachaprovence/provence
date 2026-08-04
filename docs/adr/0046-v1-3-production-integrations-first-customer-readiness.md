@@ -209,3 +209,70 @@ travail, seule sa disponibilité pour du NOUVEAU trafic doit être signalée.
   modification de `src/instrumentation.ts`, `src/lib/health/*`, ou du
   `CMD`/`ENTRYPOINT` du `Dockerfile` — une preuve empirique rejouable,
   jamais seulement une affirmation.
+
+## Décision — AR-0174 : monitoring (réponse, file d'attente, workers, sauvegarde, erreurs)
+
+### Deux audiences distinctes, jamais mélangées
+
+Ce dépôt n'a — et n'introduit délibérément PAS ici — de rôle « administrateur
+plateforme » distinct d'un administrateur d'organisation cliente (toute
+l'authentification est scopée par organisation, voir `isAdmin(actor)`).
+Or les six métriques demandées relèvent de deux audiences réellement
+différentes :
+
+1. **Métriques par organisation** (réponse, file d'attente/workers, taux
+   d'erreur) — un administrateur client légitimement intéressé par LA
+   SANTÉ DE SES PROPRES automatisations/API. Étendent la page existante
+   `/settings/metrics` (v0.9 bis, AR-0049), déjà gardée par `isAdmin`.
+2. **Métriques de sauvegarde** — un réglage de DÉPLOIEMENT (une seule base
+   de données par instance, potentiellement partagée par plusieurs
+   organisations depuis v1.0). Les exposer via le même endpoint web
+   qu'un client peut atteindre serait une fuite d'information inter-tenant
+   (statut/horodatage/taille des sauvegardes de la plateforme entière).
+   Choix : **CLI uniquement** (`scripts/backup-metrics-report.ts`, accès
+   réservé à qui a un accès déploiement/base de données), jamais un
+   endpoint web — inventer un rôle « superadmin plateforme » pour ce seul
+   besoin aurait été un ajout d'architecture d'authentification hors
+   périmètre de cette passe.
+
+### Réponse/erreurs — extension, pas duplication
+
+`getApiLatencyMetrics` (existant) gagne un champ dérivé `errorRate`
+(`errorCount / requestCount`, `null` sans requête mesurée) — aucune
+nouvelle collecte, juste un calcul supplémentaire sur des données déjà
+journalisées.
+
+### File d'attente/workers — réutilise `AutomationJob` (v0.8), agrégé par organisation
+
+`getQueueWorkerMetrics(organizationId)` reprend exactement la logique de
+`automation/dashboard-service.ts#getAutomationDashboard` (comptage par
+statut, profondeur de file, heuristique de worker actif — un job réclamé
+dans la dernière minute, aucun registre de workers vivants n'existe, voir
+ADR 0036) mais agrégée par ORGANISATION plutôt que par workspace, pour
+rejoindre les autres métriques de `/settings/metrics`, elles aussi par
+organisation (une organisation peut avoir plusieurs workspaces).
+
+### Sauvegarde — nouveau modèle `BackupRun`, jusqu'ici seulement un fichier local
+
+`scripts/backup-database.ts`/`verify-database-backup.ts`/
+`backup-s3-objects.ts`/`verify-s3-backup.ts` ne consignaient leur résultat
+que dans un fichier `.meta.json`/`manifest.json` local au répertoire de
+sauvegarde — perdu si ce répertoire n'est pas conservé entre exécutions ou
+instances (typiquement le cas : la sauvegarde tourne depuis un cron
+externe, pas forcément sur le même volume que l'application). Nouveau
+modèle `BackupRun` (migration additive) + `recordBackupRun()` (best-effort,
+jamais bloquant — même discipline que `recordApiMetric`) appelé par les 4
+scripts, succès ET échec. Vérifié pour de vrai : `npm run backup:db` puis
+`npx tsx scripts/verify-database-backup.ts <fichier>` puis
+`npm run backup:metrics-report` — les deux exécutions réelles apparaissent
+avec leur durée/succès, les types S3 (non exécutés dans cet environnement,
+aucun bucket réel disponible) sont honnêtement signalés comme sans
+exécution récente plutôt que silencieusement omis.
+
+`src/lib/observability/backup-metrics.ts` est délibérément SANS
+`import "server-only"` (contrairement à `api-metrics.ts`) : ses seuls
+consommateurs sont des scripts CLI exécutés hors du serveur Next.js — `@/lib/
+prisma` lui-même n'a pas ce garde-fou, ce qui rend l'import direct possible
+depuis `tsx` sans le patch `NODE_OPTIONS=--require=...` utilisé ailleurs
+(AR-0172) pour des modules qui, eux, importent réellement `"server-only"`
+en aval.
