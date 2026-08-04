@@ -153,6 +153,43 @@ Gmail/Outlook/S3 avec 6 états possibles (`non configurée` /
   l'écran de diagnostic contre un abus ET l'API tierce réelle contre un
   appel excessif déclenché depuis Autorun.
 
+### AR-0166 — Sauvegarde et restauration : deux clients S3 délibérément séparés, jamais un seul
+
+`scripts/lib/s3-backup-client.ts` (accès administratif : liste TOUT le
+bucket, écrit/lit/supprime à une clé exacte, toutes organisations
+confondues) est un module ENTIÈREMENT SÉPARÉ de
+`src/lib/storage/providers/s3.ts` (l'API applicative, org-scopée par
+construction — `assertKeyBelongsToOrganization` appelé sur `download`/
+`delete`). Alternative envisagée : exporter les méthodes bas-niveau déjà
+présentes dans `S3StorageProvider` (`s3Fetch`/`buildSignedRequest`) pour
+les réutiliser depuis les scripts de sauvegarde. Écartée : cela aurait
+rendu accessible, depuis n'importe quel futur code applicatif important
+`S3StorageProvider`, une capacité de lister/écrire/lire N'IMPORTE QUELLE
+clé de N'IMPORTE QUELLE organisation — exactement le genre de capacité
+qui ne doit exister que dans un script exécuté par un opérateur humain,
+jamais atteignable depuis une route HTTP. Le coût (dupliquer ~80 lignes
+de signature SigV4, déjà un algorithme standard et stable) est
+délibérément accepté pour cette garantie de séparation des privilèges.
+
+Aucune restauration "en place" (écrasant des clés/lignes réelles) n'est
+automatisée — ni pour PostgreSQL ni pour S3. `verify-database-backup.ts`
+restaure uniquement dans une base temporaire jetable (mêmes garde-fous de
+nommage que AR-0163) ; `verify-s3-backup.ts` n'écrit que sous un préfixe
+réservé (`__provence_backup_verify__/...`), jamais aux clés d'origine,
+puis nettoie systématiquement ses propres copies de vérification. Une
+restauration réelle en cas d'incident reste une procédure MANUELLE
+documentée (`docs/operations/BACKUP_RESTORE.md` §7), avec confirmation
+explicite de la cible par l'opérateur — cohérent avec la contrainte
+"aucune opération destructive sur une base existante" appliquée à
+l'ensemble de `v1.2`, qui s'étend ici par extension de principe à toute
+donnée de stockage réelle.
+
+Une sauvegarde n'est déclarée valide (`restoreVerified: true` dans son
+fichier de métadonnées) QUE par le script de vérification correspondant,
+jamais par le script de sauvegarde lui-même — empêche par construction
+qu'une sauvegarde corrompue/tronquée soit considérée exploitable sur la
+seule foi d'un code de sortie 0 de `pg_dump`/du téléchargement S3.
+
 ## Conséquences
 
 - Toute future entité avec pièce jointe/fichier stocké doit suivre le même

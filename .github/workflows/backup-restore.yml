@@ -1,0 +1,82 @@
+name: Sauvegarde et restauration PostgreSQL
+
+# AR-0166 (v1.2) — sauvegarde réelle (pg_dump) de la base de service CI
+# (peuplée par les migrations), puis vérification par restauration réelle
+# dans une base temporaire jetable créée/supprimée par
+# scripts/verify-database-backup.ts lui-même (mêmes garde-fous que AR-0163,
+# voir docs/adr/0045 et docs/operations/BACKUP_RESTORE.md). Job séparé pour
+# ne pas allonger la durée de chaque run CI standard.
+
+on:
+  pull_request:
+    paths-ignore:
+      - "provence360-squarespace/**"
+      - "**/*.md"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "provence360-squarespace/**"
+      - "**/*.md"
+  workflow_dispatch: {}
+
+concurrency:
+  group: backup-restore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backup-restore:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: provence
+          POSTGRES_PASSWORD: provence
+          POSTGRES_DB: provence360
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U provence -d provence360"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://provence:provence@localhost:5432/provence360?schema=public
+      AUTH_SECRET: ci-secret-not-for-production-0000000000
+      AI_PROVIDER: demo
+      EMAIL_PROVIDER: demo
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Migrations + génération du client Prisma
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
+
+      - name: Seed (données réelles à sauvegarder)
+        run: npm run db:seed
+
+      - name: Sauvegarde PostgreSQL (pg_dump)
+        run: npm run backup:db -- ./backups
+
+      - name: Vérification par restauration réelle sur base temporaire jetable
+        run: |
+          DUMP_FILE=$(ls ./backups/*.dump | head -n 1)
+          npm run backup:db:verify -- "$DUMP_FILE"
+
+      - name: Vérification de cohérence base ↔ stockage (démo)
+        run: npm run backup:consistency-check

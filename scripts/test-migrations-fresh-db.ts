@@ -10,6 +10,7 @@ import {
   tempConnectionUrl,
   UnsafeTempDbNameError,
 } from "./lib/temp-db-guardrails";
+import { createTempDatabase, dropTempDatabase } from "./lib/temp-db";
 
 /**
  * AR-0163 (v1.2) — Test des migrations depuis zéro, sur une base
@@ -87,32 +88,6 @@ function guardTempDbName(name: string, realDbName: string): void {
   } catch (err) {
     if (err instanceof UnsafeTempDbNameError) fail(`Garde-fou : ${err.message}`);
     throw err;
-  }
-}
-
-async function createTempDatabase(adminUrl: string, tempDbName: string): Promise<void> {
-  const client = new Client({ connectionString: adminUrl });
-  await client.connect();
-  try {
-    // Identifiant validé par assertSafeTempDbName (regex stricte) avant appel :
-    // interpolation sûre, `CREATE DATABASE` ne supporte pas les paramètres liés.
-    await client.query(`CREATE DATABASE "${tempDbName}"`);
-  } finally {
-    await client.end();
-  }
-}
-
-async function dropTempDatabase(adminUrl: string, tempDbName: string): Promise<void> {
-  const client = new Client({ connectionString: adminUrl });
-  await client.connect();
-  try {
-    await client.query(
-      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-      [tempDbName]
-    );
-    await client.query(`DROP DATABASE IF EXISTS "${tempDbName}"`);
-  } finally {
-    await client.end();
   }
 }
 

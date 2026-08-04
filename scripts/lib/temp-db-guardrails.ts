@@ -53,3 +53,19 @@ export function tempConnectionUrl(databaseUrl: string, tempDbName: string): stri
   url.pathname = `/${tempDbName}`;
   return url.toString();
 }
+
+/**
+ * `DATABASE_URL` porte `?schema=public` (v1.2, AR-0166) — une extension
+ * propre à Prisma (`search_path` côté client Prisma), qu'aucun outil natif
+ * libpq (`pg_dump`, `pg_restore`, `psql`) ne reconnaît comme paramètre de
+ * connexion valide (`invalid URI query parameter: "schema"`). Ce nom de
+ * schéma reste toujours `public` en pratique dans ce projet (jamais
+ * configuré autrement) : le retirer avant de passer l'URL à un outil natif
+ * ne change donc rien au comportement réel, seulement à ce que l'outil
+ * accepte de parser.
+ */
+export function pgToolConnectionUrl(databaseUrl: string): string {
+  const url = new URL(databaseUrl);
+  url.searchParams.delete("schema");
+  return url.toString();
+}

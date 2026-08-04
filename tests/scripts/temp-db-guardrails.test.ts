@@ -7,6 +7,7 @@ import {
   assertSafeTempDbName,
   adminConnectionUrl,
   tempConnectionUrl,
+  pgToolConnectionUrl,
 } from "../../scripts/lib/temp-db-guardrails";
 
 const REAL_DB_URL = "postgresql://provence:provence@localhost:5432/provence360?schema=public";
@@ -67,5 +68,25 @@ describe("temp-db-guardrails (AR-0163)", () => {
     expect(parsed.pathname).toBe(`/${tempName}`);
     expect(parsed.hostname).toBe("localhost");
     expect(parsed.username).toBe("provence");
+  });
+
+  describe("pgToolConnectionUrl (AR-0166)", () => {
+    it("retire le paramètre schema, non reconnu par pg_dump/pg_restore/psql", () => {
+      const url = pgToolConnectionUrl(REAL_DB_URL);
+      expect(new URL(url).searchParams.has("schema")).toBe(false);
+    });
+
+    it("préserve hôte/port/identifiants/base de données", () => {
+      const parsed = new URL(pgToolConnectionUrl(REAL_DB_URL));
+      expect(parsed.hostname).toBe("localhost");
+      expect(parsed.port).toBe("5432");
+      expect(parsed.username).toBe("provence");
+      expect(parsed.pathname).toBe("/provence360");
+    });
+
+    it("ne modifie rien si aucun paramètre schema n'est présent", () => {
+      const withoutSchema = "postgresql://provence:provence@localhost:5432/provence360";
+      expect(pgToolConnectionUrl(withoutSchema)).toBe(withoutSchema);
+    });
   });
 });

@@ -23,6 +23,9 @@
 # stockage local du fournisseur de fichiers démo (v1.1, AR-0162) — jamais commité, comme /uploads d'un déploiement réel
 /storage-demo
 
+# sauvegardes locales base de données/objets S3 (v1.2, AR-0166) — contiennent des données métier réelles, jamais commitées
+/backups
+
 # misc
 .DS_Store
 *.pem
