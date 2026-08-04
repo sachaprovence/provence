@@ -6,7 +6,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { apiPost, apiPut, apiPatch, apiDelete, ApiError } from "@/lib/api-client";
 import type { LeadDetail } from "@/app/(app)/leads/[id]/page";
-import { CATEGORY_LABEL, MESSAGE_TYPE_LABEL, INTENT_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, MESSAGE_TYPE_LABEL, INTENT_LABEL, VIRTUAL_TOUR_STATUS_LABEL } from "@/lib/labels";
 import { ScoreBadge } from "@/components/score-badge";
 import { TagBadge } from "@/components/tag-manager";
 import { AttachmentGallery } from "@/components/attachment-gallery";
@@ -703,14 +703,6 @@ function TimelinePanel({ timeline }: { timeline: TimelineEvent[] }) {
   );
 }
 
-const VISIT_STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Brouillon",
-  SCHEDULED: "Programmée",
-  IN_PROGRESS: "En cours",
-  DELIVERED: "Livrée",
-  CANCELLED: "Annulée",
-};
-
 function VisitsPanel({ lead }: { lead: LeadDetail }) {
   return (
     <Section title="Visites 3D" action={<Link href="/visits" className="text-xs text-p360-blue hover:underline">Toutes les visites</Link>}>
@@ -719,7 +711,7 @@ function VisitsPanel({ lead }: { lead: LeadDetail }) {
           <li key={tour.id} className="text-sm border border-p360-lavender-light rounded-lg px-3 py-2">
             <div className="flex items-center justify-between">
               <div className="text-p360-ink font-medium">{tour.address ?? tour.mission.title}</div>
-              <span className="badge bg-p360-lavender-light text-p360-blue">{VISIT_STATUS_LABEL[tour.status] ?? tour.status}</span>
+              <span className="badge bg-p360-lavender-light text-p360-blue">{VIRTUAL_TOUR_STATUS_LABEL[tour.status] ?? tour.status}</span>
             </div>
             <div className="text-xs text-p360-muted mt-0.5">
               {tour.scheduledAt ? formatDate(tour.scheduledAt) : "Non planifiée"}

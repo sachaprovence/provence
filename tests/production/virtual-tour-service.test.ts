@@ -69,6 +69,50 @@ runIfDatabase("Production v0.9 — VirtualTour", () => {
     expect(tour.propertyId).toBe(property.id);
   });
 
+  it("reprend automatiquement les coordonnées GPS de la Property liée quand elles ne sont pas fournies (v1.1, AR-0166)", async () => {
+    const { organization, lead, mission } = await createOrgWithMission("gps-from-property");
+    const property = await prisma.property.create({
+      data: { organizationId: organization.id, leadId: lead.id, label: "Villa géolocalisée", latitude: 43.5, longitude: 5.4 },
+    });
+
+    const tour = await createVirtualTour(organization.id, { missionId: mission.id, propertyId: property.id });
+    expect(tour.latitude).toBe(43.5);
+    expect(tour.longitude).toBe(5.4);
+  });
+
+  it("des coordonnées GPS explicites priment sur celles de la Property liée", async () => {
+    const { organization, lead, mission } = await createOrgWithMission("gps-explicit");
+    const property = await prisma.property.create({
+      data: { organizationId: organization.id, leadId: lead.id, label: "Villa géolocalisée", latitude: 43.5, longitude: 5.4 },
+    });
+
+    const tour = await createVirtualTour(organization.id, { missionId: mission.id, propertyId: property.id, latitude: 48.85, longitude: 2.35 });
+    expect(tour.latitude).toBe(48.85);
+    expect(tour.longitude).toBe(2.35);
+  });
+
+  it("n'a pas de coordonnées GPS quand aucune n'est fournie et qu'aucune Property n'est liée", async () => {
+    const { organization, mission } = await createOrgWithMission("gps-none");
+    const tour = await createVirtualTour(organization.id, { missionId: mission.id });
+    expect(tour.latitude).toBeNull();
+    expect(tour.longitude).toBeNull();
+  });
+
+  it("enregistre l'équipement utilisé et la durée prévue", async () => {
+    const { organization, mission } = await createOrgWithMission("equipment");
+    const tour = await createVirtualTour(organization.id, {
+      missionId: mission.id,
+      equipmentUsed: "Matterport Pro3, drone DJI Mini",
+      scheduledDurationMinutes: 90,
+    });
+    expect(tour.equipmentUsed).toBe("Matterport Pro3, drone DJI Mini");
+    expect(tour.scheduledDurationMinutes).toBe(90);
+
+    const updated = await updateVirtualTour(organization.id, tour.id, { equipmentUsed: "Matterport Pro3 uniquement", scheduledDurationMinutes: 45 });
+    expect(updated.equipmentUsed).toBe("Matterport Pro3 uniquement");
+    expect(updated.scheduledDurationMinutes).toBe(45);
+  });
+
   it("liste, récupère et met à jour le statut d'une visite, isolée par organisation", async () => {
     const { organization, mission } = await createOrgWithMission("list-update");
     const tour = await createVirtualTour(organization.id, { missionId: mission.id });

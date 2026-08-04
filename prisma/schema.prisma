@@ -676,23 +676,32 @@ enum VirtualTourStatus {
 /// `Invoice` (optionnelle, jamais générée automatiquement), historique via
 /// `src/lib/crm/timeline-service.ts` (task #81).
 model VirtualTour {
-  id             String            @id @default(cuid())
-  organizationId String
-  workspaceId    String?
-  leadId         String
-  missionId      String
-  propertyId     String?
-  invoiceId      String?
-  type           PropertyType      @default(OTHER)
-  address        String?
-  surfaceM2      Float?
-  scheduledAt    DateTime?
-  status         VirtualTourStatus @default(DRAFT)
-  matterportUrl  String?
-  tourUrl        String?
-  notes          String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                       String            @id @default(cuid())
+  organizationId           String
+  workspaceId              String?
+  leadId                   String
+  missionId                String
+  propertyId               String?
+  invoiceId                String?
+  type                     PropertyType      @default(OTHER)
+  address                  String?
+  latitude                 Float?
+  longitude                Float?
+  surfaceM2                Float?
+  scheduledAt              DateTime?
+  /// Durée prévue de la prise de vue, en minutes (v1.1, AR-0166).
+  scheduledDurationMinutes Int?
+  /// Matériel utilisé pour la prise de vue — texte libre (v1.1, AR-0166), ex. "Matterport Pro3, drone DJI Mini".
+  equipmentUsed            String?
+  status                   VirtualTourStatus @default(DRAFT)
+  matterportUrl            String?
+  tourUrl                  String?
+  notes                    String?
+  /// Livraison client (v1.1, AR-0167) — distinct du statut `PUBLISHED` : une visite peut être publiée en
+  /// interne avant d'être formellement livrée/acceptée par le client (déclenche `virtual_tour.delivered`).
+  deliveredAt              DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
