@@ -7,6 +7,7 @@ import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { listTags } from "@/lib/crm/tag-service";
 import { ScoreBadge } from "@/components/score-badge";
 import { TagManager, TagBadge } from "@/components/tag-manager";
+import { LeadsKanbanBoard } from "@/components/leads-kanban-board";
 import clsx from "clsx";
 
 type SearchParams = { [key: string]: string | undefined };
@@ -155,29 +156,16 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           </table>
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {pipelineStages.map((stage) => {
-            const stageLeads = filtered.filter((l) => l.stage === stage.stageKey);
-            if (stageLeads.length === 0) return null;
-            return (
-              <div key={stage.stageKey} className="w-64 shrink-0">
-                <div className="text-xs font-semibold text-p360-muted mb-2 px-1 flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
-                  {stage.label} ({stageLeads.length})
-                </div>
-                <div className="space-y-2">
-                  {stageLeads.map((lead) => (
-                    <Link key={lead.id} href={`/leads/${lead.id}`} className="card p-3 block hover:shadow-md transition-shadow">
-                      <div className="text-sm font-medium text-p360-ink">{lead.establishmentName}</div>
-                      <div className="text-xs text-p360-muted mt-0.5">{lead.city ?? "—"}</div>
-                      <div className="mt-2"><ScoreBadge value={lead.scores[0]?.value} /></div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <LeadsKanbanBoard
+          stages={pipelineStages.map((s) => ({ stageKey: s.stageKey, label: s.label, color: s.color }))}
+          leads={filtered.map((l) => ({
+            id: l.id,
+            establishmentName: l.establishmentName,
+            city: l.city,
+            stage: l.stage,
+            scoreValue: l.scores[0]?.value,
+          }))}
+        />
       )}
     </div>
   );
