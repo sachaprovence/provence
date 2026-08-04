@@ -218,6 +218,56 @@ stockage, toutes avec repli "demo" non bloquant par construction) n'est
 vérifiée — cohérent avec l'architecture existante où seules ces 3 choses
 empêcheraient réellement l'application de fonctionner.
 
+### AR-0168 — Observabilité : audit avant renforcement, jamais une réécriture de ce qui fonctionne déjà
+
+Avant toute modification, audit du code existant sur les 8 catégories
+demandées (logs structurés, identifiant de requête, corrélation de job,
+erreurs applicatives, erreurs d'automatisation, jobs qui retentent, file
+d'attente morte, échecs de webhook/paiement/stockage/intégration) — pour
+ne renforcer que les points réellement faibles plutôt que réécrire un
+système déjà correct :
+
+- **Déjà solide, vérifié directement dans le code, non retouché** :
+  corrélation de job par `runId`/`jobId` (`logger.child({ module:
+  "automation-run"|"automation-job"|"workflow-run"|"agent-run", runId })`,
+  `src/lib/automation/executor/job-executor.ts` et équivalents
+  Workflow/Agent Engine) ; mise en DLQ journalisée
+  (`sendToDeadLetter` + `logger.error` associé) ; échecs de livraison de
+  webhook sortant journalisés avec `deliveryId`/`subscriptionId`/
+  `attempts` (`src/lib/jobs/webhook-delivery-job.ts`) ; échecs de paiement
+  journalisés (`src/lib/billing/subscription-service.ts`) ; erreurs
+  d'intégration (Gmail/Outlook/Twilio/S3) déjà journalisées à leur point
+  d'échec respectif, jamais un succès simulé (convention déjà en place
+  depuis v0.9 bis) ; toute erreur applicative (`AppError`) et tout
+  incident inattendu déjà journalisés de façon centralisée par
+  `toApiErrorResponse` (`src/lib/errors.ts`), avec capture externe
+  Sentry pour les 5xx (AR-0048).
+- **Gap réel #1 — masquage des secrets incomplet** : `REDACTED_PATHS`
+  (`src/lib/logger.ts`) ne couvrait que les clés EXACTEMENT nommées
+  `password`/`token`/`authSecret`/`secret`/`authorization` — jamais
+  `refreshToken`/`accessToken`/`clientSecret`/`authToken`/`apiKey`/
+  `smtpPassword`/`secretAccessKey`, les noms RÉELLEMENT utilisés dans le
+  code pour les jetons OAuth Gmail/Outlook, Twilio, S3, SMTP (pino
+  compare le nom de clé littéralement, jamais par sous-chaîne). Corrigé
+  en étendant la liste après audit des noms de champs réels du dépôt
+  (`grep` exhaustif), vérifié par un test par champ
+  (`tests/observability/logger.test.ts`) plutôt qu'une affirmation non
+  vérifiée.
+- **Gap réel #2 — aucun identifiant de corrélation par requête HTTP** :
+  corrigé par `src/proxy.ts` (génère/respecte `X-Request-Id` sur CHAQUE
+  requête, le transmet au gestionnaire de route via l'en-tête de requête
+  ET au client via l'en-tête de réponse) et `src/lib/observability/
+  request-id.ts` (`getRequestId`). **Limite assumée et documentée** :
+  l'adoption dans les journaux applicatifs (`toApiErrorResponse`, etc.)
+  n'est démontrée que sur un point d'entrée représentatif
+  (`POST /api/billing/webhook`, qui correspond exactement à l'exemple
+  "échecs de paiement" cité) plutôt que rétrofittée sur la totalité des
+  ~150 routes API existantes — un tel rétrofit mécanique reste un travail
+  futur explicitement identifié, pas silencieusement omis. L'infrastructure
+  (en-tête toujours présent, aidant de lecture disponible) est en place
+  pour que toute route l'adopte au fil de l'eau sans changement
+  d'architecture supplémentaire.
+
 ## Conséquences
 
 - Toute future entité avec pièce jointe/fichier stocké doit suivre le même
@@ -238,3 +288,14 @@ empêcheraient réellement l'application de fonctionner.
   empiriquement sa fiabilité dans ce nouveau contexte d'exécution — la
   complétude fonctionnelle d'une suite ne garantit pas son déterminisme
   sous charge.
+- Tout nouveau champ de configuration destiné à porter un secret (jeton,
+  clé API, mot de passe) doit être ajouté à `REDACTED_PATHS`
+  (`src/lib/logger.ts`) ET couvert par un test dédié dans
+  `tests/observability/logger.test.ts` avant son premier usage réel — ne
+  jamais supposer qu'un nom de champ "évident" est déjà couvert par la
+  redaction générique.
+- Toute nouvelle route API qui journalise une erreur devrait inclure
+  `requestId` (via `getRequestId(request)`,
+  `src/lib/observability/request-id.ts`) dans le contexte journalisé —
+  convention établie mais pas encore universellement appliquée (voir
+  limite assumée ci-dessus).
