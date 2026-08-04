@@ -55,6 +55,8 @@ const BUILT_IN_AUTOMATION_TRIGGER_TYPES = [
   { key: "virtual_tour.created", name: "Visite 3D créée", description: "Une visite 3D vient d'être créée.", category: "production", kind: "event" },
   { key: "virtual_tour.shooting_done", name: "Visite terminée", description: "La prise de vue d'une visite 3D vient d'être marquée terminée.", category: "production", kind: "event" },
   { key: "virtual_tour.published", name: "Visite 3D publiée", description: "Une visite 3D vient d'être publiée.", category: "production", kind: "event" },
+  // v1.1, AR-0167 — distinct de `virtual_tour.published` (livraison client formelle, jamais republié deux fois pour la même visite).
+  { key: "virtual_tour.delivered", name: "Visite 3D livrée", description: "Une visite 3D vient d'être marquée comme livrée au client.", category: "production", kind: "event" },
   { key: "property.created", name: "Bien immobilier créé", description: "Un bien immobilier vient d'être créé.", category: "crm", kind: "event" },
 ] as const;
 

@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { createVirtualTour, listVirtualTours, getVirtualTour, updateVirtualTour } from "@/lib/production/virtual-tour-service";
-import { NotFoundError, ValidationError } from "@/lib/errors";
-import { VirtualTourStatus, PropertyType } from "@/generated/prisma/enums";
+import { createVirtualTour, listVirtualTours, getVirtualTour, updateVirtualTour, markVirtualTourDelivered } from "@/lib/production/virtual-tour-service";
+import { createInvoiceFromVirtualTour } from "@/lib/crm/invoice-service";
+import { NotFoundError, ValidationError, ConflictError } from "@/lib/errors";
+import { VirtualTourStatus, PropertyType, ServiceKind } from "@/generated/prisma/enums";
 
 /**
  * Module "Visites 3D" (v0.9, ADR 0038) : `VirtualTour` lié à un `Mission`
@@ -16,9 +17,11 @@ const runIfDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
 runIfDatabase("Production v0.9 — VirtualTour", () => {
   const organizationIds: string[] = [];
+  const userIds: string[] = [];
 
   afterAll(async () => {
     await prisma.organization.deleteMany({ where: { id: { in: organizationIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
   });
 
   async function createOrgWithMission(suffix: string) {
@@ -111,6 +114,53 @@ runIfDatabase("Production v0.9 — VirtualTour", () => {
     const updated = await updateVirtualTour(organization.id, tour.id, { equipmentUsed: "Matterport Pro3 uniquement", scheduledDurationMinutes: 45 });
     expect(updated.equipmentUsed).toBe("Matterport Pro3 uniquement");
     expect(updated.scheduledDurationMinutes).toBe(45);
+  });
+
+  it("marque une visite comme livrée une seule fois (idempotent, v1.1, AR-0167)", async () => {
+    const { organization, mission } = await createOrgWithMission("deliver");
+    const tour = await createVirtualTour(organization.id, { missionId: mission.id });
+    expect(tour.deliveredAt).toBeNull();
+
+    const delivered = await markVirtualTourDelivered(organization.id, tour.id);
+    expect(delivered.deliveredAt).not.toBeNull();
+
+    const secondCall = await markVirtualTourDelivered(organization.id, tour.id);
+    expect(secondCall.deliveredAt?.getTime()).toBe(delivered.deliveredAt?.getTime());
+  });
+
+  it("crée une facture directement depuis une visite 3D, jamais automatiquement", async () => {
+    const { organization, mission } = await createOrgWithMission("invoice-from-visit");
+    const user = await prisma.user.create({
+      data: { email: `visit-invoice-${crypto.randomUUID()}@example.test`, passwordHash: "x", firstName: "Test", lastName: "User" },
+    });
+    userIds.push(user.id);
+    const service = await prisma.service.create({
+      data: { organizationId: organization.id, kind: ServiceKind.VIRTUAL_TOUR_SIMPLE, name: "Visite virtuelle simple", basePrice: 45000 },
+    });
+    const tour = await createVirtualTour(organization.id, { missionId: mission.id });
+
+    const invoice = await createInvoiceFromVirtualTour(organization.id, tour.id, service.id, user.id);
+    expect(invoice.totalAmount).toBe(45000);
+    expect(invoice.lines).toHaveLength(1);
+    expect(invoice.lines[0].label).toBe("Visite virtuelle simple");
+
+    const refreshedTour = await prisma.virtualTour.findUniqueOrThrow({ where: { id: tour.id } });
+    expect(refreshedTour.invoiceId).toBe(invoice.id);
+  });
+
+  it("rejette une seconde facture pour une visite qui en a déjà une", async () => {
+    const { organization, mission } = await createOrgWithMission("invoice-once");
+    const user = await prisma.user.create({
+      data: { email: `visit-invoice-once-${crypto.randomUUID()}@example.test`, passwordHash: "x", firstName: "Test", lastName: "User" },
+    });
+    userIds.push(user.id);
+    const service = await prisma.service.create({
+      data: { organizationId: organization.id, kind: ServiceKind.VIRTUAL_TOUR_SIMPLE, name: "Visite virtuelle simple", basePrice: 45000 },
+    });
+    const tour = await createVirtualTour(organization.id, { missionId: mission.id });
+
+    await createInvoiceFromVirtualTour(organization.id, tour.id, service.id, user.id);
+    await expect(createInvoiceFromVirtualTour(organization.id, tour.id, service.id, user.id)).rejects.toThrow(ConflictError);
   });
 
   it("liste, récupère et met à jour le statut d'une visite, isolée par organisation", async () => {

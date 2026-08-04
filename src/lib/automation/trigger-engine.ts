@@ -156,6 +156,7 @@ const REAL_EMISSION_EVENT_KEYS = [
   "virtual_tour.created",
   "virtual_tour.shooting_done",
   "virtual_tour.published",
+  "virtual_tour.delivered",
   "property.created",
 ] as const;
 

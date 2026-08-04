@@ -92,6 +92,58 @@ export async function convertQuoteToInvoice(organizationId: string, quoteId: str
   return invoice;
 }
 
+/**
+ * Facture directement depuis une visite 3D (v1.1, AR-0167) — toujours une
+ * action explicite (bouton "Créer la facture"), jamais automatique, même
+ * principe que `convertQuoteToInvoice`. Pré-remplit une unique ligne à
+ * partir du `Service` choisi (la visite n'a pas de Service directement lié
+ * en base — l'opérateur le choisit, comme pour un devis, voir
+ * `OpportunitiesPanel`). Rejette si la visite a déjà une facture liée.
+ */
+export async function createInvoiceFromVirtualTour(organizationId: string, virtualTourId: string, serviceId: string, actorUserId: string) {
+  const tour = await prisma.virtualTour.findFirst({ where: { id: virtualTourId, organizationId } });
+  if (!tour) throw new NotFoundError("Visite 3D introuvable.");
+  if (tour.invoiceId) throw new ConflictError("Cette visite a déjà une facture liée.");
+
+  const service = await prisma.service.findFirst({ where: { id: serviceId, organizationId } });
+  if (!service) throw new NotFoundError("Prestation introuvable.");
+
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  const count = await prisma.invoice.count({ where: { organizationId } });
+  const reference = `${organization.invoicePrefix ?? "FA"}-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+
+  const dueAt = new Date();
+  dueAt.setDate(dueAt.getDate() + DEFAULT_PAYMENT_TERMS_DAYS);
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      organizationId,
+      leadId: tour.leadId,
+      reference,
+      status: InvoiceStatus.DRAFT,
+      totalAmount: service.basePrice,
+      vatAmount: 0,
+      dueAt,
+      lines: { create: [{ serviceId: service.id, label: service.name, quantity: 1, unitPrice: service.basePrice }] },
+      virtualTours: { connect: { id: tour.id } },
+    },
+    include: { lines: true },
+  });
+
+  await writeAuditLog({
+    organizationId,
+    userId: actorUserId,
+    leadId: tour.leadId,
+    action: "invoice.created_from_virtual_tour",
+    entityType: "Invoice",
+    entityId: invoice.id,
+    metadata: { virtualTourId: tour.id, totalAmount: invoice.totalAmount },
+  });
+  await publishAutomationEvent("invoice.created", { organizationId, leadId: tour.leadId, invoiceId: invoice.id });
+
+  return invoice;
+}
+
 export async function updateInvoiceStatus(organizationId: string, id: string, status: InvoiceStatus) {
   const existing = await prisma.invoice.findFirst({ where: { id, organizationId } });
   if (!existing) throw new NotFoundError("Facture introuvable.");

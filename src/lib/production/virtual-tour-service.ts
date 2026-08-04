@@ -169,3 +169,30 @@ export async function updateVirtualTour(
 
   return tour;
 }
+
+/**
+ * Livraison client (v1.1, AR-0167) — distincte du statut `PUBLISHED` (une
+ * visite peut être publiée en interne avant d'être formellement livrée/
+ * acceptée par le client). Idempotent : `deliveredAt` n'est renseigné et
+ * `virtual_tour.delivered` n'est publié qu'UNE SEULE FOIS par visite ; un
+ * second appel renvoie la visite inchangée sans republier l'évènement (sert
+ * de fondation à l'automatisation "Livraison effectuée", AR-0175).
+ */
+export async function markVirtualTourDelivered(organizationId: string, id: string) {
+  const existing = await prisma.virtualTour.findFirst({ where: { id, organizationId } });
+  if (!existing) throw new NotFoundError("Visite 3D introuvable.");
+  if (existing.deliveredAt) return existing;
+
+  const tour = await prisma.virtualTour.update({ where: { id }, data: { deliveredAt: new Date() } });
+
+  await writeAuditLog({
+    organizationId,
+    leadId: existing.leadId,
+    action: "virtual_tour.delivered",
+    entityType: "VirtualTour",
+    entityId: tour.id,
+  });
+  await publishAutomationEvent("virtual_tour.delivered", { organizationId, leadId: existing.leadId, virtualTourId: tour.id });
+
+  return tour;
+}

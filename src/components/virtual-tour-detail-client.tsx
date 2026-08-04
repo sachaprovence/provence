@@ -3,12 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { apiPut, ApiError } from "@/lib/api-client";
+import { apiPut, apiPost, ApiError } from "@/lib/api-client";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { AttachmentGallery } from "@/components/attachment-gallery";
 import { VIRTUAL_TOUR_STATUS_LABEL, PROPERTY_TYPE_LABEL } from "@/lib/labels";
 import type { getVirtualTour } from "@/lib/production/virtual-tour-service";
 import type { listAttachments } from "@/lib/crm/attachment-service";
+import type { ServiceModel } from "@/generated/prisma/models";
+
+function formatEuros(cents: number) {
+  return (cents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+}
 
 type TourDetail = Awaited<ReturnType<typeof getVirtualTour>>;
 
@@ -34,11 +39,45 @@ const STATUS_ORDER = Object.keys(VIRTUAL_TOUR_STATUS_LABEL);
 export function VirtualTourDetailClient({
   tour,
   attachments,
+  services,
 }: {
   tour: TourDetail;
   attachments: Awaited<ReturnType<typeof listAttachments>>;
+  services: ServiceModel[];
 }) {
   const router = useRouter();
+  const [deliverBusy, setDeliverBusy] = useState(false);
+  const [deliverError, setDeliverError] = useState<string | null>(null);
+  const [invoiceServiceId, setInvoiceServiceId] = useState(services[0]?.id ?? "");
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+
+  async function deliver() {
+    setDeliverBusy(true);
+    setDeliverError(null);
+    try {
+      await apiPost(`/api/virtual-tours/${tour.id}/deliver`);
+      router.refresh();
+    } catch (err) {
+      setDeliverError(err instanceof ApiError ? err.message : "Erreur inattendue.");
+    } finally {
+      setDeliverBusy(false);
+    }
+  }
+
+  async function createInvoice() {
+    if (!invoiceServiceId) return;
+    setInvoiceBusy(true);
+    setInvoiceError(null);
+    try {
+      await apiPost(`/api/virtual-tours/${tour.id}/invoice`, { serviceId: invoiceServiceId });
+      router.refresh();
+    } catch (err) {
+      setInvoiceError(err instanceof ApiError ? err.message : "Erreur inattendue.");
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
   const [form, setForm] = useState({
     type: tour.type,
     address: tour.address,
@@ -198,6 +237,50 @@ export function VirtualTourDetailClient({
         ) : (
           <p className="text-sm text-p360-muted">Aucun prestataire assigné à la mission liée.</p>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Livraison et facturation</CardTitle>
+        </CardHeader>
+        <div className="space-y-4">
+          <div>
+            {tour.deliveredAt ? (
+              <p className="text-sm text-p360-ink">
+                <span className="badge bg-green-50 text-p360-success">Livrée</span> le {formatDate(tour.deliveredAt)}
+              </p>
+            ) : (
+              <>
+                <button className="btn-secondary" disabled={deliverBusy} onClick={deliver}>
+                  {deliverBusy ? "Envoi…" : "Marquer comme livrée"}
+                </button>
+                {deliverError && <p className="text-sm text-p360-danger mt-2">{deliverError}</p>}
+              </>
+            )}
+          </div>
+          <div className="border-t border-p360-lavender-light pt-4">
+            {tour.invoice ? (
+              <p className="text-sm text-p360-ink">
+                Facture : <Link href="/invoices" className="text-p360-blue hover:underline">{tour.invoice.reference}</Link> — {formatEuros(tour.invoice.totalAmount)} ({tour.invoice.status})
+              </p>
+            ) : services.length === 0 ? (
+              <p className="text-sm text-p360-muted">Aucune prestation active à facturer — créez-en une dans les paramètres du catalogue.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 items-end">
+                <div>
+                  <label className="label">Prestation</label>
+                  <select className="input" value={invoiceServiceId} onChange={(e) => setInvoiceServiceId(e.target.value)}>
+                    {services.map((s) => <option key={s.id} value={s.id}>{s.name} — {formatEuros(s.basePrice)}</option>)}
+                  </select>
+                </div>
+                <button className="btn-primary" disabled={invoiceBusy || !invoiceServiceId} onClick={createInvoice}>
+                  {invoiceBusy ? "Création…" : "Créer la facture"}
+                </button>
+              </div>
+            )}
+            {invoiceError && <p className="text-sm text-p360-danger mt-2">{invoiceError}</p>}
+          </div>
+        </div>
       </Card>
 
       <AttachmentGallery entityType="VirtualTour" entityId={tour.id} attachments={attachments} />
