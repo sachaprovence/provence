@@ -26,7 +26,7 @@ describe("next.config.ts — en-têtes de sécurité HTTP (AR-0169)", () => {
     expect(headerMap["Permissions-Policy"]).toBeDefined();
   });
 
-  it("ne définit délibérément aucune Content-Security-Policy (voir ADR 0045 pour la justification)", async () => {
+  it("ne définit pas ici de Content-Security-Policy — posée par requête dans src/proxy.ts (v1.3, AR-0173, voir tests/security/csp.test.ts)", async () => {
     const rules = await nextConfig.headers!();
     const headerMap = Object.fromEntries(rules[0].headers.map((h) => [h.key, h.value]));
     expect(headerMap["Content-Security-Policy"]).toBeUndefined();

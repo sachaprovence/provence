@@ -7,13 +7,11 @@ import type { NextConfig } from "next";
  * applicatif, contrairement à `src/proxy.ts` qui ne s'exécute que sur les
  * requêtes traitées par le matcher du proxy.
  *
- * Volontairement SANS `Content-Security-Policy` : une CSP stricte sur une
- * application aussi large (pages, éditeur de workflow drag-drop, visites
- * 3D, PDF, éventuels scripts inline nécessaires à l'hydratation React)
- * exige un câblage par nonce vérifié page par page pour ne rien casser —
- * hors périmètre de cette passe de durcissement sans régression visuelle
- * documentée. Voir ADR 0045 pour la justification complète et le travail
- * futur explicitement identifié.
+ * `Content-Security-Policy` volontairement ABSENTE d'ici (v1.2, ADR 0045) :
+ * elle est désormais posée par `src/proxy.ts` (v1.3, AR-0173,
+ * `src/lib/security/csp.ts`), pas ici, car elle nécessite un nonce généré
+ * PAR REQUÊTE — `headers()` ci-dessous ne peut renvoyer qu'une valeur
+ * statique, connue une seule fois au build.
  */
 const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },

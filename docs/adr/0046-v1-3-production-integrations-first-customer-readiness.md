@@ -84,3 +84,66 @@ posées à l'opérateur avant de démarrer (voir historique de session) :
   test), il suffit de réexécuter `npm run integrations:validate` : aucune
   modification de code n'est nécessaire, les fournisseurs AR-0165
   détecteront automatiquement `CONFIGURED` et déclencheront le test réel.
+
+## Décision — AR-0173 : propagation complète de `X-Request-Id` + finalisation de la CSP
+
+### `X-Request-Id` sur tous les sites d'appel
+
+`toApiErrorResponse(error, context)` devient `toApiErrorResponse(error,
+request, context)` — `requestId` en est dérivé automatiquement
+(`getRequestId(request)`) et ajouté au contexte journalisé, toujours APRÈS
+le contexte fourni par l'appelant (`{ err, statusCode, ...context,
+requestId }`) pour qu'il ne puisse **jamais** être écrasé, même par erreur.
+v1.2 n'avait câblé qu'une seule route de démonstration
+(`billing/webhook`) ; v1.3 retrofit les ~160 sites d'appel restants de
+`src/app/api/**/route.ts` via un codemod AST
+(`scripts/codemods/add-request-to-api-error-responses.ts`, conservé dans le
+dépôt) plutôt que des éditions manuelles — trop nombreuses et répétitives
+pour être fiables à la main. `src/lib/public-api/handler.ts` (point d'entrée
+commun de toute l'API publique v1) n'a nécessité qu'une modification, pas
+160 : les routes `api/public/v1/**` passent toutes par ce wrapper.
+
+### CSP stricte à base de nonce (v1.2 l'avait différée, voir ADR 0045)
+
+v1.2 avait explicitement reporté la CSP, faute de vérification page par
+page qu'aucun script/style externe ou `unsafe-inline` n'était nécessaire.
+Cette vérification a été faite en v1.3 : aucune iframe, aucun `<Script>`
+externe, aucun WebSocket côté client, un seul `dangerouslySetInnerHTML`
+dans tout le dépôt (`src/app/layout.tsx`, script bloquant d'init du thème).
+Toutes les URLs `https://` référencées dans `src/` sont des appels
+serveur-à-serveur vers des fournisseurs tiers (Stripe, Gmail, Outlook,
+Twilio...), jamais des ressources chargées par le navigateur — donc hors
+périmètre de la CSP.
+
+- **Générée par requête dans `src/proxy.ts`** (`src/lib/security/csp.ts#buildCspHeader`),
+  jamais dans `next.config.ts#headers()` : un nonce doit être unique par
+  requête, or `next.config.ts` ne peut renvoyer qu'une chaîne statique
+  connue une seule fois au build.
+- **`script-src 'self' 'nonce-X' 'strict-dynamic'`** (+ `'unsafe-eval'` en
+  développement uniquement, requis par React pour la reconstruction des
+  piles d'erreur serveur→navigateur) — jamais `'unsafe-inline'`, ni en
+  développement ni en production.
+- Le nonce est transmis au gestionnaire de route/page via l'en-tête
+  `x-nonce` (même mécanisme que `X-Request-Id`) ; `src/app/layout.tsx` le
+  lit via `headers()` (Server Component) et l'applique au script inline du
+  thème.
+- **Conséquence assumée** : lire `headers()` dans le layout racine force le
+  rendu dynamique de TOUTE page (documentation Next.js sur les nonces CSP)
+  — y compris les 3 pages encore statiques (`/login`, `/register`,
+  `/reset-password`), le reste de l'application étant déjà entièrement
+  dynamique (session, données par organisation). Coût de performance jugé
+  négligible face au bénéfice de sécurité, et vérifié par les 4 suites E2E
+  (dont 3 démarrant d'une organisation fraîche) : zéro erreur console,
+  zéro violation CSP, sur l'ensemble du parcours (connexion, inscription,
+  facturation, automatisations, workflows).
+
+## Conséquences (AR-0173)
+
+- Toute nouvelle route API DOIT désormais passer `request` à
+  `toApiErrorResponse` — une erreur TypeScript (paramètre manquant) le
+  rappelle immédiatement à la revue de code plutôt qu'un oubli silencieux.
+- Toute nouvelle iframe, script externe, ou style inline non nonced fera
+  échouer silencieusement la ressource correspondante (bloquée par le
+  navigateur) — à surveiller via les futurs rapports d'erreurs `report-to`/
+  `report-uri` (non câblés dans cette passe, identifié comme travail futur
+  pour AR-0174/monitoring).
