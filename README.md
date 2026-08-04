@@ -178,8 +178,11 @@ npm run db:seed                 # charger les données de démonstration
 npm run db:reset                  # réinitialiser la base (⚠️ destructif, usage local uniquement)
 ```
 
-`GET /api/health` (public) vérifie la connectivité base de données ; utilisé
-par le `HEALTHCHECK` Docker. La CI (`.github/workflows/ci.yml`) exécute lint,
+`GET /api/health/live` (liveness, aucune dépendance) et `GET /api/health/ready`
+(readiness : base de données, migrations, configuration — voir
+`src/lib/health/readiness.ts`) sont publics ; `GET /api/health` reste
+disponible pour compatibilité (même vérification que `/ready`) et alimente
+le `HEALTHCHECK` Docker. La CI (`.github/workflows/ci.yml`) exécute lint,
 typecheck, tests et build sur chaque pull request ; `.github/workflows/e2e.yml`
 rejoue les 3 suites E2E (golden path, isolation multi-tenant, Automation
 Engine) sur chaque pull request et après merge sur `main`.

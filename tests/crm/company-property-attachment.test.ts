@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createCompany, getCompany, updateCompany, deleteCompany, listCompanies } from "@/lib/crm/company-service";
 import { createProperty, getProperty, updateProperty, deleteProperty, listProperties } from "@/lib/crm/property-service";
 import { createAttachment, listAttachments, deleteAttachment } from "@/lib/crm/attachment-service";
+import { DemoStorageProvider } from "@/lib/storage/demo-provider";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 
 /**
@@ -137,6 +138,37 @@ runIfDatabase("CRM v0.9 — Company / Property / Attachment", () => {
     await deleteAttachment(orgA.id, attachment.id);
     const remaining = await listAttachments(orgA.id, "Lead", leadA.id);
     expect(remaining.map((a) => a.id)).not.toContain(attachment.id);
+  });
+
+  it("deleteAttachment supprime réellement le fichier physique quand storageKey est renseigné (AR-0164)", async () => {
+    const { organization, lead } = await createOrgWithLead("attachment-real-delete");
+    const provider = new DemoStorageProvider();
+    const { url, key } = await provider.upload({
+      organizationId: organization.id,
+      fileName: "contrat-reel.pdf",
+      mimeType: "application/pdf",
+      data: Buffer.from("contenu réel"),
+    });
+
+    const attachment = await createAttachment(organization.id, null, {
+      entityType: "Lead",
+      entityId: lead.id,
+      category: "DOCUMENT",
+      fileName: "contrat-reel.pdf",
+      url,
+      storageKey: key,
+    });
+    expect(attachment.storageKey).toBe(key);
+
+    // Le fichier existe bien avant suppression.
+    await expect(provider.download({ organizationId: organization.id, key })).resolves.toBeDefined();
+
+    await deleteAttachment(organization.id, attachment.id);
+
+    // La ligne ET le fichier physique ont disparu.
+    const remaining = await listAttachments(organization.id, "Lead", lead.id);
+    expect(remaining.map((a) => a.id)).not.toContain(attachment.id);
+    await expect(provider.download({ organizationId: organization.id, key })).rejects.toThrow();
   });
 
   it("rejette une pièce jointe sur une Property d'une autre organisation", async () => {

@@ -116,6 +116,7 @@ model Organization {
   auditLogs            AuditLog[]
   aiRequests           AIRequest[]
   integrations         Integration[]
+  integrationDiagnosticChecks IntegrationDiagnosticCheck[]
   webhookEvents        WebhookEvent[]
   loginEvents          LoginEvent[]
   pipelineStages         PipelineStage[]
@@ -167,6 +168,7 @@ model User {
   memoryEntriesCreated        MemoryEntry[]              @relation("MemoryEntryCreatedBy")
   knowledgeDocumentsCreated   KnowledgeDocument[]        @relation("KnowledgeDocumentCreatedBy")
   automationsCreated          Automation[]               @relation("AutomationCreatedBy")
+  integrationDiagnosticChecksRun IntegrationDiagnosticCheck[] @relation("IntegrationDiagnosticCheckRunBy")
   automationVersionsCreated   AutomationVersion[]        @relation("AutomationVersionCreatedBy")
   automationRunsCreated       AutomationRun[]            @relation("AutomationRunCreatedBy")
   sessions                    Session[]
@@ -679,6 +681,13 @@ model Attachment {
   category       AttachmentCategory
   fileName       String
   url            String
+  /// Clé brute chez le fournisseur de stockage (ex. `<organizationId>/<uuid>-<nom>`),
+  /// distincte de `url` — permet un téléchargement/suppression fiables auprès du
+  /// StorageProvider sans dépendre du format d'URL publique, qui varie par
+  /// fournisseur et peut changer (rotation de bucket/CDN). Nullable : les pièces
+  /// jointes créées avant AR-0164 (v1.2) n'en ont pas — gérées en lecture seule
+  /// pour la suppression physique (voir attachment-service.ts).
+  storageKey     String?
   mimeType       String?
   sizeBytes      Int?
   uploadedById   String?
@@ -1744,6 +1753,52 @@ model Integration {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, kind, name])
+}
+
+/// Intégrations couvertes par l'écran de diagnostic (v1.2, AR-0165, voir ADR
+/// 0045) — distinct d'`IntegrationKind` : Stripe et S3 n'ont pas de ligne
+/// `Integration` (configuration par variable d'environnement de déploiement,
+/// jamais par organisation), alors que ce diagnostic les couvre quand même.
+enum IntegrationDiagnosticKey {
+  STRIPE
+  TWILIO
+  GMAIL
+  OUTLOOK
+  S3_STORAGE
+}
+
+/// États affichés par l'écran de diagnostic (v1.2, AR-0165). `TEST_SUCCESS`/
+/// `TEST_FAILED` reflètent le dernier `IntegrationDiagnosticCheck` connu ;
+/// `UNAVAILABLE` distingue un service injoignable (réseau/délai dépassé)
+/// d'un échec d'authentification/configuration (`TEST_FAILED`).
+enum IntegrationDiagnosticStatus {
+  NOT_CONFIGURED
+  PARTIALLY_CONFIGURED
+  CONFIGURED
+  TEST_SUCCESS
+  TEST_FAILED
+  UNAVAILABLE
+}
+
+/// Historique des tests de connexion déclenchés manuellement depuis l'écran
+/// de diagnostic (v1.2, AR-0165) — sert à la fois d'audit ("qui a testé
+/// quoi, quand") et de source du dernier résultat affiché. `message` est
+/// TOUJOURS un texte sûr généré côté serveur (code HTTP, nature de l'erreur)
+/// — jamais la configuration ou une valeur brute renvoyée par le
+/// fournisseur tiers.
+model IntegrationDiagnosticCheck {
+  id             String                      @id @default(cuid())
+  organizationId String
+  integration    IntegrationDiagnosticKey
+  status         IntegrationDiagnosticStatus
+  message        String?
+  checkedById    String?
+  createdAt      DateTime                    @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  checkedBy    User?        @relation("IntegrationDiagnosticCheckRunBy", fields: [checkedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, integration, createdAt])
 }
 
 model WebhookEvent {

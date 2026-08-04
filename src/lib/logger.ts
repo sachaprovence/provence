@@ -15,6 +15,18 @@ import pino from "pino";
  * `redact` : toute clé d'objet nommée ainsi, à n'importe quel niveau de
  * profondeur, est automatiquement masquée.
  */
+/**
+ * v1.2, AR-0168 : liste étendue après audit des noms de champs RÉELLEMENT
+ * utilisés dans le code pour porter un secret (`refreshToken`/`accessToken`
+ * OAuth Gmail/Outlook, `clientSecret` OAuth, `authToken` Twilio,
+ * `secretAccessKey` S3, `smtpPassword`, `apiKey` fournisseurs email) —
+ * `token`/`secret`/`password`/`authSecret` seuls ne couvraient QUE les
+ * clés exactement nommées ainsi, jamais `refreshToken`/`clientSecret`
+ * etc. (pino compare le nom de clé littéralement, pas par sous-chaîne).
+ * Voir tests/observability/logger.test.ts pour la preuve, par test, que
+ * chacun de ces champs est réellement masqué — jamais une simple
+ * affirmation en commentaire.
+ */
 const REDACTED_PATHS = [
   "password",
   "*.password",
@@ -22,12 +34,28 @@ const REDACTED_PATHS = [
   "*.passwordHash",
   "token",
   "*.token",
+  "refreshToken",
+  "*.refreshToken",
+  "accessToken",
+  "*.accessToken",
+  "clientSecret",
+  "*.clientSecret",
+  "authToken",
+  "*.authToken",
+  "apiKey",
+  "*.apiKey",
+  "smtpPassword",
+  "*.smtpPassword",
+  "secretAccessKey",
+  "*.secretAccessKey",
   "authSecret",
   "*.authSecret",
   "secret",
   "*.secret",
   "authorization",
   "*.authorization",
+  "cookie",
+  "*.cookie",
   "req.headers.authorization",
   "req.headers.cookie",
 ];

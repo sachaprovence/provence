@@ -224,10 +224,23 @@ utilisent désormais ce kit au lieu de balises HTML brutes.
 
 ### Contrôle de santé
 
-- `GET /api/health` (public, exclu de l'authentification dans
-  `src/proxy.ts`) : vérifie la connectivité base de données
-  (`SELECT 1`) et journalise un échec. Utilisé par le `HEALTHCHECK` du
-  `Dockerfile` et de `docker-compose.yml`.
+- `GET /api/health/live` (v1.2, AR-0167) : liveness pure — prouve
+  seulement que le processus répond, aucune vérification de dépendance.
+  Un orchestrateur (Kubernetes...) redémarre le conteneur si cet endpoint
+  échoue.
+- `GET /api/health/ready` (v1.2, AR-0167) : readiness — vérifie les
+  composants indispensables (base de données `SELECT 1`, migrations
+  Prisma appliquées, configuration d'environnement minimale valide) via
+  `src/lib/health/readiness.ts`, renvoie un détail structuré par
+  vérification (jamais de message d'erreur brut/pile d'appel/nom de
+  table). Une intégration optionnelle non configurée (IA, email, SMS,
+  facturation, stockage — toutes ont un repli "demo" non bloquant) ne
+  fait jamais échouer ce contrôle. Un orchestrateur retire le conteneur du
+  load balancer sans le redémarrer si cet endpoint échoue.
+- `GET /api/health` (historique, conservé pour compatibilité) : même
+  évaluation de readiness que `/ready`, forme de réponse `{status}`
+  inchangée. Toutes ces routes sont publiques (exclues de
+  l'authentification dans `src/proxy.ts`).
 
 ### CI/CD
 
@@ -262,7 +275,8 @@ utilisent désormais ce kit au lieu de balises HTML brutes.
 - `.dockerignore` ajouté (le `Dockerfile` faisait un `COPY . .` sans
   exclusion : risque de copier `.env` dans l'image).
   `HEALTHCHECK` ajouté au `Dockerfile` et à `docker-compose.yml`,
-  s'appuyant sur `GET /api/health`.
+  s'appuyant sur `GET /api/health/ready` (v1.2, AR-0169 — voir
+  `docs/operations/DEPLOYMENT.md`).
 
 ## 9. Multi-tenant : Organization/Workspace (v0.2 — `ROADMAP.md` MOD-21)
 

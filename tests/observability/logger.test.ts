@@ -67,3 +67,68 @@ describe("logger — redaction des champs sensibles (pino)", () => {
     expect(getOutput()).toContain("org-visible-123");
   });
 });
+
+/**
+ * v1.2, AR-0168 — audit des noms de champs RÉELLEMENT utilisés dans le
+ * code pour porter un jeton OAuth/mot de passe/clé API/identifiant
+ * d'accès (Gmail/Outlook `refreshToken`/`accessToken`/`clientSecret`,
+ * Twilio `authToken`, S3 `secretAccessKey`, SMTP `smtpPassword`,
+ * fournisseurs email `apiKey`) — chacun testé individuellement plutôt que
+ * supposé couvert par une redaction générique par sous-chaîne (pino
+ * compare le nom de clé littéralement).
+ */
+describe("logger — redaction des identifiants OAuth/API réellement utilisés dans le code (AR-0168)", () => {
+  const SENSITIVE_FIELDS: { field: string; value: string }[] = [
+    { field: "refreshToken", value: "refresh-token-should-never-leak" },
+    { field: "accessToken", value: "access-token-should-never-leak" },
+    { field: "clientSecret", value: "client-secret-should-never-leak" },
+    { field: "authToken", value: "twilio-auth-token-should-never-leak" },
+    { field: "secretAccessKey", value: "s3-secret-access-key-should-never-leak" },
+    { field: "smtpPassword", value: "smtp-password-should-never-leak" },
+    { field: "apiKey", value: "provider-api-key-should-never-leak" },
+    { field: "cookie", value: "session=should-never-leak" },
+  ];
+
+  for (const { field, value } of SENSITIVE_FIELDS) {
+    it(`masque "${field}" au premier niveau ET imbriqué`, () => {
+      const { testLogger, getOutput } = createCapturingLogger();
+      testLogger.info({ [field]: value, nested: { [field]: value } }, `Test redaction ${field}`);
+
+      const output = getOutput();
+      expect(output).not.toContain(value);
+      expect(output).toContain("[REDACTED]");
+    });
+  }
+
+  it("masque une configuration Gmail/Outlook complète (Integration.config) sans exposer aucun secret", () => {
+    const { testLogger, getOutput } = createCapturingLogger();
+    testLogger.warn(
+      {
+        config: {
+          provider: "gmail",
+          clientId: "client-id-not-secret",
+          clientSecret: "client-secret-should-never-leak",
+          refreshToken: "refresh-token-should-never-leak",
+        },
+      },
+      "Test configuration email complète"
+    );
+
+    const output = getOutput();
+    expect(output).not.toContain("client-secret-should-never-leak");
+    expect(output).not.toContain("refresh-token-should-never-leak");
+    expect(output).toContain("client-id-not-secret"); // Non sensible — reste visible.
+  });
+
+  it("masque des identifiants Twilio complets sans exposer authToken", () => {
+    const { testLogger, getOutput } = createCapturingLogger();
+    testLogger.warn(
+      { config: { accountSid: "ACxxx-not-secret", authToken: "twilio-auth-token-should-never-leak" } },
+      "Test configuration Twilio complète"
+    );
+
+    const output = getOutput();
+    expect(output).not.toContain("twilio-auth-token-should-never-leak");
+    expect(output).toContain("ACxxx-not-secret"); // Identifiant de compte, pas un secret — reste visible.
+  });
+});
