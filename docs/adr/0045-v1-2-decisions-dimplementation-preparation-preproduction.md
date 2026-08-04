@@ -311,6 +311,25 @@ pas simplement affirmés corrects sans preuve. Les en-têtes de sécurité
 HTTP et `X-Request-Id`, eux, ONT été vérifiés contre un vrai serveur de
 production démarré localement (`next start`, hors conteneur).
 
+### AR-0170 — Audit npm : `next` monté en version mineure après vérification que `next/image`/`sharp` est inutilisé
+
+5 vulnérabilités `high` (0 critique) : `brace-expansion`×2 et `fast-uri`
+(transitives, outillage de développement uniquement, corrigées par
+`npm audit fix` sans `--force`) ; `postcss`/`sharp` (empaquetées par
+`next@16.2.12`, corrigées par la montée non majeure `next@16.3.0`,
+`isSemVerMajor: false`). Détail complet, chaîne de dépendances,
+exploitabilité et décision par vulnérabilité :
+`docs/security/npm-audit-v1.2-2026-08-04.md`.
+
+Décision clé : avant d'appliquer la montée de `next`, recherche explicite
+de tout usage de `next/image` (seul point d'entrée exécutant `sharp`,
+la dépendance la plus significative des deux) — confirmée ABSENTE du
+dépôt (`organization-form.tsx` utilise délibérément une balise `<img>`
+classique, avec commentaire expliquant pourquoi). Cela élimine le
+principal vecteur de rupture d'une montée de version de Next.js touchant
+à l'optimisation d'image, avant même de lancer la suite de tests —
+analyse d'incompatibilité RÉELLE, pas seulement "la CI est passée".
+
 ## Conséquences
 
 - Toute future entité avec pièce jointe/fichier stocké doit suivre le même
