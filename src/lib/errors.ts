@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { captureExceptionBestEffort } from "@/lib/observability/error-tracking";
 
 /**
  * Erreur applicative "attendue" : le message est écrit pour être affiché
@@ -61,6 +62,22 @@ export class ConflictError extends AppError {
   }
 }
 
+/** Quota dépassé (ex. quota IA mensuel par organisation, AR-0051) — erreur métier attendue, jamais un incident (voir `toApiErrorResponse`). */
+export class QuotaExceededError extends AppError {
+  constructor(message = "Quota dépassé.", details?: unknown) {
+    super(message, { statusCode: 429, expose: true, details });
+    this.name = "QuotaExceededError";
+  }
+}
+
+/** Débit dépassé ou compte temporairement verrouillé (v0.10, AR-0155) — erreur métier attendue, jamais un incident. */
+export class TooManyRequestsError extends AppError {
+  constructor(message = "Trop de requêtes.", details?: unknown) {
+    super(message, { statusCode: 429, expose: true, details });
+    this.name = "TooManyRequestsError";
+  }
+}
+
 /**
  * Convertit n'importe quelle erreur (`AppError` ou exception inattendue) en
  * `NextResponse` JSON, en journalisant systématiquement côté serveur.
@@ -76,6 +93,10 @@ export function toApiErrorResponse(error: unknown, context?: Record<string, unkn
   if (error instanceof AppError) {
     const log = error.statusCode >= 500 ? logger.error.bind(logger) : logger.warn.bind(logger);
     log({ err: error, statusCode: error.statusCode, ...context }, error.message);
+    // Capture externe (AR-0048) réservée aux incidents (5xx) — un 4xx est une erreur métier attendue, pas un incident.
+    if (error.statusCode >= 500) {
+      captureExceptionBestEffort(error, { statusCode: error.statusCode, ...context });
+    }
     return NextResponse.json(
       { error: error.expose ? error.message : "Une erreur est survenue.", details: error.details },
       { status: error.statusCode }
@@ -84,6 +105,7 @@ export function toApiErrorResponse(error: unknown, context?: Record<string, unkn
 
   const incidentId = crypto.randomUUID();
   logger.error({ err: error, incidentId, ...context }, "Erreur inattendue.");
+  captureExceptionBestEffort(error, { incidentId, statusCode: 500, ...context });
   return NextResponse.json(
     {
       error: "Une erreur inattendue est survenue. Contactez le support si le problème persiste.",

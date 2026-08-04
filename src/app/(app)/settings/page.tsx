@@ -11,9 +11,10 @@ import { EmailSettingsForm } from "@/components/email-settings-form";
 import { DEFAULT_SCORING_RULES, type ScoringRule } from "@/lib/scoring";
 import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { listRegisteredLlmProviderKeys, registerBuiltInLlmProviders } from "@/lib/agents/llm";
+import { getAiSpendThisMonthUsd } from "@/lib/ai/quota";
 import { MembershipRole } from "@/generated/prisma/enums";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ calendar?: string; reason?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ calendar?: string; email?: string; reason?: string }> }) {
   const actor = await requireRole([MembershipRole.OWNER_ADMIN]);
   const sp = await searchParams;
 
@@ -38,6 +39,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {sp.calendar === "error" && (
         <div className="card p-3 text-sm text-p360-danger border-p360-danger">
           Échec de la connexion à Google Calendar{sp.reason ? ` (${sp.reason})` : ""}.
+        </div>
+      )}
+      {sp.email === "connected" && (
+        <div className="card p-3 text-sm text-p360-success border-p360-success">Messagerie connectée avec succès.</div>
+      )}
+      {sp.email === "error" && (
+        <div className="card p-3 text-sm text-p360-danger border-p360-danger">
+          Échec de la connexion de la messagerie{sp.reason ? ` (${sp.reason})` : ""}.
         </div>
       )}
 
@@ -66,6 +75,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             phone: org.phone ?? "",
             invoicePrefix: org.invoicePrefix ?? "FA",
             quotePrefix: org.quotePrefix ?? "DEV",
+            aiMonthlyBudgetUsd: org.aiMonthlyBudgetUsd,
           }}
         />
       </section>
@@ -80,7 +90,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       <section className="card p-6">
         <h2 className="text-lg font-semibold text-p360-ink mb-2">Intelligence artificielle</h2>
-        <AiSettingsStatus />
+        <AiSettingsStatus organizationId={org.id} aiMonthlyBudgetUsd={org.aiMonthlyBudgetUsd} />
       </section>
 
       <section className="card p-6">
@@ -125,6 +135,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
 async function IntegrationsList({ organizationId }: { organizationId: string }) {
   const integrations = await prisma.integration.findMany({ where: { organizationId } });
+  const emailProvider = process.env.EMAIL_PROVIDER ?? "demo";
   return (
     <ul className="divide-y divide-p360-lavender-light text-sm">
       {integrations.map((i) => (
@@ -137,11 +148,17 @@ async function IntegrationsList({ organizationId }: { organizationId: string }) 
             {i.kind === "CALENDAR" && i.status !== "CONNECTED" && (
               <a href="/api/calendar/google/connect" className="btn-secondary text-xs">Connecter Google Calendar</a>
             )}
+            {i.kind === "EMAIL" && emailProvider === "gmail" && i.status !== "CONNECTED" && (
+              <a href="/api/email/gmail/connect" className="btn-secondary text-xs">Connecter Gmail</a>
+            )}
+            {i.kind === "EMAIL" && emailProvider === "outlook" && i.status !== "CONNECTED" && (
+              <a href="/api/email/outlook/connect" className="btn-secondary text-xs">Connecter Outlook</a>
+            )}
           </div>
         </li>
       ))}
       <li className="pt-3 text-xs text-p360-muted">
-        Variable d&apos;environnement <code>EMAIL_PROVIDER</code> (choix du fournisseur — identifiants ci-dessus), <code>GOOGLE_OAUTH_CLIENT_ID</code>/<code>GOOGLE_OAUTH_CLIENT_SECRET</code>/<code>GOOGLE_OAUTH_REDIRECT_URI</code> pour Google Calendar.
+        Variable d&apos;environnement <code>EMAIL_PROVIDER</code> (choix du fournisseur — identifiants ci-dessus, ou <code>gmail</code>/<code>outlook</code> puis bouton « Connecter » ci-dessus), <code>GOOGLE_OAUTH_CLIENT_ID</code>/<code>GOOGLE_OAUTH_CLIENT_SECRET</code>/<code>GOOGLE_OAUTH_REDIRECT_URI</code> pour Google Calendar, <code>GMAIL_OAUTH_CLIENT_ID</code>/<code>GMAIL_OAUTH_CLIENT_SECRET</code>/<code>GMAIL_OAUTH_REDIRECT_URI</code> pour Gmail, <code>MICROSOFT_OAUTH_CLIENT_ID</code>/<code>MICROSOFT_OAUTH_CLIENT_SECRET</code>/<code>MICROSOFT_OAUTH_REDIRECT_URI</code> pour Outlook.
       </li>
     </ul>
   );
@@ -153,10 +170,11 @@ async function IntegrationsList({ organizationId }: { organizationId: string }) 
  * aux identifiants email (task #92). Cette section affiche donc un statut
  * honnête plutôt qu'un formulaire qui n'agirait sur rien.
  */
-async function AiSettingsStatus() {
+async function AiSettingsStatus({ organizationId, aiMonthlyBudgetUsd }: { organizationId: string; aiMonthlyBudgetUsd: number | null }) {
   registerBuiltInLlmProviders();
   const llmProvider = process.env.LLM_PROVIDER ?? "demo";
   const legacyAiProvider = process.env.AI_PROVIDER ?? "demo";
+  const spentThisMonth = await getAiSpendThisMonthUsd(organizationId);
   return (
     <div className="text-sm text-p360-ink space-y-2">
       <p>
@@ -170,6 +188,13 @@ async function AiSettingsStatus() {
       </p>
       <p className="text-xs text-p360-muted">
         Le choix du fournisseur se fait via les variables d&apos;environnement <code>LLM_PROVIDER</code>/<code>AI_PROVIDER</code> au déploiement (clé API requise pour un fournisseur réel) — voir README.
+      </p>
+      <p>
+        Quota IA mensuel (voir champ &laquo;&nbsp;Entreprise&nbsp;&raquo; ci-dessus) :{" "}
+        <span className="badge bg-p360-lavender-light">
+          {spentThisMonth.toFixed(2)} $ {aiMonthlyBudgetUsd ? `/ ${aiMonthlyBudgetUsd.toFixed(2)} $` : "(pas de quota configuré)"}
+        </span>
+        .
       </p>
     </div>
   );

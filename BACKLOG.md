@@ -1864,21 +1864,22 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
 > La tâche `AR-0052` (`SmtpEmailProvider`) ci-dessous est livrée (sous une
 > forme étendue à Resend/Postmark/Brevo et à la configuration par
 > organisation) via `AR-0145` ci-dessus. `AR-0047` à `AR-0051`, `AR-0053`
-> et `AR-0054` sont traitées dans la section "Version 0.9 bis"
-> ci-dessous — voir `ROADMAP.md` §1 novies.
+> et `AR-0054` ont été traitées et livrées dans la section "Version 0.9 bis"
+> ci-dessous — voir `ROADMAP.md` §1 decies.
 
-## Version 0.9 bis — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06)
+## Version 0.9 bis — Observabilité + connecteurs réels (MOD-16, MOD-04, MOD-06) — livrée
 
-> **Statut : en cours d'implémentation.** État des lieux réalisé avant
+> **Statut : ✅ livré** (2026-08-03). État des lieux réalisé avant
 > exécution (relecture du code, pas seulement de la roadmap) : `AR-0047`
-> est déjà satisfaite depuis une phase antérieure (`src/lib/logger.ts`,
+> était déjà satisfaite depuis une phase antérieure (`src/lib/logger.ts`,
 > pino, redaction, aucun `console.log` brut dans `src/` — règle de lint
-> active) — seul un test de non-régression manquait. `AR-0052` est déjà
+> active) — seul un test de non-régression manquait. `AR-0052` était déjà
 > livrée via `AR-0145` (v0.9). Le reste (`AR-0048`/`0049`/`0050`/`0051`/
-> `0053`/`0054`) est implémenté dans cette version, en réutilisant les
+> `0053`/`0054`) a été implémenté dans cette version, en réutilisant les
 > conventions déjà établies (fournisseur réel + repli honnête sans
 > identifiants, jamais un faux succès ; appel HTTP direct plutôt qu'un
-> SDK tiers lourd).
+> SDK tiers lourd). Voir `docs/adr/0040` pour le détail des décisions
+> d'architecture, et §"Validation finale de v0.9 bis" ci-dessous.
 
 ### AR-0047 — Logs structurés (pino) — déjà livrée, test de non-régression ajouté
 - **Description** : `src/lib/logger.ts` (pino, `redact` sur
@@ -1936,122 +1937,467 @@ entre deux développeurs si disponibles → ~8 jours calendaires).
   connus (coût IA, échec d'email, latence enregistrée) ; isolation
   multi-tenant des métriques.
 
-### AR-0050 — `AnthropicAIProvider` (`src/lib/ai/`, distinct de l'abstraction LLM du Framework des Agents)
+### AR-0050 — `AnthropicAIProvider` (`src/lib/ai/`, distinct de l'abstraction LLM du Framework des Agents) — livrée
 - **Description** : implémentation réelle de `AIProvider` (couche
   historique `src/lib/ai/`, utilisée par `analyzeLead`/`generateMessage`/
   `sequence-engine.ts` — toujours active, PAS remplacée par l'abstraction
   LLM du Framework des Agents qui dessert un périmètre différent) basée
   sur l'API Anthropic (Claude), via `fetch()` direct, sélectionnable par
-  `AI_PROVIDER=anthropic`. Échoue explicitement sans `ANTHROPIC_API_KEY`.
+  `AI_PROVIDER=anthropic`. Échoue explicitement sans `ANTHROPIC_API_KEY`,
+  sur erreur HTTP, ou si la réponse ne contient pas le JSON structuré
+  demandé (jamais un résultat fabriqué). Les méthodes retournant des
+  données structurées (`analyzeLead`, `recommendScore`, `generateMessage`,
+  `classifyReply`, `recommendNextAction`) demandent à Claude un objet JSON
+  strict, parsé et normalisé (valeurs par défaut sûres si un champ optionnel
+  manque, `classifyReply` retombe sur `ReplyIntent.UNKNOWN` si la valeur
+  renvoyée n'appartient pas à l'énumération) ; les méthodes texte libre
+  (`summarizeConversation`, `translate`, `generateSalesReport`) renvoient
+  directement le texte de Claude. `estimateCostUsd` reste basée sur une
+  estimation caractères→tokens (tarifs publics Claude Sonnet), comme
+  `DemoAIProvider` — la signature héritée de `AIProvider` ne transporte pas
+  l'usage réel de tokens.
 - **Fichiers concernés** : `src/lib/ai/providers/anthropic.ts` (nouveau),
-  `src/lib/ai/index.ts`.
+  `src/lib/ai/providers/http-helpers.ts` (nouveau, propre à cette couche —
+  distinct de `src/lib/agents/llm/providers/http-helpers.ts`), `src/lib/ai/index.ts`.
 - **Complexité** : Moyenne.
-- **Tests nécessaires** : contrat `AIProvider` (mêmes tests que
-  `DemoAIProvider`) + appel réel vérifié contre un vrai serveur HTTP
-  local ; échec explicite sans clé API.
+- **Tests** : `tests/ai/anthropic-provider.test.ts` — échec explicite sans
+  clé API ; appel réel vérifié contre un vrai serveur HTTP local (en-têtes,
+  corps de requête, modèle) ; parsing JSON pour les 5 méthodes structurées ;
+  normalisation d'une intention hors énumération vers `UNKNOWN` ; échec
+  explicite sur erreur HTTP (401) et sur réponse texte non structurée.
 
-### AR-0051 — Quota IA dur par organisation
+### AR-0051 — Quota IA dur par organisation — livrée
 - **Description** : transforme `AIRequest.estimatedCostUsd` (simple
-  journalisation) en quota bloquant mensuel, configurable par
-  organisation (`Organization.aiMonthlyBudgetUsd`, additif), avec message
-  d'erreur explicite au dépassement — vérifié avant tout nouvel appel
-  IA réel (couche `src/lib/ai/` ET Framework des Agents).
+  journalisation depuis v0.3) en quota bloquant mensuel, configurable par
+  organisation (`Organization.aiMonthlyBudgetUsd`, additif, `null` = pas de
+  quota — comportement inchangé pour toutes les organisations existantes),
+  avec message d'erreur explicite (`QuotaExceededError`, HTTP 429) au
+  dépassement — jamais un simple avertissement.
+  - Couche historique `src/lib/ai/` : `getAIProviderForOrganization(organizationId)`
+    (nouvelle fonction, vérifie le quota puis délègue à `getAIProvider()`)
+    utilisée aux 4 points d'appel réel (`sequence-engine.ts`,
+    `POST /api/messages/generate`, `POST /api/leads/[id]/analyze`,
+    `POST /api/leads/[id]/simulate-reply`) — chacun renvoie désormais une
+    réponse 429 explicite au lieu de laisser l'exception remonter en 500.
+  - Framework des Agents : `generateAgentNarrative` (point d'entrée UNIQUE
+    partagé par les 7 agents métier + Commercial, voir tâche #25) vérifie le
+    quota AVANT tout appel LLM et journalise désormais une ligne `AIRequest`
+    (nouveau `AIRequestKind.AGENT_NARRATIVE`, coût estimé génériquement —
+    `estimateGenericAiCostUsd` — le fournisseur actif pouvant être
+    n'importe lequel des 8 enregistrés) — comble un manque préexistant
+    (le champ `AIRequest.agentRunId`, conçu pour ça depuis une phase
+    antérieure, n'était jusque-là jamais renseigné : le Framework des
+    Agents n'écrivait AUCUNE ligne de coût). Les deux couches partagent
+    donc désormais le même budget mensuel par organisation.
+  - Réglage exposé dans Paramètres → Entreprise (`OrganizationForm`,
+    champ "Quota IA mensuel dur") et affiché (consommation du mois en
+    cours) dans Paramètres → Intelligence artificielle.
 - **Fichiers concernés** : `src/lib/ai/quota.ts` (nouveau), `src/lib/ai/index.ts`,
-  `src/lib/agents/llm/index.ts`, migration Prisma (`Organization.aiMonthlyBudgetUsd`).
+  `src/lib/agents/shared/generation.ts`, `src/lib/errors.ts` (nouvelle
+  `QuotaExceededError`, 429), `src/lib/sequence-engine.ts`,
+  `src/app/api/messages/generate/route.ts`,
+  `src/app/api/leads/[id]/analyze/route.ts`,
+  `src/app/api/leads/[id]/simulate-reply/route.ts`,
+  `src/lib/validations/organization.ts`, `src/components/organization-form.tsx`,
+  `src/app/(app)/settings/page.tsx`, migration Prisma
+  (`Organization.aiMonthlyBudgetUsd`, `AIRequestKind.AGENT_NARRATIVE`).
 - **Complexité** : Moyenne.
 - **Prérequis** : AR-0050.
-- **Tests nécessaires** : une organisation au quota atteint est bloquée
-  (jamais seulement avertie) ; isolation multi-tenant du quota.
+- **Tests** : `tests/ai/quota.test.ts` — pas de quota = illimité ; blocage
+  explicite au dépassement ; isolation multi-tenant ; fenêtre glissante
+  limitée au mois civil en cours ; `getAIProviderForOrganization` refuse
+  de retourner un fournisseur au-delà du quota ; un run d'agent RÉEL de
+  bout en bout (Agent Relance) réussit normalement sous le quota et
+  échoue explicitement (`AgentRun.status = FAILED`, aucun message créé)
+  une fois dépassé ; `tests/settings/organization-settings.test.ts` pour
+  la validation du nouveau champ.
 
 ### AR-0052 — `SmtpEmailProvider` — déjà livrée via AR-0145 (v0.9)
 Voir `src/lib/email/providers/smtp.ts` (task #86, v0.9) — implémentation
 SMTP réelle, configuration par organisation. Rien à faire ici.
 
-### AR-0053 — `GmailApiProvider`
+### AR-0053 — `GmailApiProvider` — livrée
 - **Description** : implémentation réelle de `EmailProvider` via l'API
-  Gmail (OAuth2 + REST `fetch()` direct — même patron que Google
-  Calendar, task #87), configuration par organisation
-  (`Integration.config`, kind EMAIL, `provider: "gmail"`). Échoue
-  explicitement sans connexion OAuth.
-- **Fichiers concernés** : `src/lib/email/providers/gmail.ts` (nouveau),
-  `src/lib/email/index.ts`, routes OAuth
-  `src/app/api/email/gmail/{connect,callback}/route.ts`.
+  Gmail v1 (`users.messages.send`, OAuth2 + REST `fetch()` direct — même
+  patron que Google Calendar, task #87), configuration par organisation
+  (`Integration.config`, kind EMAIL : `clientId`/`clientSecret`/
+  `refreshToken`, émis par le flux `/api/email/gmail/connect` →
+  `/callback`), sélectionnable par `EMAIL_PROVIDER=gmail`. Échoue
+  explicitement sans connexion OAuth ou en cas d'erreur réseau/HTTP —
+  jamais un succès simulé (même convention que SMTP/Resend/Postmark/Brevo).
+  Le client OAuth2 Google (jusque-là spécifique à Calendar) a été
+  généralisé en un module partagé `src/lib/google/oauth.ts` (`scope`
+  paramétrable) — `calendar/google/oauth.ts` délègue désormais à ce module
+  en conservant EXACTEMENT ses signatures d'origine (zéro régression sur
+  l'intégration Google Calendar déjà livrée, vérifié par sa suite de
+  tests existante inchangée).
+- **Fichiers concernés** : `src/lib/google/oauth.ts` (nouveau, partagé),
+  `src/lib/calendar/google/oauth.ts` (délègue désormais au module
+  partagé), `src/lib/email/providers/gmail.ts` (nouveau),
+  `src/lib/email/providers/gmail-oauth-flow.ts` (nouveau),
+  `src/lib/email/config.ts` (champs `clientId`/`clientSecret`/
+  `refreshToken`/`oauthBaseUrl`/`apiBaseUrl`), `src/lib/email/index.ts`,
+  routes OAuth `src/app/api/email/gmail/{connect,callback}/route.ts`,
+  Paramètres → Intégrations (bouton « Connecter Gmail »).
 - **Complexité** : Élevée.
 - **Prérequis** : AR-0052 (patron `EmailProvider`, déjà livré).
-- **Tests nécessaires** : contrat `EmailProvider` + flux OAuth/envoi
-  réel vérifié contre un vrai serveur HTTP local (comme Google
-  Calendar) — la vérification de bout en bout contre un vrai compte
-  Gmail n'est pas possible dans cet environnement (aucun identifiant).
+- **Tests** : `tests/email/gmail.test.ts` — échec explicite sans
+  configuration ; envoi réel (refresh de jeton + envoi) vérifié contre un
+  vrai serveur HTTP local (en-têtes, message RFC 2822 encodé en base64url
+  décodé et vérifié) ; échec explicite sur erreur HTTP d'envoi et sur
+  échec de renouvellement du jeton ; flux OAuth complet (URL de
+  consentement avec le bon `scope`, échec explicite sans `refresh_token`
+  renvoyé, persistance dans `Integration.config`) — la vérification de
+  bout en bout contre un vrai compte Gmail n'est pas possible dans cet
+  environnement (aucun identifiant OAuth disponible), voir ADR 0038.
 
-### AR-0054 — `OutlookApiProvider`
-- **Description** : équivalent AR-0053 pour Microsoft Graph/Outlook
-  (OAuth2 + REST `fetch()` direct).
-- **Fichiers concernés** : `src/lib/email/providers/outlook.ts` (nouveau),
-  `src/lib/email/index.ts`, routes OAuth
-  `src/app/api/email/outlook/{connect,callback}/route.ts`.
+### AR-0054 — `OutlookApiProvider` — livrée
+- **Description** : implémentation réelle de `EmailProvider` via Microsoft
+  Graph (`POST /me/sendMail`), OAuth2 (Azure AD / Entra ID — endpoint
+  `login.microsoftonline.com`, `tenant` configurable par organisation,
+  `common` par défaut = comptes personnels ET professionnels/scolaires),
+  configuration par organisation (`Integration.config`, kind EMAIL :
+  `clientId`/`clientSecret`/`refreshToken`/`tenantId`, émis par le flux
+  `/api/email/outlook/connect` → `/callback`), sélectionnable par
+  `EMAIL_PROVIDER=outlook`. Échoue explicitement sans connexion OAuth ou
+  en cas d'erreur réseau/HTTP — jamais un succès simulé. Un module OAuth2
+  Microsoft générique (`src/lib/microsoft/oauth.ts`) a été créé en miroir
+  de `src/lib/google/oauth.ts` (AR-0053) plutôt que de dupliquer sa
+  logique dans le fournisseur Outlook lui-même.
+- **Fichiers concernés** : `src/lib/microsoft/oauth.ts` (nouveau, partagé),
+  `src/lib/email/providers/outlook.ts` (nouveau),
+  `src/lib/email/providers/outlook-oauth-flow.ts` (nouveau),
+  `src/lib/email/config.ts` (champ `tenantId`), `src/lib/email/index.ts`,
+  routes OAuth `src/app/api/email/outlook/{connect,callback}/route.ts`,
+  Paramètres → Intégrations (bouton « Connecter Outlook », déjà préparé
+  par AR-0053).
 - **Complexité** : Élevée.
 - **Prérequis** : AR-0052.
-- **Tests nécessaires** : idem AR-0053.
+- **Tests** : `tests/email/outlook.test.ts` — mêmes scénarios qu'AR-0053
+  (échec explicite sans configuration ; envoi réel — refresh de jeton +
+  `sendMail` — vérifié contre un vrai serveur HTTP local, corps de
+  requête Microsoft Graph vérifié ; échec explicite sur erreur HTTP
+  d'envoi et sur échec de renouvellement du jeton ; flux OAuth complet
+  avec le scope `Mail.Send`/`offline_access` et l'hôte
+  `login.microsoftonline.com`) — la vérification de bout en bout contre
+  un vrai compte Microsoft 365 n'est pas possible dans cet environnement
+  (aucun identifiant OAuth disponible), voir ADR 0038.
 
-**Total estimé v0.9 bis : ~14 jours de travail restant** (AR-0047/AR-0052 déjà livrées ; AR-0053/AR-0054 parallélisables).
+**Total v0.9 bis : livré intégralement** (AR-0047/AR-0052 déjà satisfaites avant le début de cette version ; AR-0048/AR-0049/AR-0050/AR-0051/AR-0053/AR-0054 implémentées, testées, validées).
+
+### Validation finale de v0.9 bis (2026-08-03)
+
+- **Dépendances** : installation propre vérifiée (`node_modules` déjà en
+  place, `npx prisma generate` réexécuté après chaque changement de
+  schéma).
+- **Migrations** : les 17 migrations (v0.1 à v0.9 bis) s'appliquent sans
+  erreur sur une base PostgreSQL fraîchement créée (`npx prisma migrate
+  deploy`), puis `npm run db:seed` réussit sur cette base vide.
+- **Suite de tests complète** : 434/434 tests passent (`npx vitest run`)
+  contre cette même base fraîche — 384 hérités de v0.9 (inchangés,
+  aucune régression) + 50 nouveaux (logger, capture d'erreurs, métriques,
+  fournisseur Anthropic IA, quota IA — y compris un run d'agent réel
+  bloqué de bout en bout —, Gmail, Outlook).
+- **Qualité statique** : `npx tsc --noEmit` (0 erreur) et `npx eslint .`
+  (0 erreur, 3 avertissements préexistants sans rapport avec v0.9 bis)
+  passent sur l'ensemble du dépôt.
+- **Build de production** : `npm run build` réussit.
+- **Serveur de production réellement démarré** (`npm run start`) contre
+  la base fraîchement migrée/seedée : connexion admin démo, page
+  `/settings` (nouveau champ quota IA, statut IA avec consommation du
+  mois), `/settings/metrics` et `GET /api/settings/metrics` (métriques
+  réelles renvoyées), aucune erreur serveur inattendue dans les journaux
+  (seuls les échecs explicites ATTENDUS : Gmail/Outlook/Google Calendar
+  non connectés dans cet environnement, Sentry sans DSN).
+- **Tests de bout en bout (E2E, Playwright, contre le serveur de
+  production)** : les 3 suites existantes passent sans modification —
+  `tests/e2e/golden-path.mjs` (parcours principal), 
+  `tests/e2e/two-organizations-isolation.mjs` (isolation multi-tenant),
+  `tests/e2e/automation-golden-path.mjs` (Automation Engine) — zéro
+  erreur console dans les trois cas.
+- **Isolation multi-tenant** : vérifiée par les tests d'isolation dédiés
+  de v0.9 bis (`tests/ai/quota.test.ts` : quota d'une organisation ne
+  bloque jamais une autre ; `tests/observability/metrics-service.test.ts`
+  : métriques d'une organisation ne fuient jamais vers une autre) en plus
+  du test E2E d'isolation existant.
+- **Stubs/mocks actifs dans le périmètre v0.9 bis** : aucun — tous les
+  fournisseurs (Anthropic, Sentry, Gmail, Outlook) sont des
+  implémentations réelles qui échouent explicitement sans configuration,
+  jamais un succès simulé.
 
 ---
 
-## Version 0.10 — Sécurité avancée (MOD-17, porte obligatoire avant v1.0)
+## Version 0.10 — Stabilisation production (MOD-17, porte obligatoire avant v1.0)
+
+> **Statut : ✅ livrée** (2026-08-03). Les 11 tâches ci-dessous (AR-0153 à
+> AR-0159 nouvelles + AR-0055/0056/0057/0058 concrétisées) sont toutes
+> corrigées et testées. Voir `docs/adr/0041` et
+> `docs/security/owasp-review-2026-08-03.md` pour le détail des décisions
+> et des constats P1/P2 reportés.
+
+> **Contexte** : avant de lancer cette version, un audit exhaustif du code
+> (pas seulement des ADR/BACKLOG existants) a été mené par 3 revues
+> indépendantes ciblées (sécurité/isolation multi-tenant ; dette technique/
+> code mort/duplication/performance ; couverture de tests/migrations/
+> observabilité/documentation/CI), plus une vérification manuelle
+> ciblée du parcours de réinitialisation de mot de passe. Les tâches
+> ci-dessous sont les constats classés **P0** (indispensables avant v1.0)
+> transformés en tâches atomiques. Les constats **P1** (fortement
+> recommandés mais non bloquants) et **P2** (peuvent attendre après v1.0)
+> sont listés dans le rapport OWASP (`AR-0056`) plutôt que transformés en
+> tâches — voir aussi le rapport final « Go / No Go v1.0 ».
+
+### AR-0153 — Correction critique : lien de réinitialisation de mot de passe jamais envoyé par email réel
+- **Constat (P0, Critique)** : `POST /api/auth/reset-password/request`
+  renvoie **toujours** `demoResetLink` en clair dans la réponse JSON,
+  quel que soit l'environnement — même quand un vrai fournisseur email
+  est configuré (`EMAIL_PROVIDER=smtp/resend/postmark/brevo/gmail/
+  outlook`). Aucun email réel n'est jamais envoyé. Conséquence concrète :
+  n'importe qui connaissant l'adresse email d'un compte peut appeler cette
+  route et récupérer directement un lien de réinitialisation valide dans
+  la réponse HTTP — prise de contrôle de compte triviale en production.
+  Cette route date de la Phase 0 (avant l'existence d'un fournisseur email
+  réel, v0.9) et n'a jamais été mise à jour depuis.
+- **Description** : envoyer réellement l'email de réinitialisation via
+  `getEmailProvider().send(...)` quand un fournisseur réel est actif ;
+  ne renvoyer `demoResetLink` dans la réponse QUE si `getEmailProvider().name
+  === "demo"`. Ne jamais réveler si l'email existe ou non (comportement
+  déjà correct, conservé). Mettre à jour l'écran de demande de
+  réinitialisation pour afficher un message de confirmation générique
+  quand aucun lien démo n'est renvoyé.
+- **Fichiers concernés** : `src/app/api/auth/reset-password/request/route.ts`,
+  `src/app/(auth)/reset-password/page.tsx`.
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : en mode démo, comportement inchangé (lien
+  renvoyé) ; avec un fournisseur réel configuré (vrai serveur HTTP/SMTP
+  local), l'email est réellement envoyé et **aucun** lien n'apparaît dans
+  la réponse JSON ; l'énumération d'email (email inexistant) reste
+  indétectable dans les deux modes.
+
+### AR-0154 — Masquage des secrets dans les réponses API du Communication Hub
+- **Constat (P0, Critique)** : `PUT /api/communications/config/[channel]`
+  (`updateChannelConfig`) renvoie l'objet `Integration` complet, y compris
+  le `config` JSON brut — tout secret qu'un admin y a saisi (clé API
+  Twilio, jeton WhatsApp, secret de signature webhook...) est donc renvoyé
+  en clair dans la réponse HTTP (visible dans les devtools navigateur, un
+  éventuel proxy/APM, ou tout journal HTTP). Le fournisseur email a déjà
+  résolu ce problème (`getEmailConfigPreview`) — le Communication Hub ne
+  suit pas encore le même patron.
+- **Description** : ajouter un aperçu masqué (même patron que
+  `getEmailConfigPreview` : ne renvoyer que la présence d'un secret via un
+  booléen, jamais sa valeur) et l'utiliser dans la réponse de la route au
+  lieu de l'intégration brute.
+- **Fichiers concernés** : `src/lib/communication/hub-service.ts`,
+  `src/app/api/communications/config/[channel]/route.ts`.
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : la réponse de `PUT` ne contient jamais la valeur
+  d'un secret soumis, seulement sa présence.
+
+### AR-0155 — Rate limiting et verrouillage de compte sur l'authentification
+- **Constat (P0, Critique/Élevé)** : aucune limitation de débit n'existe
+  nulle part dans l'application pour les requêtes HTTP entrantes (le seul
+  "rate limiter" existant, `src/lib/automation/concurrency/rate-limiter.ts`,
+  protège des appels sortants vers des API tierces, pas les requêtes
+  entrantes). `POST /api/auth/login`, `/api/auth/register` et
+  `/api/auth/reset-password/request` peuvent donc être appelés sans
+  aucune limite — `LoginEvent` journalise chaque tentative échouée mais
+  rien ne le relit jamais pour bloquer un compte ou ralentir les essais :
+  la connexion est intégralement force-brutable.
+- **Description** : (a) verrouillage de compte durable, cohérent
+  multi-instance : `assertLoginNotAtLocked(email)` interroge `LoginEvent`
+  (déjà en base depuis v0.1) pour compter les échecs récents et bloque
+  explicitement au-delà d'un seuil, appelé en tout début de
+  `POST /api/auth/login` ; (b) limitation de débit best-effort par IP
+  (fenêtre glissante en mémoire, même honnêteté documentée que le
+  rate-limiter existant — jamais partagée entre instances, limite
+  assumée) dans `src/proxy.ts` (Next.js 16 : le Proxy tourne par défaut
+  sur le runtime Node.js, confirmé dans la documentation embarquée —
+  utilisable directement, contrairement à l'ancien `middleware.ts` limité
+  à l'Edge Runtime) pour `POST /api/auth/{login,register}` et
+  `POST /api/auth/reset-password/request`.
+- **Fichiers concernés** : `src/lib/auth.ts` (nouvelle fonction de
+  verrouillage), `src/app/api/auth/login/route.ts`, `src/lib/security/
+  rate-limiter.ts` (nouveau), `src/proxy.ts`, migration Prisma (index
+  `LoginEvent(email, createdAt)` pour la performance de la requête de
+  verrouillage).
+- **Complexité** : Moyenne.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : un compte avec N échecs récents est bloqué
+  (jamais seulement averti) ; un compte avec des échecs anciens (hors
+  fenêtre) n'est pas bloqué ; une IP dépassant le débit configuré reçoit
+  un 429 explicite ; un utilisateur légitime sous le seuil n'est jamais
+  affecté.
+
+### AR-0156 — Secret de webhook obligatoire (Workflow Engine + Automation Engine)
+- **Constat (P0, Moyen/Élevé)** : les déclencheurs webhook du Workflow
+  Engine (v0.6) et de l'Automation Engine (v0.8) ne vérifient le secret
+  `X-Webhook-Secret` QUE s'il a été explicitement configuré
+  (`if (configuredSecret) { ... }`) — documenté comme limite connue de
+  conception (ADR 0019), mais laisse en pratique n'importe quel
+  déclencheur webhook créé sans secret ouvert à quiconque devine
+  `workspaceId` + `workflowKey`/`automationKey` (pas de force brute
+  nécessaire, ce sont des identifiants prévisibles/observables).
+- **Description** : générer automatiquement un secret (réutilise
+  `generateToken()` déjà existant dans `src/lib/auth.ts`, aucune nouvelle
+  logique cryptographique) à chaque (ré)indexation d'un déclencheur
+  webhook (`reindexTriggerBindings`/`reindexAutomationTriggerBindings`)
+  si le noeud n'en fournit pas un explicitement. Migration de rattrapage
+  pour les liaisons existantes sans secret. Les deux routes webhook
+  exigent désormais TOUJOURS une correspondance de secret (plus de
+  branche conditionnelle qui l'ignore).
+- **Fichiers concernés** : `src/lib/workflows/workflow-service.ts`,
+  `src/lib/automation/registry/automation-service.ts`,
+  `src/app/api/webhooks/workflows/[workspaceId]/[workflowKey]/route.ts`,
+  `src/app/api/webhooks/automations/[workspaceId]/[automationKey]/route.ts`,
+  migration Prisma (backfill `config.secret`).
+- **Complexité** : Moyenne.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : un nouveau déclencheur webhook a toujours un
+  secret dès sa création ; une liaison existante sans secret (avant
+  migration) en obtient un après ; une requête sans en-tête ou avec un
+  secret incorrect est rejetée explicitement, quelle que soit la
+  configuration.
 
 ### AR-0055 — Suite exhaustive de tests d'isolation multi-tenant
-- **Description** : généraliser le gabarit AR-0004 à *toutes* les routes de
-  `src/app/api/**` (une entrée de test par route), pas seulement `leads`.
-- **Fichiers concernés** : `tests/tenant-isolation/**` (extension
-  complète).
+- **Constat (P0, Élevé)** : l'implémentation elle-même est bien scopée
+  par organisation (vérifié par l'audit — aucune fuite IDOR confirmée
+  dans les routes échantillonnées), mais `tests/tenant-isolation/` ne
+  couvre que 8 domaines (agents, commercial, director, knowledge, leads,
+  workflows, workspace-lifecycle, workspaces) sur la trentaine de domaines
+  API réels. Aucun filet de sécurité automatisé n'existe pour les
+  domaines financiers (factures, devis) et porteurs de secrets
+  (communications, email, calendrier) — précisément les zones où un futur
+  refactor risquerait le plus de réintroduire une fuite silencieuse.
+- **Description** : ajouter un test d'isolation multi-tenant (gabarit
+  `expectNoCrossTenantLeak`, AR-0004) pour chacun des domaines non
+  couverts : factures, devis, rendez-vous, automatisations, Communication
+  Hub, email (config Gmail/Outlook), calendrier (config Google Calendar).
+- **Fichiers concernés** : `tests/tenant-isolation/{invoices,quotes,
+  appointments,automations,communications,email,calendar}.test.ts`
+  (nouveaux).
 - **Complexité** : Élevée.
-- **Estimation** : 4 jours.
-- **Prérequis** : AR-0004, l'ensemble des modules précédents livrés.
-- **Tests nécessaires** : c'est la tâche de test elle-même ; critère de
-  réussite = 100 % des routes couvertes.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : c'est la tâche de test elle-même — chaque
+  nouveau fichier vérifie qu'une organisation A ne peut jamais lire/
+  écrire/deviner une ressource de l'organisation B pour ce domaine.
 
-### AR-0056 — Revue de sécurité OWASP Top 10
-- **Description** : revue manuelle structurée (injection, auth cassée,
-  exposition de données sensibles, contrôle d'accès, mauvaise
-  configuration, etc.) sur l'ensemble de l'application, avec rapport écrit
-  et plan de correction des constats.
-- **Fichiers concernés** : `docs/security/owasp-review-<date>.md`
-  (nouveau), correctifs variables selon constats.
-- **Complexité** : Élevée.
-- **Estimation** : 3 jours (revue) + variable (correctifs).
-- **Prérequis** : AR-0055.
-- **Tests nécessaires** : chaque constat corrigé doit avoir un test de
-  non-régression associé.
+### AR-0158 — Tests manquants critiques (moteur de séquences, suppression, jetons de désinscription)
+- **Constat (P0, Élevé)** : trois modules exposés à un trafic non
+  authentifié ou porteurs d'obligations de conformité n'ont **aucun**
+  test : `src/lib/sequence-engine.ts` (moteur de relance email central,
+  consommé par 9 routes), `src/lib/suppression.ts` (liste de suppression
+  RGPD/CAN-SPAM), `src/lib/unsubscribe-token.ts` (génération/validation
+  de jeton pour le lien public de désinscription).
+- **Description** : ajouter des tests unitaires/d'intégration réels pour
+  chacun (pas de mock du comportement métier).
+- **Fichiers concernés** : `tests/crm/sequence-engine.test.ts`,
+  `tests/crm/suppression.test.ts`, `tests/crm/unsubscribe-token.test.ts`
+  (nouveaux).
+- **Complexité** : Moyenne.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : c'est la tâche elle-même — voir description.
+
+### AR-0157 — Intégration des 3 suites E2E dans la CI, sur chaque PR
+- **Constat (P0, Élevé)** : `.github/workflows/e2e.yml` ne s'exécute
+  qu'après un merge sur `main` (`push: branches: [main]`), jamais sur une
+  PR — une régression du parcours principal n'est détectée qu'APRÈS avoir
+  atteint `main`. Pire : seul `golden-path.mjs` y est exécuté ;
+  `two-organizations-isolation.mjs` (isolation multi-tenant) et
+  `automation-golden-path.mjs` (Automation Engine) ne tournent **jamais**
+  en CI, seulement manuellement — pour un SaaS multi-tenant, l'absence de
+  vérification E2E continue de l'isolation est un risque de régression
+  significatif.
+- **Description** : exécuter les 3 scripts E2E sur chaque pull request
+  (pas seulement après merge), contre un serveur de production
+  réellement démarré et seedé dans le job CI.
+- **Fichiers concernés** : `.github/workflows/e2e.yml` (déclencheur
+  étendu à `pull_request`, exécution des 3 scripts).
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : le workflow lui-même ; vérifier qu'un des 3
+  scripts délibérément cassé fait échouer la CI.
+
+### AR-0056 — Revue de sécurité OWASP Top 10 (rapport + plan de correction)
+- **Description** : revue structurée deja menée (3 audits ciblés :
+  sécurité/isolation, dette technique/performance, tests/migrations/
+  observabilité/documentation/CI) — cette tâche formalise les résultats
+  en un rapport écrit référençant chaque constat P0 (avec la tâche qui le
+  corrige), chaque constat P1/P2 (avec justification du report), et l'état
+  de correction à la date de clôture de v0.10.
+- **Fichiers concernés** : `docs/security/owasp-review-2026-08-03.md`
+  (nouveau).
+- **Complexité** : Faible (revue déjà faite, reste la rédaction).
+- **Prérequis** : AR-0153 à AR-0158.
+- **Tests nécessaires** : aucun (document).
 
 ### AR-0057 — Quota email dur par organisation
 - **Description** : généraliser le principe du quota IA (AR-0051) à
   l'envoi d'email (au-delà du `dailySendLimit` déjà existant, le rendre
   strictement bloquant et testé).
-- **Fichiers concernés** : `src/lib/email/index.ts`, `src/lib/quota.ts`.
+- **Fichiers concernés** : `src/lib/email/index.ts`, `src/lib/email/quota.ts` (nouveau).
 - **Complexité** : Faible.
-- **Estimation** : 1 jour.
 - **Prérequis** : AR-0051.
-- **Tests nécessaires** : test de dépassement bloquant.
+- **Tests nécessaires** : test de dépassement bloquant, isolation
+  multi-tenant du quota.
 
 ### AR-0058 — Préparation 2FA (schéma + interface, sans activation forcée)
 - **Description** : ajouter le modèle de données et l'interface
   nécessaires à une future activation 2FA (TOTP) par utilisateur, sans
   encore la rendre obligatoire — pose les fondations pour `MOD-17`
   post-v1.0.
-- **Fichiers concernés** : `prisma/schema.prisma` (champ `twoFactorSecret`
-  optionnel sur `User`), `src/lib/auth.ts`.
+- **Fichiers concernés** : `prisma/schema.prisma` (champs `twoFactorSecret`/
+  `twoFactorEnabled` optionnels sur `User`), `src/lib/auth.ts`,
+  `src/lib/two-factor.ts` (nouveau).
 - **Complexité** : Moyenne.
-- **Estimation** : 2 jours.
-- **Prérequis** : AR-0055.
+- **Prérequis** : aucun.
 - **Tests nécessaires** : test d'activation/désactivation du 2FA par un
   utilisateur de test, sans impact sur les utilisateurs qui ne l'activent
   pas.
 
-**Total estimé v0.10 : ~10 jours (hors correctifs variables AR-0056).**
+### AR-0159 — Mise à jour de `README.md` (périmètre fonctionnel réel)
+- **Constat (P0, Moyen — impact Élevé)** : `README.md` ne décrit encore
+  que le parcours CRM v0.1 d'origine et liste dans « Fonctionnalités
+  restant à développer » des éléments déjà livrés. Il ne mentionne nulle
+  part le Framework des Agents, le Workflow Engine, l'Automation Engine,
+  l'intelligence documentaire (Memory/Knowledge/Context Engine), les
+  workspaces multi-tenant, le tableau de bord de métriques, la
+  facturation, ou la synchronisation calendrier — environ la moitié du
+  produit réel est invisible pour quiconque ne lit que ce fichier.
+- **Description** : réécrire la section de présentation des
+  fonctionnalités pour refléter fidèlement le produit actuel.
+- **Fichiers concernés** : `README.md`.
+- **Complexité** : Faible.
+- **Prérequis** : aucun.
+- **Tests nécessaires** : aucun (document).
+
+**Total v0.10 : 11 tâches (AR-0153 à AR-0159 nouvelles + AR-0055/0056/
+0057/0058 concrétisées).** Constats P1 (recommandés, non bloquants —
+N+1 sur `getPerformanceDashboard`/`checkStaleQuotes`, index manquants sur
+`Quote`/`Task`, duplication de la formule de remise
+(`commercial-document-pdf.ts` vs `quote-pricing.ts`), duplication du
+patron HTTP entre fournisseurs email, `daysAgo()` dupliqué ~8 fois,
+`--max-warnings=0` en CI, scan de secrets en CI, comparaison à temps
+constant pour `CRON_SECRET`) et P2 (peuvent attendre après v1.0 —
+alerting sur seuil, tests HTTP dédiés par fournisseur vector-store/
+embedding, UI de signature électronique de devis, cache Redis, runbook de
+rollback de migration) sont détaillés dans `docs/security/
+owasp-review-2026-08-03.md` (AR-0056) plutôt que transformés en tâches.
 
 ---
 
 ## Version 1.0 — Ouverture SaaS (MOD-18, MOD-19) — première version stable
+
+> **Statut : ✅ livrée** (2026-08-03). Les 8 tâches ci-dessous (`AR-0059`
+> à `AR-0066`) sont implémentées intégralement, sans modification du
+> périmètre défini, à deux écarts documentés près (voir `docs/adr/0042`) :
+> `AR-0063` référençait `AR-0027` (paiement client final, jamais
+> implémentée) comme prérequis — la plomberie Stripe a été construite de
+> zéro pour l'abonnement SaaS ; `AR-0064` décrivait un choix de vertical à
+> l'inscription — `MOD-20` (Vertical Pack) reste reporté depuis `v0.4` et
+> n'a jamais été livré, donc omis du parcours d'inscription. Voir
+> `docs/release/v1.0-recette.md` pour la recette finale complète.
 
 ### AR-0059 — API publique en lecture (v1)
 - **Description** : premières routes `api/public/v1/**` en lecture seule
@@ -2150,6 +2496,11 @@ SMTP réelle, configuration par organisation. Rien à faire ici.
 - **Tests nécessaires** : c'est la tâche de test elle-même.
 
 **Total estimé v1.0 : ~19,5 jours.**
+
+**Total v1.0 : 8 tâches (AR-0059 à AR-0066), toutes livrées.** Voir
+`docs/adr/0042` pour les décisions d'architecture et les deux écarts de
+périmètre documentés, et `docs/release/v1.0-recette.md` pour la recette
+finale complète.
 
 ---
 

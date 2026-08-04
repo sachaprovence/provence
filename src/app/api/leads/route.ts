@@ -6,9 +6,10 @@ import { leadCreateSchema } from "@/lib/validations/lead";
 import { writeAuditLog } from "@/lib/audit";
 import { isSuppressed } from "@/lib/suppression";
 import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
+import { withApiMetrics } from "@/lib/observability/api-metrics";
 import { LeadSourceType } from "@/generated/prisma/enums";
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ leads: filtered });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -128,3 +129,7 @@ export async function POST(request: Request) {
     { status: 201 }
   );
 }
+
+// Route représentative instrumentée pour la latence API (AR-0049, v0.9 bis) — voir src/lib/observability/api-metrics.ts.
+export const GET = withApiMetrics("GET /api/leads", handleGet);
+export const POST = withApiMetrics("POST /api/leads", handlePost);

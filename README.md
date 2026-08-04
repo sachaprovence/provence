@@ -1,10 +1,17 @@
-# Provence 360 — Plateforme d'acquisition client automatisée
+# Autorun / Provence 360 — plateforme SaaS multi-tenant d'acquisition et d'automatisation client
 
-Logiciel interne d'acquisition client pour **Provence 360** (visites virtuelles
-3D/360°, contenus immersifs Airbnb/Booking, photos professionnelles) :
-prospection → analyse → scoring → message personnalisé → séquence de relance
-→ réponse → rendez-vous → devis → client → mission, avec tableau de bord,
-carte des prospects, et garde-fous anti-spam/RGPD intégrés.
+**Provence 360** (visites virtuelles 3D/360°, contenus immersifs
+Airbnb/Booking, photos professionnelles) est le premier vertical métier de
+**Autorun**, une plateforme SaaS multi-tenant (organisations, workspaces)
+qui combine un CRM complet, un framework d'agents IA autonomes, un moteur de
+workflows et un moteur d'automatisations événementielles, une couche
+d'intelligence documentaire (mémoire/connaissances/contexte), et une
+communication multicanal — le tout testé, isolé par organisation, et déjà
+livré (voir [`MILESTONES.md`](MILESTONES.md) pour l'historique version par
+version, de v0.1 à v1.0), désormais ouverte en SaaS self-service : API
+publique versionnée, webhooks sortants signés, plans d'abonnement et
+facturation récurrente Stripe (ou démo, sans configuration), onboarding
+sans intervention manuelle.
 
 📄 Spécification fonctionnelle : [`docs/01-SPECIFICATION.md`](docs/01-SPECIFICATION.md)
 🏗️ Architecture technique : [`docs/02-ARCHITECTURE.md`](docs/02-ARCHITECTURE.md)
@@ -13,6 +20,7 @@ vertical) : [`docs/00-AUTORUN-VISION.md`](docs/00-AUTORUN-VISION.md)
 🗺️ Plan de développement Autorun : [`ROADMAP.md`](ROADMAP.md) (modules) ·
 [`BACKLOG.md`](BACKLOG.md) (tâches) · [`MILESTONES.md`](MILESTONES.md)
 (jalons) · [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) (guide de travail)
+🔒 Revue de sécurité : [`docs/security/owasp-review-2026-08-03.md`](docs/security/owasp-review-2026-08-03.md)
 
 Le projet fonctionne **entièrement en mode démonstration** dès l'installation
 (fournisseurs email et IA simulés) — aucune clé API ni service payant n'est
@@ -20,6 +28,7 @@ nécessaire pour l'essayer.
 
 ## Sommaire
 
+- [Fonctionnalités](#fonctionnalités)
 - [Démarrage rapide (Docker)](#démarrage-rapide-docker)
 - [Installation locale (sans Docker)](#installation-locale-sans-docker)
 - [Comptes de démonstration](#comptes-de-démonstration)
@@ -28,6 +37,60 @@ nécessaire pour l'essayer.
 - [Brancher de vrais fournisseurs](#brancher-de-vrais-fournisseurs-après-le-mode-démo)
 - [Déploiement](#déploiement)
 - [Fonctionnalités restant à développer](#fonctionnalités-restant-à-développer)
+
+## Fonctionnalités
+
+Tout ce qui suit est réellement implémenté et testé (pas un plan) — voir
+`MILESTONES.md` pour la version qui a livré chaque bloc.
+
+- **CRM multi-tenant** : organisations et workspaces isolés, prospects
+  (import CSV, carte, Kanban/pipeline personnalisable), séquences de
+  relance email multi-étapes avec fenêtre horaire autorisée, campagnes,
+  opportunités, devis (catalogue, remises, TVA, versions, PDF, e-signature
+  — abstraction prête pour un fournisseur réel), factures (conversion
+  devis → facture), rendez-vous (synchronisation Google Calendar réelle),
+  missions, visites virtuelles 3D (VirtualTour), liste de suppression
+  RGPD/CAN-SPAM et jetons de désinscription publics.
+- **Framework des Agents** : moteur d'exécution d'agents générique
+  (planification, outils déclaratifs, mémoire, journalisation), un agent
+  Directeur qui décompose des objectifs et délègue à des agents métier, un
+  agent Commercial (qualification/scoring/génération de messages), et 7
+  agents métier spécialisés supplémentaires (relance, support,
+  planification RDV, etc.), tous branchés sur les vraies données CRM.
+- **Workflow Engine** : éditeur visuel de graphes (glisser-déposer),
+  déclencheurs/conditions/actions déclaratifs et extensibles, exécution
+  avec parallélisme, timeouts, retries et reprise, 10 modèles de workflows
+  prêts à l'emploi.
+- **Automation Engine** : automatisations événementielles asynchrones
+  (files d'attente, verrous distribués, limitation de débit, disjoncteur,
+  file de lettres mortes, planificateur multi-fuseaux/DST, priorités),
+  déclenchées par évènement, webhook (secret obligatoire) ou planification.
+- **Intelligence documentaire** : mémoire multi-niveaux, ingestion de
+  documents, indexation, recherche plein texte/vectorielle/hybride, et un
+  moteur de contexte qui sélectionne et compresse automatiquement ce qui
+  est injecté dans les prompts des agents.
+- **Communication Hub** : abstraction unique pour email (SMTP, Resend,
+  Postmark, Brevo, Gmail OAuth2, Outlook/Microsoft Graph OAuth2), SMS,
+  WhatsApp, téléphone et webhooks sortants, configurée par organisation.
+- **Observabilité** : capture d'erreurs réelle (Sentry), métriques (coût
+  IA, taux d'échec email, latence API) exposées dans un tableau de bord
+  dédié, journalisation structurée avec rédaction automatique des secrets.
+- **Sécurité** : verrouillage de compte et limitation de débit sur
+  l'authentification, secret obligatoire et vérifié à temps constant sur
+  tous les déclencheurs webhook, quota d'envoi email quotidien dur par
+  organisation (tous points d'envoi confondus), masquage systématique des
+  secrets dans les réponses API, préparation du schéma 2FA (TOTP).
+- **Tableaux de bord** : commercial, production, clients, visites, chiffre
+  d'affaires, IA, automatisations, rendez-vous, performance — tous scopés
+  par organisation.
+- **Ouverture SaaS** : API publique versionnée en lecture
+  (`/api/public/v1/**`, clés API scopées par organisation, rate limiting),
+  webhooks sortants signés (HMAC, retry, idempotence), plans d'abonnement
+  (Starter/Pro/Entreprise) avec quotas appliqués immédiatement, Stripe
+  Billing réel (abonnement récurrent, changement de plan, annulation,
+  webhooks entrants) ou fournisseur démo sans configuration, onboarding
+  self-service (inscription → choix de plan → provisionnement
+  automatique) et interface de gestion de la facturation.
 
 ## Démarrage rapide (Docker)
 
@@ -118,7 +181,8 @@ npm run db:reset                  # réinitialiser la base (⚠️ destructif, u
 `GET /api/health` (public) vérifie la connectivité base de données ; utilisé
 par le `HEALTHCHECK` Docker. La CI (`.github/workflows/ci.yml`) exécute lint,
 typecheck, tests et build sur chaque pull request ; `.github/workflows/e2e.yml`
-rejoue le golden path après merge sur `main`.
+rejoue les 3 suites E2E (golden path, isolation multi-tenant, Automation
+Engine) sur chaque pull request et après merge sur `main`.
 
 ### Test de bout en bout (parcours principal)
 
@@ -166,17 +230,31 @@ npm run test:e2e                  # dans un autre terminal
 Le projet est conçu pour remplacer les fournisseurs simulés sans changer le
 reste du code :
 
-1. **Email** : implémenter `EmailProvider` (`src/lib/email/types.ts`) dans un
-   nouveau fichier (ex. `smtp-provider.ts`), l'enregistrer dans
-   `src/lib/email/index.ts`, définir `EMAIL_PROVIDER=smtp` (ou autre) et les
-   variables nécessaires (hôte SMTP, identifiants…) dans `.env`.
-2. **IA** : implémenter `AIProvider` (`src/lib/ai/types.ts`) dans un nouveau
-   fichier, l'enregistrer dans `src/lib/ai/index.ts`, définir
-   `AI_PROVIDER=<nom>` et la clé API côté serveur uniquement (jamais
-   `NEXT_PUBLIC_*`).
+1. **Email** : 6 fournisseurs réels déjà implémentés — `EMAIL_PROVIDER=smtp`
+   (identifiants SMTP), `resend`/`postmark`/`brevo` (clé API), ou
+   `gmail`/`outlook` (OAuth2 — connecter depuis Paramètres → Intégrations
+   une fois `GMAIL_OAUTH_*`/`MICROSOFT_OAUTH_*` configurées, voir
+   `.env.example`). Pour un nouveau fournisseur : implémenter
+   `EmailProvider` (`src/lib/email/types.ts`) et l'enregistrer dans
+   `src/lib/email/index.ts`.
+2. **IA** : `AI_PROVIDER=anthropic` (clé `ANTHROPIC_API_KEY`) est déjà
+   implémenté pour la couche IA historique (analyse/scoring/génération de
+   message). Un quota mensuel dur optionnel par organisation est
+   disponible (`Organization.aiMonthlyBudgetUsd`, réglable dans
+   Paramètres → Entreprise). Pour un nouveau fournisseur : implémenter
+   `AIProvider` (`src/lib/ai/types.ts`) et l'enregistrer dans
+   `src/lib/ai/index.ts`. La clé API reste toujours côté serveur
+   uniquement (jamais `NEXT_PUBLIC_*`).
 3. **Carte interactive réelle** : les champs `Lead.latitude`/`longitude`
    existent déjà ; brancher Mapbox/Leaflet dans `src/app/(app)/map/page.tsx`
    à la place de la vue liste actuelle.
+4. **Facturation SaaS (Stripe)** : `BILLING_PROVIDER=stripe` (clés
+   `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, voir `.env.example`) —
+   activation d'abonnement, changement de plan et annulation passent alors
+   par l'API Stripe réelle au lieu du fournisseur démo (activation
+   immédiate, sans configuration). Configurer un webhook Stripe pointant
+   vers `POST /api/billing/webhook` et un `Plan.stripePriceId` par plan
+   (Starter/Pro/Entreprise) côté tableau de bord Stripe.
 
 ## Déploiement
 
@@ -199,7 +277,18 @@ séparément dans le MVP).
 ## Fonctionnalités restant à développer
 
 Voir [`docs/01-SPECIFICATION.md`](docs/01-SPECIFICATION.md#5-reporté-après-le-mvp-hors-périmètre-v1) :
-connecteurs email réels (Gmail/Outlook/SMTP), fournisseurs de données
-payants, vraie carte interactive, file de traitement distribuée
-(BullMQ/Redis), notifications push/Slack, facturation SaaS multi-plan,
-i18n complète de l'interface, application mobile, SSO/2FA.
+fournisseurs de données payants, vraie carte interactive, file de
+traitement distribuée (BullMQ/Redis), notifications push/Slack, second
+vertical métier réel (`MOD-20`, actuellement reporté — le choix de
+vertical n'existe donc pas à l'inscription), paiement en ligne pour le
+client final de chaque organisation (`AR-0027`, distinct de la facturation
+SaaS Autorun elle-même, déjà livrée en v1.0), i18n complète de
+l'interface, application mobile, SSO, activation effective du 2FA à la
+connexion (le schéma et l'interface existent déjà, voir
+`src/lib/two-factor.ts`, mais rien ne l'impose encore), UI de signature
+électronique de devis avec un fournisseur réel, cache Redis, alerting sur
+seuil de métriques.
+Les connecteurs email réels (SMTP/Resend/Postmark/Brevo/Gmail/Outlook), un
+fournisseur IA réel (Anthropic), le quota d'envoi email quotidien dur,
+l'API publique, les webhooks sortants et la facturation SaaS Stripe sont
+déjà livrés — voir `MILESTONES.md` §v0.9, §v0.9 bis, §v0.10 et §v1.0.

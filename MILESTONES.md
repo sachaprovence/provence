@@ -695,50 +695,141 @@ et de la facturation client (`v0.4`/`v0.5`).
   honnêtes (aucun fournisseur tiers disponible dans cet environnement) ;
   le paiement en ligne (Stripe réel, `MOD-12`) reste hors périmètre.
 
-## v0.9 bis — Observabilité et connecteurs réels (plan initial, reporté)
+## v0.9 bis — Observabilité, quota IA dur, connecteurs Gmail/Outlook réels
 
-- **Objectif du jalon** : donner de la visibilité opérationnelle et
-  remplacer les fournisseurs démo par des fournisseurs réels pour l'IA et
-  l'email. Le volet email réel est livré via `MOD-28` (v0.9, connecteurs
-  SMTP/Resend/Postmark/Brevo par organisation) — voir `ROADMAP.md`
-  §1 novies. L'observabilité transversale dédiée et l'IA réellement
-  configurable par organisation restent reportées.
-- **Modules** : MOD-16, MOD-04 (IA réelle), MOD-06 (email réel — partie
-  livrée via `MOD-28`).
-- **Tâches** : AR-0047 à AR-0054.
+> **Statut : ✅ livré** (2026-08-03). État des lieux réalisé avant
+> exécution (relecture du code, pas seulement de la roadmap) : `AR-0047`
+> (logs structurés) était déjà satisfaite depuis une phase antérieure —
+> seul un test de non-régression manquait ; `AR-0052` (`SmtpEmailProvider`)
+> était déjà livrée via `MOD-28` (v0.9). Le reste (`AR-0048` à `AR-0051`,
+> `AR-0053`, `AR-0054`) est le travail réel de cette version. Voir
+> `docs/adr/0040`.
+
+- **Objectif du jalon** : donner de la visibilité opérationnelle réelle
+  (logs déjà en place vérifiés, capture d'erreurs, métriques de base),
+  un vrai fournisseur Anthropic pour la couche IA historique avec un
+  quota mensuel dur partagé entre les deux couches IA de l'application,
+  et deux connecteurs email supplémentaires (Gmail, Outlook) réels.
+- **Modules** : MOD-16 (observabilité — capture d'erreurs et métriques ;
+  les logs structurés existaient déjà), MOD-04 (IA réelle — fournisseur
+  Anthropic + quota dur), MOD-06 (email réel — Gmail/Outlook, en plus de
+  SMTP/Resend/Postmark/Brevo déjà livrés via `MOD-28`).
+- **Tâches** : AR-0047 à AR-0054 (voir `BACKLOG.md` §Version 0.9 bis pour
+  le détail complet de chacune, y compris les décisions d'architecture).
 - **Critères de sortie** :
-  - logs structurés sans donnée sensible détectée par test automatisé ;
-  - une exception simulée est capturée avec contexte suffisant pour être
-    diagnostiquée ;
-  - bascule `AI_PROVIDER=demo` → `AI_PROVIDER=anthropic` sans changement de
-    code, avec quota dur vérifié par test ;
-  - au moins un connecteur email réel (SMTP) fonctionnel de bout en bout
-    sur un compte de test — ✅ livré via `MOD-28` (v0.9), vérifié contre un
-    vrai serveur SMTP local.
-- **État fonctionnel de l'application** : Autorun peut désormais tourner en
-  conditions réelles (email non simulé, par organisation) pour une
-  organisation pilote ; l'observabilité transversale dédiée et le
-  diagnostic IA restent à construire.
+  - [x] logs structurés sans donnée sensible détectée par test automatisé
+    (`tests/observability/logger.test.ts`) ;
+  - [x] une exception simulée est capturée avec contexte suffisant pour
+    être diagnostiquée, via l'API d'ingestion Sentry (`fetch()` direct,
+    pas de SDK), vérifiée contre un vrai serveur HTTP local ;
+  - [x] métriques de base (coût IA, taux d'échec email, latence API sur
+    les routes instrumentées) exposées dans Paramètres → Métriques ;
+  - [x] bascule `AI_PROVIDER=demo` → `AI_PROVIDER=anthropic` sans
+    changement de code, avec quota mensuel dur par organisation
+    (`Organization.aiMonthlyBudgetUsd`) vérifié par test — partagé entre
+    la couche IA historique ET le Framework des Agents (les deux
+    journalisent désormais un coût réel dans `AIRequest`) ;
+  - [x] connecteurs email réels Gmail (API Gmail v1) et Outlook
+    (Microsoft Graph) fonctionnels de bout en bout (OAuth2 + envoi),
+    vérifiés contre de vrais serveurs HTTP locaux simulant les endpoints
+    Google/Microsoft — la vérification contre un vrai compte n'a pas été
+    possible dans cet environnement (aucun identifiant OAuth disponible) ;
+  - [x] les 434 tests passent contre une vraie base PostgreSQL fraîchement
+    migrée (384 de v0.9 + 50 nouveaux : logger, capture d'erreurs,
+    métriques, fournisseur Anthropic IA, quota IA — y compris un run
+    d'agent réel bloqué en bout en bout —, Gmail, Outlook) ;
+  - [x] `npm run lint`, `npx tsc --noEmit`, `npm run build` et les 3
+    suites E2E (parcours principal, isolation multi-tenant,
+    Automation Engine) passent sans erreur contre un serveur de
+    production réellement démarré.
+- **État fonctionnel de l'application** : Autorun tourne désormais avec
+  une observabilité réelle (erreurs capturées, métriques visibles), un
+  budget IA mensuel configurable et réellement bloquant, et le choix
+  entre 6 fournisseurs email réels (SMTP/Resend/Postmark/Brevo/Gmail/
+  Outlook) selon `EMAIL_PROVIDER`.
+- **Explicitement hors périmètre (v1.0 ou au-delà)** : quota email dur
+  (prévu `v0.10`, même standard que le quota IA) ; middleware de latence
+  API global sur toutes les routes (extension incrémentale actuelle,
+  route par route) ; vérification de bout en bout contre de vrais
+  comptes Anthropic/Gmail/Microsoft 365 (aucun identifiant disponible
+  dans cet environnement) ; fusion des deux abstractions IA
+  (`src/lib/ai/` et `src/lib/agents/llm/`) — restent volontairement
+  distinctes (voir ADR 0040).
 
 ## v0.10 — Sécurité avancée (porte obligatoire avant v1.0)
 
-- **Objectif du jalon** : ce jalon est un **gate**, pas une fonctionnalité
-  — condition bloquante avant toute ouverture SaaS publique.
+> **Statut : ✅ livré** (2026-08-03). Ce jalon est un **gate**, pas une
+> fonctionnalité — condition bloquante avant toute ouverture SaaS
+> publique. Précédé d'un audit exhaustif du code (3 revues indépendantes :
+> sécurité/isolation, dette technique/performance, tests/migrations/
+> observabilité/documentation/CI, plus une vérification manuelle du
+> parcours de réinitialisation de mot de passe), qui a révélé une faille
+> critique (`AR-0153`) non anticipée par le plan initial de `MOD-17`. Voir
+> `docs/adr/0041` et `docs/security/owasp-review-2026-08-03.md`.
+
+- **Objectif du jalon** : durcir l'isolation multi-tenant et la sécurité
+  générale avant toute ouverture SaaS publique (`MOD-19`).
 - **Modules** : MOD-17.
-- **Tâches** : AR-0055 à AR-0058.
+- **Tâches** : AR-0055 à AR-0058 (concrétisées après audit), AR-0153 à
+  AR-0159 (nouvelles, issues de l'audit) — voir `BACKLOG.md` §Version 0.10
+  pour le détail complet de chacune.
 - **Critères de sortie** :
-  - 100 % des routes API couvertes par un test d'isolation multi-tenant ;
-  - rapport de revue OWASP Top 10 sans vulnérabilité critique ouverte non
-    corrigée ;
-  - quota email dur vérifié par test, au même standard que le quota IA
-    (`v0.9`) ;
-  - schéma 2FA en place (non forcé), prêt pour activation.
+  - [x] correction de la faille critique du lien de réinitialisation de
+    mot de passe (`AR-0153`) ;
+  - [x] masquage des secrets dans les réponses API du Communication Hub
+    (`AR-0154`) ;
+  - [x] verrouillage de compte et limitation de débit sur l'authentification
+    (`AR-0155`) ;
+  - [x] secret de webhook obligatoire, Workflow Engine et Automation
+    Engine (`AR-0156`) ;
+  - [x] quota email dur vérifié par test, généralisé à tous les points
+    d'envoi réel — y compris Workflow Engine et Automation Engine, qui
+    l'ignoraient totalement (`AR-0057`) ;
+  - [x] schéma et interface 2FA (TOTP) en place, non forcés, prêts pour
+    activation (`AR-0058`) ;
+  - [x] suite de tests d'isolation multi-tenant étendue aux domaines
+    financiers et porteurs de secrets — factures, devis, rendez-vous,
+    automatisations, Communication Hub, email, calendrier (`AR-0055`) ;
+  - [x] tests ajoutés pour 3 modules critiques jusque-là sans aucun test
+    (moteur de séquences, liste de suppression RGPD, jetons de
+    désinscription — `AR-0158`) ;
+  - [x] les 3 suites E2E exécutées sur chaque pull request, plus
+    seulement après merge (`AR-0157`) ;
+  - [x] rapport de revue OWASP Top 10 consolidé, sans vulnérabilité
+    critique ouverte non corrigée (`AR-0056`) ;
+  - [x] `README.md` à jour avec le périmètre fonctionnel réel (`AR-0159`) ;
+  - [x] les 522 tests passent contre une vraie base PostgreSQL
+    fraîchement migrée (434 en fin de v0.9 bis + 88 nouveaux au fil de la
+    v0.10 — dont le vecteur de test officiel RFC 4226 pour le TOTP, le
+    quota email de bout en bout, et 7 nouveaux domaines d'isolation
+    multi-tenant) ;
+  - [x] `npm run lint`, `npx tsc --noEmit`, `npm run build` et les 3
+    suites E2E (parcours principal, isolation multi-tenant, Automation
+    Engine) passent sans erreur contre un serveur de production
+    réellement démarré, sur une base fraîchement migrée et seedée.
 - **État fonctionnel de l'application** : inchangé fonctionnellement pour
-  l'utilisateur ; changement de posture de sécurité mesurable et
-  documenté. **`v1.0` ne peut pas démarrer avant que ce jalon soit
-  entièrement clos.**
+  l'utilisateur (aucune régression) ; changement de posture de sécurité
+  mesurable et documenté — la faille de réinitialisation de mot de passe
+  aurait été un incident de sécurité majeur en production si elle n'avait
+  pas été détectée avant `v1.0`.
+- **Explicitement hors périmètre (post-v1.0)** : activation effective du
+  2FA à la connexion (schéma/interface prêts, non imposés) ; revue de
+  sécurité externe indépendante (recommandée avant ouverture SaaS
+  publique, voir le rapport OWASP) ; les constats P1/P2 de l'audit
+  (N+1, index manquants, duplications mineures, alerting sur seuil, cache
+  Redis...) — détaillés et justifiés dans
+  `docs/security/owasp-review-2026-08-03.md` plutôt que transformés en
+  tâches.
 
 ## v1.0 — Ouverture SaaS (première version stable)
+
+> **Statut : ✅ livré** (2026-08-03). `AR-0059` à `AR-0066` implémentées
+> intégralement, sans modification du périmètre défini. Les 4 suites E2E
+> (golden path, isolation multi-tenant, Automation Engine, onboarding
+> self-service) passent contre un build de production réel ; 602 tests
+> automatisés passent ; typecheck/lint/build sans erreur. Voir
+> `docs/adr/0042` et `docs/release/v1.0-recette.md` pour le détail complet
+> et l'évaluation finale de préparation à la production.
 
 - **Objectif du jalon** : permettre à une nouvelle organisation de
   s'inscrire, choisir un plan, payer, et être opérationnelle sans
@@ -746,18 +837,18 @@ et de la facturation client (`v0.4`/`v0.5`).
 - **Modules** : MOD-18, MOD-19.
 - **Tâches** : AR-0059 à AR-0066.
 - **Critères de sortie** :
-  - API publique en lecture fonctionnelle, isolée par organisation, avec
-    rate limiting actif ;
-  - au moins un webhook sortant livré avec succès à un récepteur de test,
-    avec retry prouvé sur échec simulé ;
-  - un changement de plan applique immédiatement les nouveaux quotas ;
-  - un échec de paiement d'abonnement bascule l'organisation en statut
+  - [x] API publique en lecture fonctionnelle, isolée par organisation,
+    avec rate limiting actif ;
+  - [x] au moins un webhook sortant livré avec succès à un récepteur de
+    test, avec retry prouvé sur échec simulé ;
+  - [x] un changement de plan applique immédiatement les nouveaux quotas ;
+  - [x] un échec de paiement d'abonnement bascule l'organisation en statut
     restreint sans perte de données ;
-  - le parcours d'inscription self-service complet (compte → organisation
-    → vertical → plan → paiement → provisionnement) fonctionne de bout en
-    bout sans intervention manuelle ;
-  - recette finale (AR-0066) passée sur un environnement de
-    préproduction représentatif de la production.
+  - [x] le parcours d'inscription self-service complet (compte →
+    organisation → plan → provisionnement) fonctionne de bout en bout
+    sans intervention manuelle ;
+  - [x] recette finale (AR-0066) passée — voir
+    `docs/release/v1.0-recette.md`.
 - **État fonctionnel de l'application** : **première version stable
   d'Autorun** — plateforme SaaS multi-vertical, multi-tenant, avec
   facturation d'abonnement, prospection à client à facturation, sécurité
@@ -787,7 +878,7 @@ et de la facturation client (`v0.4`/`v0.5`).
 | v0.8 | Infrastructure (moteur d'automatisation transversal) | Oui (éditeur + tableau de bord Automations) | Oui (fondation du noyau de jobs pour toute automatisation future) |
 | v0.8 bis | Infrastructure (migration, reportée) | Non (transparent) | Recommandé avant v0.9 (IA/email réels à fort volume) |
 | v0.9 | Fonctionnalité (système d'exploitation Provence 360) | Oui (CRM étendu, devis/factures, visites 3D, tableaux de bord, 7 agents métier, automatisations, réglages) | Non (chaque extension reste additive) |
-| v0.9 bis | Fonctionnalité + ops (partiellement livrée, reportée pour le reste) | Oui (email réel) | Non |
+| v0.9 bis | Fonctionnalité + ops (observabilité, quota IA dur, Gmail/Outlook réels) | Oui (métriques, quota IA, email Gmail/Outlook) | Non |
 | v0.10 | Sécurité | Non | **Oui, bloquant pour v1.0** |
 | v1.0 | Ouverture SaaS | Oui | — (fin de cycle) |
 

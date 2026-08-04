@@ -141,6 +141,19 @@ relances maintenant" en mode démo), soit par un vrai cron système appelant
 - Lien de désinscription signé par HMAC (`AUTH_SECRET`), vérifié en temps
   constant (`crypto.timingSafeEqual`).
 - Aucune clé API IA/email n'est exposée au navigateur.
+- (v0.10) Verrouillage de compte durable (`assertLoginNotLocked`, basé sur
+  `LoginEvent`, cross-instance) après 8 échecs de connexion en 15 minutes,
+  et limitation de débit best-effort en mémoire (`src/lib/security/
+  rate-limiter.ts`) sur les endpoints d'authentification les plus
+  sensibles, appliquée dans `src/proxy.ts` (runtime Node.js par défaut,
+  voir §18).
+- (v0.10) Secret de webhook obligatoire et généré automatiquement
+  (`src/lib/security/webhook-secret.ts`), vérifié en temps constant, sur
+  tous les déclencheurs webhook du Workflow Engine et de l'Automation
+  Engine — était auparavant optionnel.
+- (v0.10) Quota d'envoi email quotidien dur par organisation
+  (`src/lib/email/quota.ts`), appliqué à tous les points d'envoi réel
+  (moteur de séquences, Workflow Engine, Automation Engine).
 
 ## 7. Fonctionnalités restant à développer après le MVP
 
@@ -1319,3 +1332,263 @@ analyse}-agent.test.ts` (effets de bord réels vérifiés dans chaque
 table concernée), `tests/automation/business-automation-templates.test.ts`
 (scénario complet déclencheur→job→agent→effet réel), et
 `tests/settings/organization-settings.test.ts`.
+
+## 17. v0.9 bis — Observabilité, quota IA dur, connecteurs Gmail/Outlook (`ROADMAP.md` §1 decies)
+
+Voir `docs/adr/0040` pour la justification complète. Contrairement à v0.9
+(extension du CRM/nouveaux agents métier), v0.9 bis complète des briques
+transversales laissées de côté (`MOD-16`/`MOD-04`/`MOD-06`) — aucune
+nouvelle table CRM, uniquement de l'observabilité, un garde-fou de coût,
+et deux connecteurs email supplémentaires.
+
+### Capture d'erreurs (`src/lib/observability/error-tracking.ts`)
+
+API d'ingestion Sentry (protocole "envelope") via `fetch()` direct, pas le
+SDK `@sentry/node` — même convention que les fournisseurs LLM/email/
+Calendar. `captureException`/`captureExceptionBestEffort` échouent
+explicitement (`{captured: false, reason}`) sans `SENTRY_DSN` — jamais un
+faux succès. Branché dans `toApiErrorResponse` (incidents 5xx uniquement,
+jamais les 4xx métier) et `POST /api/client-errors` (erreurs React
+navigateur). Réglage de DÉPLOIEMENT, jamais par organisation.
+
+### Métriques de base (`src/lib/observability/metrics-service.ts`, `api-metrics.ts`)
+
+Coût IA et taux d'échec email réagrègent des données déjà journalisées
+(`AIRequest.estimatedCostUsd` depuis v0.3, `EmailEvent` depuis v0.1). La
+latence API est mesurée par `withApiMetrics()`, un assistant appliqué
+route par route (3 routes représentatives aujourd'hui) — jamais un
+middleware global, pour limiter le risque de régression. Exposées dans
+`/settings/metrics` (page) et `GET /api/settings/metrics` (admin
+uniquement).
+
+### `AnthropicAIProvider` et quota IA dur (`src/lib/ai/providers/anthropic.ts`, `src/lib/ai/quota.ts`)
+
+Fournisseur réel pour la couche IA HISTORIQUE (`src/lib/ai/`, données
+structurées — analyse/scoring/génération de message/classification),
+distinct de l'abstraction LLM du Framework des Agents
+(`src/lib/agents/llm/`, texte brut) qui a déjà son propre fournisseur
+Anthropic réel depuis une phase antérieure. Prompte Claude pour un objet
+JSON strict par méthode, normalise les champs optionnels manquants,
+échoue explicitement sur réponse non exploitable.
+
+`Organization.aiMonthlyBudgetUsd` (`null` = illimité) est vérifié par
+`assertAiQuotaAvailable`/`getAIProviderForOrganization` AVANT tout appel
+IA réel — `QuotaExceededError` (429) si dépassé. Le Framework des Agents
+(`generateAgentNarrative`, point d'entrée unique des 8 agents) vérifie
+désormais le même quota et journalise un coût réel
+(`AIRequestKind.AGENT_NARRATIVE`) — il n'en journalisait AUCUN
+auparavant, malgré un champ `AIRequest.agentRunId` conçu pour ça depuis
+une phase antérieure mais jamais renseigné. Les deux couches IA
+partagent donc désormais le même budget mensuel par organisation.
+
+### Gmail et Outlook réels (`src/lib/email/providers/{gmail,outlook}.ts`)
+
+Complètent SMTP/Resend/Postmark/Brevo (v0.9) — 6 fournisseurs email
+réels au total, sélectionnables par `EMAIL_PROVIDER`. OAuth2 via deux
+modules génériques PAR fournisseur d'identité, réutilisables par de
+futures intégrations : `src/lib/google/oauth.ts` (extrait de
+`calendar/google/oauth.ts`, qui délègue désormais à ce module en
+conservant ses signatures d'origine — zéro régression sur Google
+Calendar) et `src/lib/microsoft/oauth.ts` (nouveau, tenant Azure AD
+configurable par organisation, `common` par défaut). Même convention que
+les autres fournisseurs email : échec explicite sans configuration ou
+sur erreur réseau/HTTP, jamais un succès simulé ; vérifiés contre de
+vrais serveurs HTTP locaux simulant les endpoints Google/Microsoft.
+
+### Réglages (`/settings`)
+
+Nouveau champ « Quota IA mensuel dur » dans le formulaire Entreprise
+(`OrganizationForm`), et statut de consommation du mois en cours dans la
+section Intelligence artificielle. Boutons « Connecter Gmail »/
+« Connecter Outlook » dans la liste des intégrations (visibles selon
+`EMAIL_PROVIDER`), même patron que « Connecter Google Calendar » (v0.9).
+
+### Tests
+
+`tests/observability/{logger,error-tracking,metrics-service,api-metrics}.test.ts`,
+`tests/ai/{anthropic-provider,quota}.test.ts` (dont un run d'agent réel
+bloqué de bout en bout par le quota), `tests/email/{gmail,outlook}.test.ts`
+(vrais serveurs HTTP locaux simulant Google/Microsoft), et l'extension de
+`tests/settings/organization-settings.test.ts` pour le nouveau champ de
+quota.
+
+## 18. v0.10 — Stabilisation production (`ROADMAP.md` §1 undecies, MOD-17)
+
+Voir `docs/adr/0041` pour la justification complète. Contrairement aux
+versions précédentes (nouvelles fonctionnalités), v0.10 est un jalon de
+sécurisation : correction de failles, extension de la couverture de
+tests, et documentation — précédée d'un audit exhaustif du code (3 revues
+indépendantes) qui a révélé la faille la plus sévère de toute la revue
+(réinitialisation de mot de passe) avant toute exécution.
+
+### Faille critique corrigée : réinitialisation de mot de passe (`src/app/api/auth/reset-password/request/route.ts`)
+
+La route renvoyait **toujours** `demoResetLink` en clair dans la réponse
+JSON, même avec un fournisseur email réel configuré — aucun email n'était
+jamais réellement envoyé. Corrigé : envoi réel via
+`getEmailProvider().send(...)` quand un fournisseur réel est actif ;
+`demoResetLink` n'est renvoyé QUE si `getEmailProvider().name === "demo"`.
+La non-énumération des comptes (comportement déjà correct) est conservée
+dans les deux modes.
+
+### Verrouillage de compte et limitation de débit (`src/lib/auth.ts`, `src/lib/security/rate-limiter.ts`, `src/proxy.ts`)
+
+Deux mécanismes complémentaires, choisis selon leur nature :
+- **Verrouillage durable** (`assertLoginNotLocked`) : repose sur
+  `LoginEvent` (Postgres, déjà journalisé depuis v0.1, partagé entre
+  toutes les instances) — bloque après 8 échecs en 15 minutes. Protection
+  de sécurité critique, doit survivre à un redémarrage/plusieurs
+  instances.
+- **Limitation de débit best-effort** (`isRateLimited`) : compteur glissant
+  en mémoire par processus, documenté honnêtement comme une protection
+  best-effort (même convention que `automation/concurrency/rate-limiter.ts`,
+  v0.8) — appliquée dans `src/proxy.ts` sur les endpoints d'authentification
+  les plus sensibles. Le Proxy Next.js 16 tourne par défaut sur le runtime
+  Node.js (contrairement à l'ancien `middleware.ts`, limité à l'Edge
+  Runtime) — c'est ce qui rend cette vérification possible directement
+  dans le Proxy, sans détour par une route API intermédiaire.
+
+### Secret de webhook obligatoire (`src/lib/security/webhook-secret.ts`)
+
+Le secret des déclencheurs webhook (Workflow Engine et Automation Engine)
+était auparavant optionnel — un déclencheur créé sans secret restait
+ouvert à quiconque devine `workspaceId` + `workflowKey`/`automationKey`.
+`ensureWebhookTriggerConfig` génère désormais systématiquement un secret à
+la (ré)indexation des liaisons de déclencheur ; une migration de
+rattrapage (`20260803201424_backfill_webhook_trigger_secrets`) comble les
+liaisons existantes. Comparaison en temps constant
+(`timingSafeStringEqual`, même patron que `unsubscribe-token.ts`).
+
+### Quota email dur généralisé (`src/lib/email/quota.ts`, `src/lib/email/index.ts`)
+
+Le quota (`Organization.dailySendLimit`/`EmailAccount.dailyLimit`)
+bloquait déjà les envois dans `sequence-engine.ts`, mais l'action
+`email.send` de l'Automation Engine et du Workflow Engine appelait
+`getEmailProvider()` directement, sans aucune vérification — un
+automatisme ou un workflow pouvait envoyer un nombre illimité d'emails.
+`getEmailProviderForOrganization` généralise le patron déjà établi par
+`getAIProviderForOrganization` (v0.9 bis) : vérifie le quota avant de
+retourner le fournisseur, à chaque point d'envoi réel.
+
+### Préparation 2FA (`prisma/schema.prisma`, `src/lib/two-factor.ts`)
+
+Schéma (`User.twoFactorSecret`/`twoFactorEnabled`) et implémentation TOTP
+(RFC 6238, HMAC-SHA1) sans dépendance externe — cycle
+inscription/confirmation/désactivation complet, testé contre le vecteur de
+test officiel RFC 4226 Annexe D. Non encore imposé à la connexion
+(`src/lib/auth.ts` ne consulte pas `twoFactorEnabled`) : pose les
+fondations de `MOD-17` post-v1.0.
+
+### Extension de la couverture de tests
+
+`tests/tenant-isolation/{invoices,quotes,appointments,automations,
+communications,email,calendar}.test.ts` (7 nouveaux domaines, en
+priorité les domaines financiers et porteurs de secrets) et
+`tests/crm/{sequence-engine,suppression,unsubscribe-token}.test.ts` (3
+modules critiques jusque-là sans aucun test). `.github/workflows/e2e.yml`
+exécute désormais les 3 suites E2E sur chaque pull request, pas seulement
+après merge sur `main`.
+
+## 19. v1.0 — Ouverture SaaS (`ROADMAP.md` MOD-18/MOD-19, `BACKLOG.md` AR-0059 à AR-0066)
+
+Voir `docs/adr/0042` pour la justification complète. Premier jalon de
+fonctionnalités depuis `v0.9 bis` (v0.10 était un jalon de sécurisation
+pur) : ouvre Autorun à des intégrations tierces (API publique, webhooks
+sortants) et transforme l'application en SaaS facturable en self-service
+(plans, Stripe Billing, onboarding automatique).
+
+### API publique v1 et clés API (`src/lib/public-api/`, AR-0059/AR-0060)
+
+`GET /api/public/v1/{leads,opportunities,invoices}[/[id]]` — routes en
+lecture seule, authentifiées par clé API (`ApiKey`, hachée SHA-256,
+jamais stockée en clair, préfixe visible pour identification), toujours
+scopées `organizationId` côté serveur (jamais transmis par le client).
+`withPublicApiHandler`/`withPublicApiHandlerParams` (`src/lib/public-api/
+handler.ts`) centralisent authentification + rate limiting (60
+requêtes/minute par clé, réutilise `isRateLimited`, v0.10) + conversion
+d'erreur en un seul point, plutôt que de dupliquer cette logique dans
+chaque route. Documentation OpenAPI 3.0.3 : `docs/api/openapi.yaml`.
+Gestion des clés : `/settings/api-keys` (réservé `OWNER_ADMIN`).
+
+### Webhooks sortants (`src/lib/webhooks-outbound.ts`, `src/lib/jobs/webhook-delivery-job.ts`, AR-0061)
+
+`registerOutboundWebhookListeners()` s'abonne au bus d'évènements
+générique déjà existant (`src/lib/events/domain-events.ts`, v0.6) — les
+mêmes évènements métier réels déjà publiés par `publishAutomationEvent`
+(`lead.created`, `quote.signed`, `invoice.paid`, ...) déclenchent
+désormais aussi une livraison de webhook sortant, sans nouveau point
+d'émission ajouté à la logique métier. Chaque livraison
+(`WebhookDelivery`) est signée HMAC-SHA256 (`X-Autorun-Signature`),
+identifiée par une clé d'idempotence unique, et retentée selon la
+politique de retry déjà éprouvée de l'Automation Engine (`decideRetry`,
+`DEFAULT_RETRY_POLICY`, v0.8) plutôt qu'une réimplémentation. Gestion des
+abonnements : `/settings/webhooks`.
+
+### Plans d'abonnement et quotas (`src/lib/billing/plan-service.ts`, AR-0062)
+
+`Plan` (STARTER/PRO/ENTERPRISE, seedé en migration de données — référence
+nécessaire dans tout environnement, pas seulement en démo) porte les
+valeurs de quota de référence. `applyPlanToOrganization` les COPIE
+directement sur `Organization.{dailySendLimit,aiMonthlyBudgetUsd}` au
+moment de la souscription/du changement de plan — tout le code de
+vérification de quota déjà existant (`sequence-engine.ts`, `src/lib/ai/
+quota.ts`, `src/lib/email/quota.ts`) continue de lire ces deux champs
+sans jamais avoir à connaître la notion de plan. `assertMemberLimitAvailable`
+est appelée aux deux points réels de création de `Membership` (invitation
+directe, acceptation d'invitation de workspace) ; no-op pour toute
+organisation sans plan (comportement additif).
+
+### Facturation Stripe (`src/lib/billing/`, AR-0063)
+
+`BillingProvider` (interface) a deux implémentations : `DemoBillingProvider`
+(activation synchrone, sans configuration externe — comportement par
+défaut, même convention que `DemoAIProvider`/`DemoEmailProvider`) et
+`StripeBillingProvider` (REST API via `fetch()`, sans SDK `stripe`, en
+cohérence avec Sentry/Gmail/Outlook/Google Calendar — voir ADR 0042 pour
+la discussion complète de ce choix). Le fournisseur ne gère jamais les
+quotas directement : `subscription-service.ts` orchestre le fournisseur
+ET `plan-service.ts` (source de vérité locale des quotas), traite les
+webhooks entrants Stripe de façon idempotente (réutilise
+`WebhookEvent.externalId`, ajouté par v1.0 sur un modèle jusque-là non
+exploité pour ce cas d'usage). Une organisation en échec de paiement
+(`SubscriptionStatus.RESTRICTED`) est bloquée en écriture au niveau du
+Proxy (`src/proxy.ts`, `SUBSCRIPTION_GATE_EXEMPT_PREFIXES` exempte
+`/api/billing`/`/api/cron`/`/api/settings/billing` pour permettre à
+l'organisation de toujours régulariser elle-même sa facturation), jamais
+en lecture, et sans jamais perdre de données.
+
+### Onboarding self-service et interface de facturation (AR-0064/AR-0065)
+
+`POST /api/auth/register` accepte un `planKey` optionnel (STARTER par
+défaut) et déclenche automatiquement `startOrganizationCheckout` juste
+après la création de l'organisation — activation immédiate en mode démo,
+ou URL de paiement Stripe à suivre en mode réel (retournée au client, qui
+redirige). `GET /api/plans` (public, sans authentification) permet de
+choisir un plan AVANT la création du compte. `/settings/billing` (plan
+actuel, statut, consommation de quota en temps réel, changement de plan,
+annulation) suit le même patron que `/settings/api-keys`/`/settings/
+webhooks`. Le parcours complet (inscription → choix de plan → activation
+→ page de facturation) est validé de bout en bout par
+`tests/e2e/self-service-onboarding.mjs`, exécuté en CI sur chaque pull
+request au même titre que les 3 suites E2E précédentes.
+
+### Écarts de périmètre documentés : pas de réutilisation d'`AR-0027`, pas de sélecteur de vertical
+
+`AR-0063` référence `AR-0027` (intégration Stripe côté facturation
+client final) comme prérequis dans `BACKLOG.md` — vérifié inexistant
+dans le code (`AR-0027` à `AR-0030` n'ont jamais été implémentées,
+confirmé par recherche exhaustive de "stripe" dans `src/` avant ce
+jalon). La plomberie Stripe (authentification par clé secrète, encodage
+de formulaire, vérification de signature de webhook) a donc été
+construite de zéro pour l'abonnement SaaS, plutôt que de réutiliser une
+abstraction `PaymentProvider` qui n'existe pas.
+
+De même, `AR-0064` décrit un « choix du vertical de départ » à
+l'inscription — `MOD-20` (Vertical Pack, second vertical fictif), dont ce
+choix dépendrait, reste reporté depuis `v0.4` et n'a jamais été livré
+(confirmé par recherche exhaustive de "vertical" dans `src/` : aucun
+concept de vertical métier configurable n'existe, un seul produit
+Provence 360 est câblé en dur). `/register` ne propose donc que le choix
+du plan, pas du vertical — un sélecteur factice aurait été trompeur sans
+`MOD-20` réellement livré derrière. Voir ADR 0042 pour la discussion
+complète des deux écarts.

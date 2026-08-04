@@ -5,8 +5,10 @@ import { registerSchema } from "@/lib/validations/auth";
 import { bootstrapOrganization } from "@/lib/bootstrap";
 import { writeAuditLog } from "@/lib/audit";
 import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
-import { MembershipRole, WorkspaceRole } from "@/generated/prisma/enums";
+import { MembershipRole, PlanKey, WorkspaceRole } from "@/generated/prisma/enums";
 import { WORKSPACE_AUDIT_ACTIONS } from "@/lib/workspace-permissions";
+import { startOrganizationCheckout } from "@/lib/billing/subscription-service";
+import { logger } from "@/lib/logger";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -14,7 +16,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Données invalides.", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { organizationName, firstName, lastName, email, password } = parsed.data;
+  const { organizationName, firstName, lastName, email, password, planKey } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -64,5 +66,27 @@ export async function POST(request: Request) {
   await publishAutomationEvent("workspace.created", { organizationId: organization.id, workspaceId: workspace.id });
   await publishAutomationEvent("user.registered", { organizationId: organization.id, userId: user.id });
 
-  return NextResponse.json({ organizationId: organization.id, userId: user.id }, { status: 201 });
+  // Provisionnement automatique de l'abonnement (v1.0, AR-0064) — sans
+  // intervention manuelle : STARTER par défaut, activé immédiatement en
+  // mode démo, ou une URL de paiement Stripe à suivre en mode réel. Un
+  // échec ici ne doit jamais faire échouer la création du compte, déjà
+  // actée ci-dessus — l'organisation reste TRIALING et peut réessayer
+  // depuis /settings/billing.
+  const origin = new URL(request.url).origin;
+  let checkoutUrl: string | null = null;
+  try {
+    const outcome = await startOrganizationCheckout({
+      organizationId: organization.id,
+      planKey: planKey ?? PlanKey.STARTER,
+      requesterEmail: email,
+      requesterName: `${firstName} ${lastName}`,
+      successUrl: `${origin}/onboarding?checkout=success`,
+      cancelUrl: `${origin}/register?checkout=cancel`,
+    });
+    checkoutUrl = outcome.checkoutUrl;
+  } catch (error) {
+    logger.warn({ err: error, module: "billing", organizationId: organization.id }, "Provisionnement automatique de l'abonnement à l'inscription en échec — l'organisation reste en essai (TRIALING).");
+  }
+
+  return NextResponse.json({ organizationId: organization.id, userId: user.id, checkoutUrl }, { status: 201 });
 }

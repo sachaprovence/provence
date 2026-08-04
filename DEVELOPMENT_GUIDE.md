@@ -427,6 +427,135 @@ touchant ce périmètre :
   non-fuite des secrets) contre un serveur de développement réellement
   démarré, zéro erreur console.
 
+## 0 decies. État de v0.9 bis (observabilité, quota IA dur, Gmail/Outlook)
+
+Voir `docs/adr/0040` pour le détail complet des décisions. Points à
+connaître pour tout nouveau code touchant ce périmètre :
+
+- **Toujours passer par `getAIProviderForOrganization(organizationId)`
+  (`src/lib/ai/index.ts`), jamais `getAIProvider()` directement, à un
+  nouveau point d'appel réel de la couche IA historique** — la première
+  vérifie le quota mensuel avant de retourner le fournisseur
+  (`QuotaExceededError`, HTTP 429, si dépassé), la seconde ne fait aucune
+  vérification. Les 4 points d'appel existants
+  (`sequence-engine.ts`, `POST /api/messages/generate`,
+  `POST /api/leads/[id]/analyze`, `POST /api/leads/[id]/simulate-reply`)
+  suivent déjà ce patron — le reproduire pour tout nouveau point d'appel.
+- **`generateAgentNarrative` (point d'entrée unique des 8 agents) vérifie
+  déjà le quota et journalise le coût** — un nouvel agent ou outil qui
+  appelle un LLM DOIT passer par cette fonction (déjà une règle non
+  négociable depuis l'ADR 0029), jamais un appel direct à
+  `getActiveLlmProvider().complete(...)`, sous peine de contourner
+  silencieusement le quota IA.
+- **`src/lib/ai/` (données structurées) et `src/lib/agents/llm/` (texte
+  brut) restent deux abstractions séparées** — ne pas essayer de les
+  fusionner ni de faire implémenter les deux interfaces par un même
+  fournisseur ; voir ADR 0040 pour le raisonnement complet.
+- **Un module OAuth2 générique par fournisseur d'identité**
+  (`src/lib/google/oauth.ts`, `src/lib/microsoft/oauth.ts`) — toute
+  nouvelle intégration Google (ex. futur Google Sheets) ou Microsoft
+  (ex. futur Teams) doit réutiliser le module existant en lui passant son
+  propre `scope`, jamais dupliquer la logique d'échange/renouvellement de
+  jeton dans le nouveau fournisseur.
+- **`EMAIL_PROVIDER` accepte désormais 6 valeurs** (`smtp`/`resend`/
+  `postmark`/`brevo`/`gmail`/`outlook`) — Gmail/Outlook nécessitent en
+  plus un flux de connexion OAuth (`/api/email/{gmail,outlook}/connect`
+  puis `/callback`), contrairement aux 4 premiers qui ne nécessitent
+  qu'une clé API/des identifiants SMTP saisis directement.
+- **`Organization.aiMonthlyBudgetUsd` est `null` par défaut (illimité)**
+  — ne jamais supposer qu'une organisation a un quota configuré ; toujours
+  vérifier via `assertAiQuotaAvailable`/`getAIProviderForOrganization`,
+  jamais lire le champ directement pour décider d'un comportement.
+- **Toute nouvelle fonctionnalité de ce périmètre a été vérifiée au moins
+  une fois par une vraie requête HTTP contre un serveur de production
+  réellement démarré** (`/settings`, `/settings/metrics`,
+  `GET /api/settings/metrics`) — voir §"Validation finale" de
+  `BACKLOG.md` pour le détail des commandes exécutées.
+
+## 0 undecies. État de v0.10 (stabilisation production, sécurité)
+
+Voir `docs/adr/0041` pour le détail complet des décisions. Points à
+connaître pour tout nouveau code touchant ce périmètre :
+
+- **Toujours passer par `getEmailProviderForOrganization(organizationId)`
+  (`src/lib/email/index.ts`), jamais `getEmailProvider()` directement, à
+  un nouveau point d'appel réel d'envoi email** — même patron que
+  `getAIProviderForOrganization` (v0.9 bis) : vérifie le quota quotidien
+  avant de retourner le fournisseur (`QuotaExceededError`, HTTP 429, si
+  dépassé). `sequence-engine.ts` fait exception : il garde son propre
+  appel à `assertEmailQuotaAvailable` pour préserver ses effets de bord
+  spécifiques (marquer le `Message` `FAILED` + créer un `EmailEvent`) en
+  cas de dépassement, plutôt que de laisser l'erreur se propager
+  génériquement.
+- **Un déclencheur webhook (Workflow Engine ou Automation Engine) a
+  TOUJOURS un secret** — généré automatiquement par
+  `ensureWebhookTriggerConfig` (`src/lib/security/webhook-secret.ts`) à la
+  (ré)indexation des liaisons de déclencheur. Ne jamais rendre ce secret
+  optionnel dans un nouveau chemin de code ; comparer avec
+  `timingSafeStringEqual`, jamais `===`/`!==`.
+- **Les routes qui appellent `next/headers` (directement ou via
+  `recordLoginEvent`/`createSession`, `src/lib/auth.ts`) ne peuvent PAS
+  être invoquées directement dans Vitest** — `headers()` lève `"headers
+  was called outside a request scope"` hors d'un vrai contexte de requête
+  Next.js. Pour tester ces routes : vérification manuelle contre un vrai
+  serveur démarré (voir `tests/auth/login-lockout.test.ts` pour un
+  exemple documenté), ou restructurer la logique métier testable
+  séparément de la route (ex. `assertLoginNotLocked`, testé isolément).
+  Les routes qui n'appellent PAS `headers()` peuvent être importées et
+  invoquées directement avec un `Request` construit (voir
+  `tests/security/webhook-secret.test.ts`).
+- **Le Proxy Next.js 16 (`src/proxy.ts`) tourne par défaut sur le runtime
+  Node.js**, contrairement à l'ancien `middleware.ts` (Edge Runtime
+  uniquement) — permet d'y placer une logique nécessitant des API Node
+  complètes (ex. le rate limiter). Ne pas supposer les contraintes de
+  l'Edge Runtime obsolètes sans vérifier `node_modules/next/dist/docs/`
+  (voir `AGENTS.md`).
+- **`tests/tenant-isolation/` couvre désormais 15 domaines** (8 avant
+  v0.10 + 7 nouveaux : factures, devis, rendez-vous, automatisations,
+  Communication Hub, email, calendrier) — reproduire le gabarit
+  `expectNoCrossTenantLeak` pour tout nouveau domaine sensible, en
+  particulier financier ou porteur de secrets.
+
+## 0 duodecies. État de v1.0 (ouverture SaaS, API publique, Stripe Billing)
+
+Voir `docs/adr/0042` pour le détail complet des décisions. Points à
+connaître pour tout nouveau code touchant ce périmètre :
+
+- **`/api/public/v1/**` (authentifié par clé API) et `/api/plans` (public,
+  sans authentification) sont deux espaces distincts, volontairement** —
+  ne jamais ajouter une route sans authentification sous
+  `/api/public/v1/`, et ne jamais faire porter à une route interne d'aide
+  UI (comme `/api/plans`) la sémantique d'API publique versionnée.
+- **Toute nouvelle route publique en lecture doit passer par
+  `withPublicApiHandler`/`withPublicApiHandlerParams`
+  (`src/lib/public-api/handler.ts`)** — centralise authentification, rate
+  limiting (60 req/min/clé) et conversion d'erreur ; ne jamais dupliquer
+  cette logique dans la route elle-même.
+- **`applyPlanToOrganization` (`src/lib/billing/plan-service.ts`) est la
+  SEULE façon de faire varier les quotas d'une organisation** — ne jamais
+  écrire directement `Organization.dailySendLimit`/`aiMonthlyBudgetUsd`
+  ailleurs qu'à travers cette fonction, pour qu'un changement de plan
+  reste la source de vérité unique.
+- **Une organisation `RESTRICTED` (échec de paiement) est bloquée en
+  écriture au niveau du Proxy** (`src/proxy.ts`,
+  `SUBSCRIPTION_GATE_EXEMPT_PREFIXES`), jamais route par route — si une
+  nouvelle route de facturation doit rester accessible à une organisation
+  restreinte (pour qu'elle puisse se régulariser), ajouter son préfixe à
+  cette liste plutôt que de contourner le Proxy.
+- **`BillingProvider` (abonnement SaaS de l'éditeur) est un domaine
+  distinct du futur `AR-0027` (paiement client final)** — ne jamais
+  réutiliser `src/lib/billing/` pour un besoin de paiement client, même
+  si Stripe est le fournisseur des deux côtés à terme.
+- **Un mutateur de `window.location.href` dans un composant client doit
+  être extrait en fonction top-level** (hors du corps du composant),
+  sinon le linter `react-hooks/immutability` (react-compiler) le
+  rapporte à tort comme une mutation de variable de rendu — voir
+  `redirectToCheckout` dans `src/app/(app)/settings/billing/
+  billing-client.tsx` pour le patron à suivre.
+- **`tests/e2e/self-service-onboarding.mjs` est la 4ᵉ suite E2E**,
+  exécutée en CI sur chaque pull request au même titre que les 3
+  précédentes — la mettre à jour si le parcours d'inscription change.
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)
@@ -498,9 +627,10 @@ référence rapide pendant le développement :
 - Jamais de préfixe `NEXT_PUBLIC_` sur une variable contenant un secret.
 - Pas de `console.log` brut dans `src/` (règle de lint, voir AR-0006) —
   utiliser `src/lib/logger.ts` (pino, déjà en place depuis plusieurs
-  phases) ; l'observabilité transversale dédiée (`MOD-16`, logs
-  structurés/capture d'erreurs/métriques centralisées) reste reportée
-  après v0.9 — voir `ROADMAP.md` §1 novies et `MILESTONES.md` §v0.9 bis.
+  phases). L'observabilité transversale (`MOD-16` : logs structurés,
+  capture d'erreurs réelle via `src/lib/observability/error-tracking.ts`,
+  métriques de base) est livrée depuis v0.9 bis — voir `ROADMAP.md`
+  §1 decies et `MILESTONES.md` §v0.9 bis.
 
 ## 5. Stratégie de tests
 

@@ -21,6 +21,16 @@ export interface EmailIntegrationConfig {
   apiKey?: string;
   /** Surcharge de l'URL de base de l'API (tests, passerelle d'entreprise auto-hébergée). */
   baseUrl?: string;
+  /** Gmail (AR-0053) / Outlook (AR-0054) — OAuth2, émis par le flux de connexion (voir Paramètres → Intégrations). */
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+  /** Outlook (AR-0054) uniquement — "common" par défaut (comptes personnels ET professionnels/scolaires), sinon l'identifiant du tenant Azure AD de l'organisation. */
+  tenantId?: string;
+  /** Surcharges pour les tests (jamais utilisées en production) — endpoint d'échange/renouvellement de jeton. */
+  oauthBaseUrl?: string;
+  /** Surcharge pour les tests — endpoint de l'API d'envoi (Gmail/Microsoft Graph). */
+  apiBaseUrl?: string;
   [key: string]: unknown;
 }
 

@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
-import { getAIProvider } from "@/lib/ai";
+import { getAIProviderForOrganization } from "@/lib/ai";
+import { QuotaExceededError } from "@/lib/errors";
 import { generateMessageSchema } from "@/lib/validations/message";
 import { unsubscribeUrl } from "@/lib/unsubscribe-token";
 import { writeAuditLog } from "@/lib/audit";
+import { withApiMetrics } from "@/lib/observability/api-metrics";
 import { LeadStage, MessageStatus } from "@/generated/prisma/enums";
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -24,7 +26,13 @@ export async function POST(request: Request) {
 
   const analysis = await prisma.leadAnalysis.findFirst({ where: { leadId }, orderBy: { createdAt: "desc" } });
 
-  const ai = getAIProvider();
+  let ai;
+  try {
+    ai = await getAIProviderForOrganization(actor.organization.id);
+  } catch (error) {
+    if (error instanceof QuotaExceededError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    throw error;
+  }
   const facts = {
     establishmentName: lead.establishmentName,
     category: lead.category,
@@ -119,3 +127,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ message });
 }
+
+// Route représentative instrumentée pour la latence API (AR-0049, v0.9 bis) — voir src/lib/observability/api-metrics.ts.
+export const POST = withApiMetrics("POST /api/messages/generate", handlePost);

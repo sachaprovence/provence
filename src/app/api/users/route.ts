@@ -5,6 +5,8 @@ import { canManageUsers } from "@/lib/permissions";
 import { inviteUserSchema } from "@/lib/validations/organization";
 import { hashPassword } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { assertMemberLimitAvailable } from "@/lib/billing/plan-service";
+import { toApiErrorResponse } from "@/lib/errors";
 
 export async function GET() {
   const actor = await requireActorApi();
@@ -32,6 +34,12 @@ export async function POST(request: Request) {
   if (existing) {
     const alreadyMember = await prisma.membership.findFirst({ where: { userId: existing.id, organizationId: actor.organization.id } });
     if (alreadyMember) return NextResponse.json({ error: "Cet utilisateur fait déjà partie de l'organisation." }, { status: 409 });
+  }
+
+  try {
+    await assertMemberLimitAvailable(actor.organization.id);
+  } catch (error) {
+    return toApiErrorResponse(error, { route: "POST /api/users" });
   }
 
   const passwordHash = await hashPassword(data.temporaryPassword);

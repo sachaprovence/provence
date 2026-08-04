@@ -6,6 +6,7 @@ import { AutomationDefinitionStatus } from "@/generated/prisma/enums";
 import type { WorkspaceActor } from "@/lib/workspace-context";
 import { validateAutomationGraph } from "../graph-validation";
 import type { AutomationGraph } from "../graph-types";
+import { ensureWebhookTriggerConfig } from "@/lib/security/webhook-secret";
 
 /**
  * Automation Registry (v0.8) : cycle de vie d'un `Automation` — créé,
@@ -229,14 +230,17 @@ async function reindexAutomationTriggerBindings(automationId: string, workspaceI
   const triggerNodes = version.graph.nodes.filter((n) => n.type === "trigger");
   if (triggerNodes.length === 0) return;
   await prisma.automationTriggerBinding.createMany({
-    data: triggerNodes.map((node) => ({
-      automationId,
-      automationVersionId: version.id,
-      workspaceId,
-      nodeId: node.id,
-      triggerKey: (node.data as { triggerKey: string }).triggerKey,
-      config: ((node.data as { config?: unknown }).config ?? null) as never,
-    })),
+    data: triggerNodes.map((node) => {
+      const triggerKey = (node.data as { triggerKey: string }).triggerKey;
+      return {
+        automationId,
+        automationVersionId: version.id,
+        workspaceId,
+        nodeId: node.id,
+        triggerKey,
+        config: ensureWebhookTriggerConfig(triggerKey, (node.data as { config?: unknown }).config ?? null) as never,
+      };
+    }),
   });
 }
 

@@ -32,12 +32,15 @@ const REDACTED_PATHS = [
   "req.headers.cookie",
 ];
 
-export const logger = pino({
+/** Exportée uniquement pour permettre à un test de reconstruire un pino avec la même politique de redaction contre une destination capturable (voir tests/observability/logger.test.ts) — jamais utilisée ailleurs. */
+export const LOGGER_OPTIONS = {
   level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === "production" ? "info" : "debug"),
   redact: { paths: REDACTED_PATHS, censor: "[REDACTED]" },
   base: { app: "autorun" },
   timestamp: pino.stdTimeFunctions.isoTime,
-});
+};
+
+export const logger = pino(LOGGER_OPTIONS);
 
 /** Logger dédié à un module (`logger.child({ module: "sequence-engine" })`). */
 export function createModuleLogger(moduleName: string) {

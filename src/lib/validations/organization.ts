@@ -23,6 +23,8 @@ export const organizationSettingsSchema = z.object({
   phone: z.string().max(40).optional().nullable(),
   invoicePrefix: z.string().max(10).optional().nullable(),
   quotePrefix: z.string().max(10).optional().nullable(),
+  /// Quota IA mensuel dur en USD (v0.9 bis, AR-0051) — `null`/absent = pas de quota (illimité). Voir `src/lib/ai/quota.ts`.
+  aiMonthlyBudgetUsd: z.coerce.number().positive().optional().nullable(),
 });
 
 export const emailIntegrationConfigUpdateSchema = z.object({
