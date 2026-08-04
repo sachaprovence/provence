@@ -9,6 +9,8 @@ import { IcpManager } from "@/components/icp-manager";
 import { PipelineStagesManager } from "@/components/pipeline-stages-manager";
 import { EmailSettingsForm } from "@/components/email-settings-form";
 import { CommunicationSettingsForm } from "@/components/communication-settings-form";
+import { BusinessHoursForm } from "@/components/business-hours-form";
+import { NotificationPreferencesForm } from "@/components/notification-preferences-form";
 import { DEFAULT_SCORING_RULES, type ScoringRule } from "@/lib/scoring";
 import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { listRegisteredLlmProviderKeys, registerBuiltInLlmProviders } from "@/lib/agents/llm";
@@ -95,6 +97,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           Fournisseur actif par canal pour cette organisation (Twilio couvre les trois canaux avec un seul compte). Sans configuration, ces canaux restent en mode démo (aucun envoi réel).
         </p>
         <CommunicationSettingsForm />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Agenda</h2>
+        <p className="text-sm text-p360-muted mb-4">
+          Horaires d&apos;ouverture par jour et capacité par créneau (nombre de rendez-vous/visites simultanés max) — consommés par l&apos;Agent Planning pour ne proposer que des créneaux réellement disponibles.
+        </p>
+        <BusinessHoursForm />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Préférences de notification</h2>
+        <p className="text-sm text-p360-muted mb-4">
+          Réglages personnels — choisissez, par évènement, les canaux (application/email) sur lesquels vous souhaitez être notifié·e.
+        </p>
+        <NotificationPreferencesForm />
       </section>
 
       <section className="card p-6">

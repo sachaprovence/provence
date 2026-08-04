@@ -72,6 +72,8 @@ model Organization {
   billingSubscriptionId    String?
   subscriptionStatus       SubscriptionStatus @default(TRIALING)
   subscriptionCanceledAt   DateTime?
+  /// Capacité par créneau : nombre de rendez-vous/visites simultanés max (v1.1, AR-0179). `1` = comportement inchangé pour les organisations existantes (un seul créneau à la fois).
+  appointmentSlotCapacity  Int                @default(1)
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
@@ -116,7 +118,9 @@ model Organization {
   integrations         Integration[]
   webhookEvents        WebhookEvent[]
   loginEvents          LoginEvent[]
-  pipelineStages       PipelineStage[]
+  pipelineStages         PipelineStage[]
+  businessHours          BusinessHours[]
+  notificationPreferences NotificationPreference[]
   companies            Company[]
   properties           Property[]
   contacts             Contact[]
@@ -173,6 +177,7 @@ model User {
   tasksAssigned               Task[]                     @relation("TaskAssignee")
   appointments                Appointment[]              @relation("AppointmentOwner")
   notifications               Notification[]
+  notificationPreferences     NotificationPreference[]
   messagesValidated           Message[]                  @relation("MessageValidatedBy")
   notesAuthored               LeadNote[]
   attachmentsUploaded         Attachment[]
@@ -486,6 +491,31 @@ model PipelineStage {
 
   @@unique([organizationId, stageKey])
   @@index([organizationId, order])
+}
+
+/// Horaires d'ouverture par jour de la semaine (v1.1, AR-0179) — consommé par
+/// `src/lib/agents/tools/planning-tools.ts#suggestSlotsTool` pour ne proposer que des créneaux
+/// réellement disponibles. Absence de ligne pour un jour donné = aucune restriction (comportement
+/// inchangé pour les organisations qui n'ont rien configuré). Horaires exprimés en UTC
+/// ("HH:mm") — aucune conversion de fuseau horaire par organisation (simplification assumée,
+/// voir ADR correspondant).
+model BusinessHours {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// 0 = dimanche ... 6 = samedi (convention `Date.prototype.getUTCDay()`).
+  dayOfWeek      Int
+  isOpen         Boolean  @default(true)
+  /// Heure d'ouverture au format "HH:mm" (UTC) — `null` si `isOpen` est `false`, ou si aucune restriction d'horaire n'est fixée pour ce jour ouvert.
+  opensAt        String?
+  /// Heure de fermeture au format "HH:mm" (UTC).
+  closesAt       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, dayOfWeek])
+  @@index([organizationId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1539,6 +1569,34 @@ model Notification {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
 
+  @@index([organizationId, userId])
+}
+
+enum NotificationChannel {
+  APP
+  EMAIL
+}
+
+/// Préférences de notification par utilisateur (v1.1, AR-0180) — canal (application/email) x
+/// évènement, vérifiées avant émission par `notification.create` (Automation Engine ET Workflow
+/// Engine, voir `notification-action.ts` des deux modules). Absence de ligne pour une combinaison
+/// (utilisateur, évènement, canal) = activé par défaut (comportement inchangé pour tout
+/// utilisateur qui n'a rien configuré) — jamais un opt-in silencieux.
+model NotificationPreference {
+  id             String              @id @default(cuid())
+  organizationId String
+  userId         String
+  /// Clé d'évènement (ex. "lead.created", "quote.signed", "invoice.paid", "invoice.overdue") — voir `NOTIFICATION_PREFERENCE_EVENTS`.
+  eventKey       String
+  channel        NotificationChannel
+  enabled        Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventKey, channel])
   @@index([organizationId, userId])
 }
 
