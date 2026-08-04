@@ -60,6 +60,22 @@ export const propertyCreateSchema = z.object({
 
 export const propertyUpdateSchema = propertyCreateSchema.omit({ leadId: true }).partial();
 
+// Personne physique (v1.1, AR-0160) — voir docs/adr/0043, additive à LeadContact (inchangé).
+export const contactCreateSchema = z.object({
+  workspaceId: z.string().optional().nullable(),
+  fullName: z.string().min(1).max(200),
+  jobTitle: z.string().max(200).optional().nullable(),
+  email: z.string().email().optional().or(z.literal("")).nullable(),
+  phone: z.string().max(40).optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export const contactUpdateSchema = contactCreateSchema.partial();
+
+export const contactLinkSchema = z.object({
+  role: z.string().max(80).optional().nullable(),
+});
+
 export const attachmentCreateSchema = z.object({
   workspaceId: z.string().optional().nullable(),
   entityType: attachmentEntityTypeSchema,

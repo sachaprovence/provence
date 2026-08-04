@@ -118,6 +118,7 @@ model Organization {
   pipelineStages       PipelineStage[]
   companies            Company[]
   properties           Property[]
+  contacts             Contact[]
   attachments          Attachment[]
   virtualTours         VirtualTour[]
   apiRequestMetrics    ApiRequestMetric[]
@@ -220,6 +221,7 @@ model Workspace {
   automationTriggerBindings AutomationTriggerBinding[]
   companies                 Company[]
   properties                Property[]
+  contacts                  Contact[]
   attachments               Attachment[]
   virtualTours              VirtualTour[]
   quoteVersions             QuoteVersion[]
@@ -506,13 +508,76 @@ model Company {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?               @relation(fields: [workspaceId], references: [id])
   leads        Lead[]
   properties   Property[]
+  contactLinks CompanyContactRelation[]
 
   @@index([organizationId])
   @@index([workspaceId])
+}
+
+/// Personne physique (v1.1, AR-0160) — SCOPÉE organisation/workspace, jamais à un seul `Lead` : peut être
+/// liée à plusieurs `Lead`/`Company` (gérant de plusieurs établissements, prescripteur lié à plusieurs
+/// prospects). Distincte et additive par rapport à `LeadContact` (contact opérationnel de messagerie,
+/// scopé à un seul Lead, inchangé — voir ADR 0043 : migrer/retirer LeadContact aurait cassé 15+ points
+/// d'appel de résolution d'email/téléphone pour un bénéfice disproportionné).
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  fullName       String
+  jobTitle       String?
+  email          String?
+  phone          String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?               @relation(fields: [workspaceId], references: [id])
+  leadLinks    LeadContactRelation[]
+  companyLinks CompanyContactRelation[]
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([email])
+}
+
+/// Liaison N:N `Contact`↔`Lead` avec rôle optionnel (v1.1, AR-0160) — clés étrangères réelles
+/// (contrairement à la convention polymorphe `entityType`/`entityId` d'`Attachment`, jugée trop faible
+/// en intégrité référentielle pour une notion aussi centrale, voir ADR 0043).
+model LeadContactRelation {
+  id        String   @id @default(cuid())
+  contactId String
+  leadId    String
+  role      String?
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, leadId])
+  @@index([leadId])
+  @@index([contactId])
+}
+
+/// Liaison N:N `Contact`↔`Company` avec rôle optionnel (v1.1, AR-0160) — même patron que
+/// `LeadContactRelation`.
+model CompanyContactRelation {
+  id        String   @id @default(cuid())
+  contactId String
+  companyId String
+  role      String?
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, companyId])
+  @@index([companyId])
+  @@index([contactId])
 }
 
 /// Type physique d'un bien immobilier ("Bien immobilier" du brief v0.9) — distinct de `LeadCategory`
@@ -721,6 +786,7 @@ model Lead {
   company      Company?              @relation(fields: [companyId], references: [id])
 
   contacts      LeadContact[]
+  contactLinks  LeadContactRelation[]
   analyses      LeadAnalysis[]
   scores        LeadScore[]
   notes         LeadNote[]
