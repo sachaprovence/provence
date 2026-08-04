@@ -3,6 +3,8 @@ import { hasWorkspacePermission } from "@/lib/workspace-permissions";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { LogoutButton } from "@/components/logout-button";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { CommandPalette } from "@/components/command-palette";
+import { CommandPaletteTrigger } from "@/components/command-palette-trigger";
 
 const ROLE_LABEL: Record<string, string> = {
   OWNER_ADMIN: "Administrateur",
@@ -27,6 +29,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             canManageWorkspaces={hasWorkspacePermission(actor.workspace.role, "MANAGE_WORKSPACE")}
           />
         </div>
+        <div className="px-5 py-3 border-b border-p360-lavender-light">
+          <CommandPaletteTrigger />
+        </div>
         <div className="flex-1 overflow-y-auto px-3 py-4">
           <SidebarNav role={actor.membership.role} />
         </div>
@@ -41,6 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-8">{children}</div>
       </main>
+      <CommandPalette role={actor.membership.role} />
     </div>
   );
 }
