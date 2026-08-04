@@ -193,4 +193,27 @@ export class S3StorageProvider implements StorageProvider {
       throw new Error(`Échec de la suppression S3 (${response.status}) : ${body}`);
     }
   }
+
+  /**
+   * Test de connexion en lecture seule pour l'écran de diagnostic (v1.2,
+   * AR-0165) — un GET signé sur une clé délibérément inexistante prouve
+   * l'authentification ET l'accessibilité du bucket sans jamais lire ni
+   * écrire de donnée applicative réelle : 404 = authentification valide,
+   * bucket joignable (l'objet, lui, n'existe simplement pas) ; 403 =
+   * identifiants/permissions invalides ; toute autre réponse est traitée
+   * comme un échec explicite plutôt qu'un succès supposé.
+   */
+  async testConnection(): Promise<{ status: "TEST_SUCCESS" | "TEST_FAILED" | "UNAVAILABLE"; message: string }> {
+    try {
+      const probeKey = `__provence_diagnostic_check__/${crypto.randomUUID()}`;
+      const response = await s3Fetch("GET", probeKey, { payloadHash: EMPTY_PAYLOAD_HASH });
+      if (response.status === 404) return { status: "TEST_SUCCESS", message: "Connexion établie (bucket accessible, authentification valide)." };
+      if (response.ok) return { status: "TEST_SUCCESS", message: "Connexion établie." };
+      if (response.status === 403) return { status: "TEST_FAILED", message: "Accès refusé par S3 (403) — identifiants ou permissions du bucket invalides." };
+      return { status: "TEST_FAILED", message: `S3 a répondu ${response.status}.` };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur réseau.";
+      return { status: "UNAVAILABLE", message };
+    }
+  }
 }

@@ -95,6 +95,64 @@ bien connue pour les requêtes sans corps) plutôt qu'un second chemin de
 signature dédié — même fonction `buildSignedRequest`, paramétrée par
 méthode et hash de charge utile.
 
+### AR-0165 — Diagnostic des intégrations : collision de numéro avec `v1.1`, prime la demande explicite `v1.2`
+
+`AR-0165` désignait déjà, dans le plan `v1.1` (`ADR 0043`, plage `AR-0160`
+à `AR-0185`), la fonctionnalité "Pipeline commercial : évènement de
+transition d'étape" (livrée, voir `BACKLOG.md`/`docs/release/v1.1-
+recette.md`). La demande explicite ayant lancé `v1.2` réutilise pourtant
+ce même numéro pour une fonctionnalité entièrement différente ("Diagnostic
+des intégrations"). Décision : suivre la demande utilisateur telle
+qu'écrite (le numéro `AR-0165` de `v1.2` désigne bien le diagnostic
+d'intégrations dans tous les commits/tests/documents de `v1.2`) plutôt que
+d'improviser un numéro différent qui romprait la correspondance avec la
+demande d'origine — cette note existe pour qu'une recherche future de
+"AR-0165" sache qu'il existe deux fonctionnalités distinctes selon la
+version (`v1.1` vs `v1.2`), toutes deux réelles et livrées.
+
+Écran réservé à l'administrateur (`isAdmin`), couvrant Stripe/Twilio/
+Gmail/Outlook/S3 avec 6 états possibles (`non configurée` /
+`partiellement configurée` / `configurée` / `test réussi` / `test échoué`
+/ `indisponible`). Décisions structurantes :
+
+- **`IntegrationDiagnosticCheck` est un modèle Prisma dédié**, distinct
+  d'`Integration` — sert à la fois d'audit ("qui a déclenché quel test,
+  quand, avec quel résultat") et de source du dernier résultat affiché.
+  Alternative écartée : stocker le dernier résultat directement sur
+  `Integration.config` (comme un champ `lastTestStatus`) — rejetée car
+  Stripe et S3 n'ont justement AUCUNE ligne `Integration` (configuration
+  de déploiement, jamais par organisation), donc un modèle séparé,
+  toujours scopé par `organizationId`, est le seul point commun aux 5
+  intégrations.
+- **L'état affiché ne fait JAMAIS confiance aveuglément au dernier test
+  connu** : `listIntegrationDiagnostics` recalcule l'état de configuration
+  à chaque appel et ne fait primer `TEST_SUCCESS`/`TEST_FAILED` que si la
+  configuration est TOUJOURS complète au moment de la lecture — sinon un
+  test réussi avant qu'un identifiant soit retiré afficherait à tort
+  "test réussi" alors que l'intégration n'est plus utilisable.
+- **Un test de connexion n'est JAMAIS tenté sur une configuration
+  incomplète** (`testable` = `configState === "CONFIGURED"`), refusé
+  explicitement côté service (`ValidationError`) même si l'appelant
+  contourne l'UI — aucun appel à un tiers avec des identifiants
+  partiels/absents.
+- **Chaque test de connexion réutilise un appel bas-privilège déjà
+  existant plutôt que d'en inventer un nouveau** : renouvellement de jeton
+  OAuth pour Gmail/Outlook (`refreshGoogleAccessToken`/
+  `refreshMicrosoftAccessToken`, sans envoyer aucun email), lecture seule
+  pour Stripe (`GET /v1/balance`)/Twilio (`GET /Accounts/{Sid}.json`)/S3
+  (`GET` signé sur une clé délibérément inexistante, 404 = succès) —
+  jamais un envoi de test qui produirait un effet de bord réel (SMS,
+  email, appel facturé).
+- **Le message de résultat est TOUJOURS un texte généré côté serveur**
+  (code HTTP, nature de l'erreur), jamais la configuration elle-même ni la
+  réponse brute du fournisseur tiers — vérifié par test que la valeur du
+  secret utilisé n'apparaît jamais dans le message persisté/journalisé/
+  renvoyé à l'API, y compris en cas d'échec d'authentification.
+- **Double limitation de débit** (`assertDiagnosticTestRateLimitAvailable`,
+  5 tests / 5 minutes / organisation / intégration) : protège à la fois
+  l'écran de diagnostic contre un abus ET l'API tierce réelle contre un
+  appel excessif déclenché depuis Autorun.
+
 ## Conséquences
 
 - Toute future entité avec pièce jointe/fichier stocké doit suivre le même
@@ -105,6 +163,11 @@ méthode et hash de charge utile.
   cas entre blocage au démarrage (`AUTH_SECRET`) et alerte visible non
   bloquante (`STORAGE_PROVIDER=demo`) selon que la configuration est
   intrinsèquement non sûre ou seulement risquée pour un usage donné.
+- Tout futur "test de connexion" vers un fournisseur tiers doit réutiliser
+  un appel bas-privilège/lecture-seule déjà existant dans le code de
+  production plutôt que d'inventer un nouvel appel dédié — évite un effet
+  de bord réel et une divergence entre ce que le test vérifie et ce que le
+  code de production utilise réellement.
 - Un script de validation destiné à devenir un contrôle CI obligatoire ne
   doit réutiliser une suite E2E existante qu'après avoir vérifié
   empiriquement sa fiabilité dans ce nouveau contexte d'exécution — la

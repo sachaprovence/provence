@@ -202,6 +202,38 @@ describe("S3StorageProvider — contre un vrai serveur HTTP local simulant S3", 
     expect(request.body).toHaveLength(0);
   });
 
+  it("testConnection() renvoie TEST_SUCCESS quand S3 répond 404 (bucket accessible, authentification valide, clé sondée absente) — AR-0165", async () => {
+    configure();
+    nextResponse = { status: 404 };
+
+    const provider = new S3StorageProvider();
+    const result = await provider.testConnection();
+    expect(result.status).toBe("TEST_SUCCESS");
+    expect(requestLog[0].method).toBe("GET");
+    expect(requestLog[0].url).toMatch(/^\/__provence_diagnostic_check__\//);
+  });
+
+  it("testConnection() renvoie TEST_FAILED quand S3 répond 403 (AR-0165)", async () => {
+    configure();
+    nextResponse = { status: 403 };
+
+    const provider = new S3StorageProvider();
+    const result = await provider.testConnection();
+    expect(result.status).toBe("TEST_FAILED");
+  });
+
+  it("testConnection() renvoie UNAVAILABLE si le endpoint S3 est injoignable (AR-0165)", async () => {
+    process.env.STORAGE_S3_BUCKET = "test-bucket";
+    process.env.STORAGE_S3_REGION = "eu-west-3";
+    process.env.STORAGE_S3_ACCESS_KEY_ID = "AKIATEST";
+    process.env.STORAGE_S3_SECRET_ACCESS_KEY = "secret-test-key";
+    process.env.STORAGE_S3_ENDPOINT = "http://127.0.0.1:1";
+
+    const provider = new S3StorageProvider();
+    const result = await provider.testConnection();
+    expect(result.status).toBe("UNAVAILABLE");
+  });
+
   it("respecte un délai maximal configurable et distingue l'erreur de timeout d'une erreur réseau", async () => {
     configure();
     process.env.STORAGE_S3_TIMEOUT_MS = "100";

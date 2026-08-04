@@ -11,6 +11,7 @@ import { EmailSettingsForm } from "@/components/email-settings-form";
 import { CommunicationSettingsForm } from "@/components/communication-settings-form";
 import { BusinessHoursForm } from "@/components/business-hours-form";
 import { NotificationPreferencesForm } from "@/components/notification-preferences-form";
+import { IntegrationDiagnosticsPanel } from "@/components/integration-diagnostics-panel";
 import { DEFAULT_SCORING_RULES, type ScoringRule } from "@/lib/scoring";
 import { getPipelineStages } from "@/lib/crm/pipeline-service";
 import { listRegisteredLlmProviderKeys, registerBuiltInLlmProviders } from "@/lib/agents/llm";
@@ -155,6 +156,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <section className="card p-6">
         <h2 className="text-lg font-semibold text-p360-ink mb-4">Intégrations</h2>
         <IntegrationsList organizationId={actor.organization.id} />
+      </section>
+
+      <section className="card p-6">
+        <h2 className="text-lg font-semibold text-p360-ink mb-2">Diagnostic des intégrations</h2>
+        <p className="text-sm text-p360-muted mb-4">
+          État de configuration et de connexion de Stripe, Twilio, Gmail, Outlook et du stockage S3 — jamais aucun secret affiché ici.
+        </p>
+        <IntegrationDiagnosticsPanel />
       </section>
     </div>
   );
