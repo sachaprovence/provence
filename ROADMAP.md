@@ -384,6 +384,7 @@ décisions d'architecture complètes sont documentées dans `docs/adr/0042`.
 | MOD-26 | Intelligence documentaire (Memory/Knowledge/Context/Prompt Engine) | ✅ Livré (v0.7) | Critique |
 | MOD-27 | Automation Engine (moteur d'automatisation Enterprise) | ✅ Livré (v0.8) | Critique |
 | MOD-28 | Provence 360 Operating System (CRM étendu, Devis/Facturation, Communication Hub, email/agenda réels, Visites 3D, tableaux de bord, 7 agents métier, automatisations prêtes à l'emploi, réglages) | ✅ Livré (v0.9) | Critique |
+| MOD-29 | Provence 360 Production (fiches 360°, pipeline adapté, visites/devis/factures complets, communication réelle, agents/automatisations/dashboards complémentaires, UX) | 🚧 En cours (v1.1) | Critique (usage quotidien réel) |
 
 ## 3. Détail par module
 
@@ -1631,6 +1632,33 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   automatisés passent contre une vraie base PostgreSQL (384 tests),
   zéro régression ; lint, typecheck et build de production passent.
 
+### MOD-29 — Provence 360 Production (v1.1)
+
+- **Objectif** : Autorun cesse d'être développé comme un SaaS générique
+  pour devenir le logiciel métier quotidien de Provence 360 elle-même —
+  un prospect doit pouvoir parcourir tout son cycle de vie (prospection →
+  qualification → premier contact → rendez-vous → visite virtuelle →
+  devis → signature → facturation → paiement → suivi → fidélisation) sans
+  quitter Autorun.
+- **Fonctionnalités** : voir `BACKLOG.md` §Version 1.1 (`AR-0067` à
+  `AR-0092`, 26 tâches) pour le détail complet. Un audit exhaustif du
+  code (2 revues indépendantes) a précédé la rédaction du plan — une
+  large partie du brief était déjà livrée par `MOD-28` (v0.9) ; `MOD-29`
+  complète les parties manquantes ou non reliées à l'interface (fiches
+  360° assemblant des données déjà agrégées mais jamais affichées,
+  entités `Company`/`Property` sans UI, fournisseurs SMS/WhatsApp/
+  téléphone réels, dashboards Planning/Financier, UX transverse) plutôt
+  que de dupliquer l'existant.
+- **Dépendances** : `MOD-28` (base fonctionnelle complète à étendre).
+- **Priorité** : Critique — mandat explicite de cette phase (usage
+  quotidien réel par Provence 360).
+- **Choix d'architecture** : voir `docs/adr/0043`.
+- **Critères de fin** : les 12 étapes du cycle de vie prospect→client
+  fidélisé sont réellement praticables sans sortir d'Autorun ; zéro
+  régression sur les jalons précédents ; lint, typecheck, build de
+  production et suite de tests complète passent ; recette finale
+  documentée dans `docs/release/v1.1-recette.md`.
+
 ## 4. Ordre logique de développement
 
 ```
@@ -1654,6 +1682,8 @@ v0.9  MOD-16 (observabilité) + MOD-06 (connecteurs email réels) + MOD-04 (IA r
 v0.10 MOD-17 (sécurité avancée — porte obligatoire)
         │
 v1.0  MOD-18 (API/intégrations) + MOD-19 (SaaS billing) → première version stable
+        │
+v1.1  MOD-29 (Provence 360 Production — logiciel métier quotidien réel)
 ```
 
 Remarque d'ordonnancement : `MOD-15` (infrastructure de jobs) est listé en
