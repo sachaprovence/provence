@@ -1,3 +1,5 @@
+import type { Instrumentation } from "next";
+
 /**
  * Exécuté une fois au démarrage d'une instance serveur Next.js (avant que le
  * serveur ne commence à traiter des requêtes) — voir
@@ -74,3 +76,30 @@ export async function register() {
     }
   }
 }
+
+/**
+ * Filet de sécurité pour les erreurs que `toApiErrorResponse` ne voit
+ * JAMAIS (v1.3, AR-0173) : celles levées pendant le rendu d'un Server
+ * Component, une Server Action, ou par le Proxy lui-même — en dehors de
+ * tout `try/catch` applicatif, elles n'atteignaient jusqu'ici ni le journal
+ * structuré (`logger`) ni Sentry (`captureExceptionBestEffort`, AR-0048),
+ * seulement la sortie console brute de Next.js. `onRequestError` est le
+ * seul point d'entrée officiel de Next.js pour ce cas — voir la doc
+ * `node_modules/next/dist/docs/.../instrumentation.md`.
+ */
+export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
+  const { logger } = await import("@/lib/logger");
+  const { captureExceptionBestEffort } = await import("@/lib/observability/error-tracking");
+
+  const errorContext = {
+    route: request.path,
+    method: request.method,
+    routerKind: context.routerKind,
+    routePath: context.routePath,
+    routeType: context.routeType,
+    requestId: Array.isArray(request.headers["x-request-id"]) ? request.headers["x-request-id"][0] : request.headers["x-request-id"],
+  };
+
+  logger.error({ err: error, ...errorContext }, "Erreur non interceptée par un gestionnaire applicatif (rendu/action/proxy).");
+  captureExceptionBestEffort(error, errorContext);
+};
