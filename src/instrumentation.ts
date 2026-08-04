@@ -74,6 +74,25 @@ export async function register() {
     } catch (error) {
       logger.error({ err: error }, "Échec de l'initialisation de l'Automation Engine.");
     }
+
+    // Bascule la disponibilité ("readiness") sur "non prêt" DÈS la réception
+    // du signal d'arrêt (v1.3, AR-0173) — avant même que `next start` ne
+    // termine de drainer les requêtes en cours (voir `server.close()`,
+    // `node_modules/next/dist/server/lib/start-server.js`). Un simple
+    // écouteur supplémentaire, jamais `process.exit()` ici : le nettoyage
+    // et la sortie du processus restent entièrement gérés par Next.js
+    // lui-même ; on ne fait qu'avertir plus tôt le mécanisme de sonde de
+    // disponibilité pour qu'un rolling update cesse de router du nouveau
+    // trafic vers cette instance dès le début de sa période de grâce.
+    const { markShuttingDown } = await import("@/lib/health/shutdown-state");
+    process.on("SIGTERM", () => {
+      logger.info("SIGTERM reçu — bascule readiness sur non-prêt, drain des requêtes en cours par Next.js.");
+      markShuttingDown();
+    });
+    process.on("SIGINT", () => {
+      logger.info("SIGINT reçu — bascule readiness sur non-prêt, drain des requêtes en cours par Next.js.");
+      markShuttingDown();
+    });
   }
 }
 

@@ -137,6 +137,59 @@ périmètre de la CSP.
   zéro violation CSP, sur l'ensemble du parcours (connexion, inscription,
   facturation, automatisations, workflows).
 
+### Capture des erreurs hors gestionnaire applicatif (`onRequestError`)
+
+`toApiErrorResponse` ne voit jamais une erreur levée pendant le rendu d'un
+Server Component, une Server Action, ou par le Proxy lui-même (en dehors de
+tout `try/catch` applicatif) — jusqu'ici seulement visible dans la sortie
+console brute de Next.js, jamais dans le journal structuré ni Sentry.
+`src/instrumentation.ts` exporte désormais `onRequestError` (seul point
+d'entrée officiel Next.js pour ce cas), qui journalise avec le contexte
+route/routeur/type et déclenche `captureExceptionBestEffort` — mêmes
+garanties que `toApiErrorResponse`.
+
+### Arrêt propre sous charge — vérifié empiriquement, pas seulement affirmé
+
+Un premier test naïf (60 requêtes concurrentes envoyées d'un coup, 5ms
+avant `SIGTERM`) a montré ~16/60 échecs `ECONNRESET`. Analyse : ce n'est
+PAS un défaut de `next start` (lecture de `node_modules/next/dist/server/
+lib/start-server.js` : `server.close()` standard, ne coupe QUE les
+nouvelles connexions, jamais `closeAllConnections()` hors mode dev) — c'est
+un artefact du test lui-même, qui saturait la file d'attente TCP du
+système au point que des connexions jamais encore acceptées par le
+processus échouaient pour une raison indépendante du comportement d'arrêt
+propre de l'application.
+
+Réécrit avec une charge réaliste (8 requêtes, 50ms de battement avant
+`SIGTERM` pour laisser les connexions être réellement acceptées) :
+`scripts/verify-graceful-shutdown.mjs` — exécuté pour de vrai contre un
+`next start` en mode production (jamais `next dev`) — confirme :
+- 8/8 requêtes réellement en cours de traitement au moment du signal se
+  terminent avec succès (aucune interruption).
+- Le processus quitte de lui-même en ~3s, largement sous le délai de grâce
+  de 30s (`docker-compose.yml#stop_grace_period`, ajouté dans cette passe —
+  absent auparavant, valeur par défaut Docker de 10s jugée trop proche de
+  la borne basse recommandée par Next.js pour une requête lente, ex.
+  génération de PDF).
+
+### Readiness pendant un déploiement — bascule immédiate, pas seulement à la fin du drain
+
+Sans intervention, un rolling update continuerait de router du NOUVEAU
+trafic vers une instance déjà en train de s'arrêter jusqu'à ce que la sonde
+de disponibilité échoue par un autre moyen (ex. connexion refusée) —
+plus tardif et moins fiable qu'un signal explicite. `src/lib/health/
+shutdown-state.ts` (simple booléen en mémoire) est posé à `true` par un
+écouteur `SIGTERM`/`SIGINT` enregistré dans `src/instrumentation.ts`
+(JAMAIS `process.exit()` ici — le nettoyage et la sortie du processus
+restent entièrement gérés par Next.js) ; `evaluateReadiness()`
+(`/api/health/ready`) le vérifie EN PREMIER, avant même d'interroger la
+base de données, et bascule sur `503` dès que l'arrêt commence. Vérifié
+empiriquement dans le même script : readiness bascule 14ms après
+`SIGTERM` — bien avant que le processus n'ait fini de drainer quoi que ce
+soit. `/api/health/live` (liveness) reste volontairement inchangée
+pendant ce temps : le processus est toujours vivant et termine son
+travail, seule sa disponibilité pour du NOUVEAU trafic doit être signalée.
+
 ## Conséquences (AR-0173)
 
 - Toute nouvelle route API DOIT désormais passer `request` à
@@ -147,3 +200,12 @@ périmètre de la CSP.
   navigateur) — à surveiller via les futurs rapports d'erreurs `report-to`/
   `report-uri` (non câblés dans cette passe, identifié comme travail futur
   pour AR-0174/monitoring).
+- Un orchestrateur de déploiement (Kubernetes, load balancer) DOIT
+  interroger `/api/health/ready` (jamais `/api/health/live`) pour décider
+  de router du trafic — c'était déjà vrai depuis AR-0167 (v1.2), mais
+  prend maintenant tout son sens : c'est cette route précise qui porte le
+  signal précoce d'arrêt en cours.
+- `scripts/verify-graceful-shutdown.mjs` doit être réexécuté après toute
+  modification de `src/instrumentation.ts`, `src/lib/health/*`, ou du
+  `CMD`/`ENTRYPOINT` du `Dockerfile` — une preuve empirique rejouable,
+  jamais seulement une affirmation.

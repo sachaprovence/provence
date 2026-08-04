@@ -47,6 +47,14 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
+    # Arrêt propre (v1.3, AR-0173) : `next start` (App Router) termine les
+    # requêtes en cours et les callbacks `after()` en attente sur SIGTERM
+    # avant de quitter (voir doc Next.js self-hosting) ; Docker Compose
+    # attend ce délai avant d'envoyer SIGKILL. 30s = borne haute de la
+    # période de "drain" recommandée (10-30s) — mieux vaut laisser un peu
+    # de marge à une requête lente (génération PDF, appel IA) qu'interrompre
+    # une écriture en cours.
+    stop_grace_period: 30s
 
 volumes:
   provence_db_data:

@@ -4,6 +4,7 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { loadEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { isShuttingDown } from "@/lib/health/shutdown-state";
 
 /**
  * Contrôle de disponibilité ("readiness", v1.2, AR-0167) — distinct de la
@@ -31,6 +32,7 @@ export interface ReadinessCheckResult {
     database: "ok" | "error";
     migrations: "ok" | "error";
     configuration: "ok" | "error";
+    shutdown: "ok" | "error";
   };
 }
 
@@ -80,15 +82,22 @@ function checkConfiguration(): boolean {
 }
 
 export async function evaluateReadiness(): Promise<ReadinessCheckResult> {
+  // Vérifié EN PREMIER et sans attendre : dès qu'un arrêt est en cours
+  // (v1.3, AR-0173), inutile d'interroger la base — l'instance doit être
+  // retirée de la rotation immédiatement, quel que soit l'état des autres
+  // vérifications.
+  const shutdownOk = !isShuttingDown();
+
   const [databaseOk, migrationsOk] = await Promise.all([checkDatabase(), checkMigrations()]);
   const configurationOk = checkConfiguration();
 
   return {
-    ready: databaseOk && migrationsOk && configurationOk,
+    ready: shutdownOk && databaseOk && migrationsOk && configurationOk,
     checks: {
       database: databaseOk ? "ok" : "error",
       migrations: migrationsOk ? "ok" : "error",
       configuration: configurationOk ? "ok" : "error",
+      shutdown: shutdownOk ? "ok" : "error",
     },
   };
 }
