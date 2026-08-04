@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-08-04T19:59:41.191Z",
+  "organizationId": "cli-validation-no-organization",
+  "evidence": [
+    {
+      "key": "STRIPE",
+      "label": "Stripe (facturation)",
+      "configState": "NOT_CONFIGURED",
+      "configStateLabel": "non configurée",
+      "test": null,
+      "realAccountValidated": false,
+      "note": "Aucun identifiant fourni — validation contre un compte réel impossible tant qu'aucun identifiant n'est configuré."
+    },
+    {
+      "key": "TWILIO",
+      "label": "Twilio (SMS / WhatsApp / Téléphone)",
+      "configState": "NOT_CONFIGURED",
+      "configStateLabel": "non configurée",
+      "test": null,
+      "realAccountValidated": false,
+      "note": "Aucun identifiant fourni — validation contre un compte réel impossible tant qu'aucun identifiant n'est configuré."
+    },
+    {
+      "key": "GMAIL",
+      "label": "Gmail",
+      "configState": "NOT_CONFIGURED",
+      "configStateLabel": "non configurée",
+      "test": null,
+      "realAccountValidated": false,
+      "note": "Aucun identifiant fourni — validation contre un compte réel impossible tant qu'aucun identifiant n'est configuré."
+    },
+    {
+      "key": "OUTLOOK",
+      "label": "Outlook",
+      "configState": "NOT_CONFIGURED",
+      "configStateLabel": "non configurée",
+      "test": null,
+      "realAccountValidated": false,
+      "note": "Aucun identifiant fourni — validation contre un compte réel impossible tant qu'aucun identifiant n'est configuré."
+    },
+    {
+      "key": "S3_STORAGE",
+      "label": "Stockage S3",
+      "configState": "NOT_CONFIGURED",
+      "configStateLabel": "non configurée",
+      "test": null,
+      "realAccountValidated": false,
+      "note": "Aucun identifiant fourni — validation contre un compte réel impossible tant qu'aucun identifiant n'est configuré."
+    }
+  ]
+}
