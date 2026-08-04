@@ -20,6 +20,9 @@
 # production
 /build
 
+# stockage local du fournisseur de fichiers démo (v1.1, AR-0162) — jamais commité, comme /uploads d'un déploiement réel
+/storage-demo
+
 # misc
 .DS_Store
 *.pem
