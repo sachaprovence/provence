@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const virtualTours = await listVirtualTours(actor.organization.id, { leadId, status });
     return NextResponse.json({ virtualTours });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/virtual-tours" });
+    return toApiErrorResponse(error, request, { route: "GET /api/virtual-tours" });
   }
 }
 
@@ -34,6 +34,6 @@ export async function POST(request: Request) {
     const virtualTour = await createVirtualTour(actor.organization.id, parsed.data);
     return NextResponse.json({ virtualTour }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/virtual-tours" });
+    return toApiErrorResponse(error, request, { route: "POST /api/virtual-tours" });
   }
 }

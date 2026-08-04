@@ -55,6 +55,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ run: finishedRun }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/commercial/requests" });
+    return toApiErrorResponse(error, request, { route: "POST /api/commercial/requests" });
   }
 }

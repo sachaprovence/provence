@@ -19,6 +19,6 @@ export async function GET(request: Request) {
     const busy = await getGoogleCalendarBusySlots(actor.organization.id, from, to);
     return NextResponse.json({ busy });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/calendar/availability" });
+    return toApiErrorResponse(error, request, { route: "GET /api/calendar/availability" });
   }
 }

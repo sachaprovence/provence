@@ -4,7 +4,7 @@ import { toApiErrorResponse } from "@/lib/errors";
 import { resolveRunForActor } from "@/lib/workflows/workflow-service";
 import { cancelWorkflowRun } from "@/lib/workflows/execution-engine";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -15,6 +15,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ru
     const run = await cancelWorkflowRun(runId);
     return NextResponse.json({ run });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workflows/runs/[runId]/cancel" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workflows/runs/[runId]/cancel" });
   }
 }

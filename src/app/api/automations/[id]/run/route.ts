@@ -20,6 +20,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const run = await triggerManualAutomationRun(actor, id, parsed.data.input);
     return NextResponse.json({ run }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/automations/[id]/run" });
+    return toApiErrorResponse(error, request, { route: "POST /api/automations/[id]/run" });
   }
 }

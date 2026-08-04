@@ -6,7 +6,7 @@ import { getInvoice, updateInvoiceStatus } from "@/lib/crm/invoice-service";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: Params) {
     const invoice = await getInvoice(actor.organization.id, id);
     return NextResponse.json({ invoice });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/invoices/[id]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/invoices/[id]" });
   }
 }
 
@@ -34,6 +34,6 @@ export async function PATCH(request: Request, { params }: Params) {
     const invoice = await updateInvoiceStatus(actor.organization.id, id, parsed.data.status);
     return NextResponse.json({ invoice });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PATCH /api/invoices/[id]" });
+    return toApiErrorResponse(error, request, { route: "PATCH /api/invoices/[id]" });
   }
 }

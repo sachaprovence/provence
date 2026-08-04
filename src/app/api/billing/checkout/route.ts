@@ -29,6 +29,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(outcome);
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/billing/checkout" });
+    return toApiErrorResponse(error, request, { route: "POST /api/billing/checkout" });
   }
 }

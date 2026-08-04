@@ -4,7 +4,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { resolveProspectForActor } from "@/lib/agents/commercial/commercial-service";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -15,6 +15,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const actions = await prisma.commercialAction.findMany({ where: { prospectId: id }, orderBy: { createdAt: "desc" } });
     return NextResponse.json({ prospect, actions });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/commercial/prospects/[id]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/commercial/prospects/[id]" });
   }
 }

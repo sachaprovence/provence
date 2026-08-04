@@ -4,7 +4,7 @@ import { toApiErrorResponse } from "@/lib/errors";
 import { installAgentSchema } from "@/lib/validations/agent";
 import { listInstallations, installAgent } from "@/lib/agents/installation-service";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -12,7 +12,7 @@ export async function GET() {
     const installations = await listInstallations(actor);
     return NextResponse.json({ installations });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/installations" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/installations" });
   }
 }
 
@@ -32,6 +32,6 @@ export async function POST(request: Request) {
     const installation = await installAgent(actor, parsed.data);
     return NextResponse.json({ installation }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/agents/installations" });
+    return toApiErrorResponse(error, request, { route: "POST /api/agents/installations" });
   }
 }

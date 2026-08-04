@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   try {
     await assertMemberLimitAvailable(actor.organization.id);
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/users" });
+    return toApiErrorResponse(error, request, { route: "POST /api/users" });
   }
 
   const passwordHash = await hashPassword(data.temporaryPassword);

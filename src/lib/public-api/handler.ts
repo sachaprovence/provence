@@ -23,7 +23,7 @@ export function withPublicApiHandler(handler: (request: Request, actor: PublicAp
       const actor = await authenticateAndRateLimit(request);
       return await handler(request, actor);
     } catch (error) {
-      return toApiErrorResponse(error, { route: "public-api" });
+      return toApiErrorResponse(error, request, { route: "public-api" });
     }
   };
 }
@@ -37,7 +37,7 @@ export function withPublicApiHandlerParams<TParams extends Record<string, string
       const params = await context.params;
       return await handler(request, actor, params);
     } catch (error) {
-      return toApiErrorResponse(error, { route: "public-api" });
+      return toApiErrorResponse(error, request, { route: "public-api" });
     }
   };
 }

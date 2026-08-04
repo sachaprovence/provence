@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { captureExceptionBestEffort } from "@/lib/observability/error-tracking";
+import { getRequestId } from "@/lib/observability/request-id";
 
 /**
  * Erreur applicative "attendue" : le message est écrit pour être affiché
@@ -88,14 +89,25 @@ export class TooManyRequestsError extends AppError {
  *   message brut de l'exception n'est renvoyé au client (il peut contenir
  *   des détails internes sensibles), seulement un identifiant d'incident
  *   permettant de retrouver la trace complète dans les logs serveur.
+ *
+ * `request` (v1.3, AR-0173) : `requestId` en est dérivé automatiquement et
+ * ajouté au contexte journalisé — impossible à oublier à un site d'appel,
+ * contrairement à v1.2 où seule une route de démonstration le passait
+ * manuellement. Déjà présent dans l'en-tête de réponse `X-Request-Id` posé
+ * par `src/proxy.ts` sur CHAQUE réponse ; journalisé ici en plus pour
+ * qu'une ligne de log précise puisse être retrouvée à partir de cet en-tête.
  */
-export function toApiErrorResponse(error: unknown, context?: Record<string, unknown>): NextResponse {
+export function toApiErrorResponse(error: unknown, request: Request, context?: Record<string, unknown>): NextResponse {
+  const requestId = getRequestId(request);
+
   if (error instanceof AppError) {
     const log = error.statusCode >= 500 ? logger.error.bind(logger) : logger.warn.bind(logger);
-    log({ err: error, statusCode: error.statusCode, ...context }, error.message);
+    // `requestId` toujours placé APRÈS `...context` : dérivé de la vraie requête, il ne doit
+    // jamais pouvoir être écrasé par un contexte fourni par l'appelant (même par erreur).
+    log({ err: error, statusCode: error.statusCode, ...context, requestId }, error.message);
     // Capture externe (AR-0048) réservée aux incidents (5xx) — un 4xx est une erreur métier attendue, pas un incident.
     if (error.statusCode >= 500) {
-      captureExceptionBestEffort(error, { statusCode: error.statusCode, ...context });
+      captureExceptionBestEffort(error, { statusCode: error.statusCode, ...context, requestId });
     }
     return NextResponse.json(
       { error: error.expose ? error.message : "Une erreur est survenue.", details: error.details },
@@ -104,8 +116,8 @@ export function toApiErrorResponse(error: unknown, context?: Record<string, unkn
   }
 
   const incidentId = crypto.randomUUID();
-  logger.error({ err: error, incidentId, ...context }, "Erreur inattendue.");
-  captureExceptionBestEffort(error, { incidentId, statusCode: 500, ...context });
+  logger.error({ err: error, incidentId, ...context, requestId }, "Erreur inattendue.");
+  captureExceptionBestEffort(error, { incidentId, statusCode: 500, ...context, requestId });
   return NextResponse.json(
     {
       error: "Une erreur inattendue est survenue. Contactez le support si le problème persiste.",

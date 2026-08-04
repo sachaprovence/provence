@@ -19,6 +19,6 @@ export async function POST(request: Request, { params }: Params) {
     const invoice = await createInvoiceFromVirtualTour(actor.organization.id, id, serviceId, actor.user.id);
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/virtual-tours/[id]/invoice" });
+    return toApiErrorResponse(error, request, { route: "POST /api/virtual-tours/[id]/invoice" });
   }
 }

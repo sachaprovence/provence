@@ -35,6 +35,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ rawKey, apiKey: preview }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/settings/api-keys" });
+    return toApiErrorResponse(error, request, { route: "POST /api/settings/api-keys" });
   }
 }

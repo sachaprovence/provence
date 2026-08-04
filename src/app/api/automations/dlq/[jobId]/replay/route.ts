@@ -10,7 +10,7 @@ import { replayDeadLetter } from "@/lib/automation/dlq";
  * pas automatiquement — la reprise d'un run entier passe par
  * `POST /api/automations/runs/[runId]/retry` (nouveau run).
  */
-export async function POST(_request: Request, { params }: { params: Promise<{ jobId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ jobId: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -20,6 +20,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ jo
     const job = await replayDeadLetter(jobId, { organizationId: actor.organization.id, workspaceId: actor.workspace.id });
     return NextResponse.json({ job });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/automations/dlq/[jobId]/replay" });
+    return toApiErrorResponse(error, request, { route: "POST /api/automations/dlq/[jobId]/replay" });
   }
 }

@@ -36,6 +36,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ secret, subscription: preview }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/settings/webhooks" });
+    return toApiErrorResponse(error, request, { route: "POST /api/settings/webhooks" });
   }
 }

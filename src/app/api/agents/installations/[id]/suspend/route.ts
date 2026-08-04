@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { transitionInstallation } from "@/lib/agents/installation-service";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -13,6 +13,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const installation = await transitionInstallation(actor, id, "suspend");
     return NextResponse.json({ installation });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/agents/installations/[id]/suspend" });
+    return toApiErrorResponse(error, request, { route: "POST /api/agents/installations/[id]/suspend" });
   }
 }

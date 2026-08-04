@@ -4,7 +4,7 @@ import { toApiErrorResponse } from "@/lib/errors";
 import { getCommercialDashboard } from "@/lib/agents/commercial/dashboard-service";
 import { resolveCommercialInstallation } from "@/lib/agents/commercial/commercial-service";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -16,6 +16,6 @@ export async function GET() {
     ]);
     return NextResponse.json({ installation, dashboard });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/commercial/dashboard" });
+    return toApiErrorResponse(error, request, { route: "GET /api/commercial/dashboard" });
   }
 }

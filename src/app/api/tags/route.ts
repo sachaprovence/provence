@@ -5,7 +5,7 @@ import { tagCreateSchema } from "@/lib/validations/crm";
 import { listTags, createTag } from "@/lib/crm/tag-service";
 import { writeAuditLog } from "@/lib/audit";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -13,7 +13,7 @@ export async function GET() {
     const tags = await listTags(actor.organization.id);
     return NextResponse.json({ tags });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/tags" });
+    return toApiErrorResponse(error, request, { route: "GET /api/tags" });
   }
 }
 
@@ -39,6 +39,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ tag }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/tags" });
+    return toApiErrorResponse(error, request, { route: "POST /api/tags" });
   }
 }

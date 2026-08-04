@@ -20,6 +20,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { automation, version } = await cloneAutomationDefinition(actor, id, parsed.data);
     return NextResponse.json({ automation, version }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/automations/[id]/clone" });
+    return toApiErrorResponse(error, request, { route: "POST /api/automations/[id]/clone" });
   }
 }

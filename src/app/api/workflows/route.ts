@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const definitions = await listDefinitionsForWorkspace(actor.workspace.id, { includeTemplates });
     return NextResponse.json({ definitions });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/workflows" });
+    return toApiErrorResponse(error, request, { route: "GET /api/workflows" });
   }
 }
 
@@ -33,6 +33,6 @@ export async function POST(request: Request) {
     const { definition, version } = await createWorkflowDefinition(actor, parsed.data);
     return NextResponse.json({ definition, version }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workflows" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workflows" });
   }
 }

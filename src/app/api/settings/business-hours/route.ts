@@ -5,7 +5,7 @@ import { isAdmin } from "@/lib/permissions";
 import { businessHoursUpdateSchema } from "@/lib/validations/business-hours";
 import { getBusinessHoursConfig, updateBusinessHours } from "@/lib/settings/business-hours-service";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -13,7 +13,7 @@ export async function GET() {
     const config = await getBusinessHoursConfig(actor.organization.id);
     return NextResponse.json({ config });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/settings/business-hours" });
+    return toApiErrorResponse(error, request, { route: "GET /api/settings/business-hours" });
   }
 }
 
@@ -32,6 +32,6 @@ export async function PUT(request: Request) {
     const config = await updateBusinessHours(actor.organization.id, parsed.data);
     return NextResponse.json({ config });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PUT /api/settings/business-hours" });
+    return toApiErrorResponse(error, request, { route: "PUT /api/settings/business-hours" });
   }
 }

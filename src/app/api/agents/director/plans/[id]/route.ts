@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { getPlanGraph } from "@/lib/agents/director/dashboard-service";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -13,6 +13,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const graph = await getPlanGraph(actor.workspace.id, id);
     return NextResponse.json(graph);
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/director/plans/[id]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/director/plans/[id]" });
   }
 }

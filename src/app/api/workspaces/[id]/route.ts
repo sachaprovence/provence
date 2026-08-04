@@ -4,7 +4,7 @@ import { toApiErrorResponse } from "@/lib/errors";
 import { updateWorkspaceSchema } from "@/lib/validations/workspace";
 import { resolveWorkspaceOrThrow, updateWorkspace } from "@/lib/workspace-service";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const workspace = await resolveWorkspaceOrThrow(actor, id);
     return NextResponse.json({ workspace });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/workspaces/[id]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/workspaces/[id]" });
   }
 }
 
@@ -36,6 +36,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const workspace = await updateWorkspace(actor, id, parsed.data);
     return NextResponse.json({ workspace });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PATCH /api/workspaces/[id]" });
+    return toApiErrorResponse(error, request, { route: "PATCH /api/workspaces/[id]" });
   }
 }

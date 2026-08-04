@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { getAutomationDashboard } from "@/lib/automation/dashboard-service";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -12,6 +12,6 @@ export async function GET() {
     const dashboard = await getAutomationDashboard(actor.workspace.id);
     return NextResponse.json({ dashboard });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/automations/dashboard" });
+    return toApiErrorResponse(error, request, { route: "GET /api/automations/dashboard" });
   }
 }

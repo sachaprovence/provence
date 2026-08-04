@@ -5,7 +5,7 @@ import { toApiErrorResponse, NotFoundError } from "@/lib/errors";
 import { listRunLogs } from "@/lib/agents/observability";
 
 /** Détail d'une exécution + son journal. `runId` revérifié contre l'organisation de l'acteur (jamais de confiance directe). */
-export async function GET(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -20,6 +20,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     const logs = await listRunLogs(runId);
     return NextResponse.json({ run, logs });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/runs/[runId]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/runs/[runId]" });
   }
 }

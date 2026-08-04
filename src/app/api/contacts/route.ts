@@ -5,7 +5,7 @@ import { contactCreateSchema } from "@/lib/validations/crm";
 import { listContacts, createContact } from "@/lib/crm/contact-service";
 import { writeAuditLog } from "@/lib/audit";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -13,7 +13,7 @@ export async function GET() {
     const contacts = await listContacts(actor.organization.id);
     return NextResponse.json({ contacts });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/contacts" });
+    return toApiErrorResponse(error, request, { route: "GET /api/contacts" });
   }
 }
 
@@ -39,6 +39,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ contact }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/contacts" });
+    return toApiErrorResponse(error, request, { route: "POST /api/contacts" });
   }
 }

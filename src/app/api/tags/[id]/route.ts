@@ -7,7 +7,7 @@ import { writeAuditLog } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   if (!isAdmin(actor)) return NextResponse.json({ error: "Réservé à l'administrateur." }, { status: 403 });
@@ -25,6 +25,6 @@ export async function DELETE(_request: Request, { params }: Params) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "DELETE /api/tags/[id]" });
+    return toApiErrorResponse(error, request, { route: "DELETE /api/tags/[id]" });
   }
 }

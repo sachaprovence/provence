@@ -37,6 +37,6 @@ export async function POST(request: Request) {
     const summary = await runIntegrationDiagnosticTest(actor.organization.id, parsed.data.integration, actor.user.id);
     return NextResponse.json({ diagnostic: summary });
   } catch (error) {
-    return toApiErrorResponse(error, { organizationId: actor.organization.id, integration: parsed.data.integration, route: "settings/integrations/diagnostics/test" });
+    return toApiErrorResponse(error, request, { organizationId: actor.organization.id, integration: parsed.data.integration, route: "settings/integrations/diagnostics/test" });
   }
 }

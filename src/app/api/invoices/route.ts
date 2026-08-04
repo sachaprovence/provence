@@ -18,6 +18,6 @@ export async function GET(request: Request) {
     const invoices = await listInvoices(actor.organization.id, { leadId });
     return NextResponse.json({ invoices });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/invoices" });
+    return toApiErrorResponse(error, request, { route: "GET /api/invoices" });
   }
 }

@@ -23,6 +23,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ result });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/communications/send" });
+    return toApiErrorResponse(error, request, { route: "POST /api/communications/send" });
   }
 }

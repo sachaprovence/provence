@@ -5,7 +5,7 @@ import { inviteWorkspaceMemberSchema } from "@/lib/validations/workspace";
 import { listWorkspaceMembers, inviteWorkspaceMember } from "@/lib/workspace-service";
 import { env } from "@/lib/env";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const members = await listWorkspaceMembers(actor, id);
     return NextResponse.json({ members });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/workspaces/[id]/members" });
+    return toApiErrorResponse(error, request, { route: "GET /api/workspaces/[id]/members" });
   }
 }
 
@@ -42,6 +42,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ invitation, demoInvitationLink }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workspaces/[id]/members" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workspaces/[id]/members" });
   }
 }

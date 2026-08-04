@@ -5,7 +5,7 @@ import { resolveInstallationOrThrow } from "@/lib/agents/installation-service";
 import { listMemory } from "@/lib/agents/memory";
 
 /** Vue de débogage/admin sur la mémoire d'une installation (SHORT_TERM/PERSISTENT). */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -16,6 +16,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const entries = await listMemory({ workspaceId: installation.workspaceId, installationId: id });
     return NextResponse.json({ entries });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/installations/[id]/memory" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/installations/[id]/memory" });
   }
 }

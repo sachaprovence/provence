@@ -20,6 +20,6 @@ export async function POST(request: Request) {
     await changeOrganizationPlan(actor.organization.id, planKey);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/billing/change-plan" });
+    return toApiErrorResponse(error, request, { route: "POST /api/billing/change-plan" });
   }
 }

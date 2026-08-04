@@ -7,7 +7,7 @@ import { createAgentRun, executeAgentRun } from "@/lib/agents/execution-engine";
 import { listRunsForInstallation } from "@/lib/agents/observability";
 import { AgentInstallationStatus, AgentRunTrigger } from "@/generated/prisma/enums";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -17,7 +17,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const runs = await listRunsForInstallation(id);
     return NextResponse.json({ runs });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/installations/[id]/runs" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/installations/[id]/runs" });
   }
 }
 
@@ -61,6 +61,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ run: refreshed[0] ?? run }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/agents/installations/[id]/runs" });
+    return toApiErrorResponse(error, request, { route: "POST /api/agents/installations/[id]/runs" });
   }
 }

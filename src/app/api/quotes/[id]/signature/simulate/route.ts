@@ -26,6 +26,6 @@ export async function POST(request: Request, { params }: Params) {
     const quote = await recordSignatureResult(actor.organization.id, id, parsed.data.status);
     return NextResponse.json({ quote });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/quotes/[id]/signature/simulate" });
+    return toApiErrorResponse(error, request, { route: "POST /api/quotes/[id]/signature/simulate" });
   }
 }

@@ -19,6 +19,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const version = await createNewVersion(actor, id, parsed.data);
     return NextResponse.json({ version }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workflows/[id]/versions" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workflows/[id]/versions" });
   }
 }

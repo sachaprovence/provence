@@ -16,6 +16,6 @@ export async function GET(request: Request) {
     const jobs = await listAutomationJobsForWorkspace(actor.workspace.id, { status, limit });
     return NextResponse.json({ jobs });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/automations/jobs" });
+    return toApiErrorResponse(error, request, { route: "GET /api/automations/jobs" });
   }
 }

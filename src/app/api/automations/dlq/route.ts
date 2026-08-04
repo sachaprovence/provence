@@ -14,6 +14,6 @@ export async function GET(request: Request) {
     const jobs = await listDeadLetters({ organizationId: actor.organization.id, workspaceId: actor.workspace.id, limit });
     return NextResponse.json({ jobs });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/automations/dlq" });
+    return toApiErrorResponse(error, request, { route: "GET /api/automations/dlq" });
   }
 }

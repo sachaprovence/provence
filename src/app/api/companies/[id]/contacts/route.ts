@@ -8,7 +8,7 @@ import { writeAuditLog } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -20,7 +20,7 @@ export async function GET(_request: Request, { params }: Params) {
     const links = await listContactsForCompany(actor.organization.id, id);
     return NextResponse.json({ links });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/companies/[id]/contacts" });
+    return toApiErrorResponse(error, request, { route: "GET /api/companies/[id]/contacts" });
   }
 }
 
@@ -53,6 +53,6 @@ export async function POST(request: Request, { params }: Params) {
 
     return NextResponse.json({ link }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/companies/[id]/contacts" });
+    return toApiErrorResponse(error, request, { route: "POST /api/companies/[id]/contacts" });
   }
 }

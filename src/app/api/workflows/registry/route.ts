@@ -6,7 +6,7 @@ import { listTriggerTypes } from "@/lib/workflows/triggers/registry";
 import { listWorkflowActions } from "@/lib/workflows/actions/registry";
 
 /** Catalogue des déclencheurs/actions enregistrés — alimente la palette de l'éditeur de workflow (voir `components/workflow-editor.tsx`). */
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -17,6 +17,6 @@ export async function GET() {
     const actions = listWorkflowActions().map((a) => ({ key: a.key, name: a.name, description: a.description, category: a.category }));
     return NextResponse.json({ triggers, actions });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/workflows/registry" });
+    return toApiErrorResponse(error, request, { route: "GET /api/workflows/registry" });
   }
 }

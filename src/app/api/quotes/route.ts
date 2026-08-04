@@ -43,7 +43,7 @@ async function handlePost(request: Request) {
 
     return NextResponse.json({ quote }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/quotes" });
+    return toApiErrorResponse(error, request, { route: "POST /api/quotes" });
   }
 }
 

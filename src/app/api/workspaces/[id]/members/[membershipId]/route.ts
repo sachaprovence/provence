@@ -24,12 +24,12 @@ export async function PATCH(
     const membership = await changeWorkspaceMemberRole(actor, id, membershipId, parsed.data.role);
     return NextResponse.json({ membership });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PATCH /api/workspaces/[id]/members/[membershipId]" });
+    return toApiErrorResponse(error, request, { route: "PATCH /api/workspaces/[id]/members/[membershipId]" });
   }
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string; membershipId: string }> }
 ) {
   const actor = await requireWorkspaceActorApi();
@@ -41,6 +41,6 @@ export async function DELETE(
     await removeWorkspaceMember(actor, id, membershipId);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "DELETE /api/workspaces/[id]/members/[membershipId]" });
+    return toApiErrorResponse(error, request, { route: "DELETE /api/workspaces/[id]/members/[membershipId]" });
   }
 }
