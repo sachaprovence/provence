@@ -873,7 +873,7 @@ et de la facturation client (`v0.4`/`v0.5`).
   visite virtuelle, devis, signature, facturation, paiement, suivi,
   fidélisation — sans quitter Autorun.
 - **Modules** : MOD-29.
-- **Tâches** : AR-0067 à AR-0092 (26 tâches).
+- **Tâches** : AR-0160 à AR-0185 (26 tâches).
 - **Critères de sortie** :
   - [ ] chaque fiche prospect/client (CRM production) affiche réellement
     timeline, documents, notes, historique, automatisations, agents IA,

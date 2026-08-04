@@ -1640,8 +1640,8 @@ risques techniques, choix d'architecture, tests à prévoir, critères de fin
   qualification → premier contact → rendez-vous → visite virtuelle →
   devis → signature → facturation → paiement → suivi → fidélisation) sans
   quitter Autorun.
-- **Fonctionnalités** : voir `BACKLOG.md` §Version 1.1 (`AR-0067` à
-  `AR-0092`, 26 tâches) pour le détail complet. Un audit exhaustif du
+- **Fonctionnalités** : voir `BACKLOG.md` §Version 1.1 (`AR-0160` à
+  `AR-0185`, 26 tâches) pour le détail complet. Un audit exhaustif du
   code (2 revues indépendantes) a précédé la rédaction du plan — une
   large partie du brief était déjà livrée par `MOD-28` (v0.9) ; `MOD-29`
   complète les parties manquantes ou non reliées à l'interface (fiches

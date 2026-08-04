@@ -17,26 +17,42 @@ livrée par `MOD-28` (v0.9) : catégories métier (`LeadCategory`), module
 Visites 3D, devis/factures avec PDF réel, Communication Hub, Google
 Calendar réel, 8 agents IA, 10 automatisations, 9 tableaux de bord. Cette
 ADR documente les décisions structurantes prises pour combler les écarts
-identifiés (`BACKLOG.md` §Version 1.1, `AR-0067` à `AR-0092`), pas
+identifiés (`BACKLOG.md` §Version 1.1, `AR-0160` à `AR-0185`), pas
 l'ensemble du plan.
 
 ## Décision
 
-### Modèle `Contact` : nouvelle entité de premier niveau, `LeadContact` migré puis retiré
+### Modèle `Contact` : nouvelle entité additive, `LeadContact` conservé tel quel
 
-`LeadContact` était scopé 1:1 à un seul `Lead` (`leadId` obligatoire,
-cascade) — aucune personne ne pouvait être partagée entre plusieurs
-fiches (gérant de plusieurs établissements, architecte prescripteur lié
-à plusieurs prospects). Plutôt que de superposer un second modèle en
-parallèle (dette permanente, deux sources de vérité pour "qui est cette
-personne"), décision de :
-1. créer `Contact` (scopé organisation/workspace, jamais à un seul Lead)
-   et `LeadContactLink` (relation N:N avec rôle optionnel) ;
-2. migrer les données existantes (`LeadContact` → un `Contact` par ligne,
-   lié via `LeadContactLink` au `Lead` d'origine, préservant l'historique) ;
-3. **retirer** `LeadContact` du schéma une fois la migration de données
-   effectuée et tout le code appelant basculé — pas de coexistence
-   permanente des deux modèles.
+`LeadContact` était scopé 1:1 à un seul `Lead` — aucune personne ne
+pouvait être partagée entre plusieurs fiches (gérant de plusieurs
+établissements, architecte prescripteur lié à plusieurs prospects).
+Décision initiale envisagée (migrer puis retirer `LeadContact`) écartée
+après audit du code appelant : `lead.contacts` (relation `LeadContact`)
+est lu directement dans **plus de 15 fichiers** (résolution d'email/
+téléphone pour la génération de message, `sequence-engine.ts`,
+`unsubscribe`, les outils de scoring/qualification, l'import CSV) —
+toujours sous la forme `lead.contacts.find(c => c.email)`. Retirer ce
+modèle aurait exigé de réécrire ces 15+ points d'appel pour un bénéfice
+disproportionné : la plupart des fiches Provence 360 n'ont besoin que
+d'UN contact opérationnel par prospect, exactement ce que `LeadContact`
+fournit déjà correctement.
+
+Décision finale, additive plutôt que remplaçante :
+- **`LeadContact` reste inchangé**, continue de servir la résolution
+  d'email/téléphone opérationnelle pour la messagerie/les séquences/le
+  scoring — zéro régression sur le code existant.
+- **`Contact`** (nouveau, scopé organisation/workspace) représente une
+  personne qui peut exister indépendamment d'un `Lead` et être liée à
+  PLUSIEURS fiches. Deux tables de liaison explicites (avec vraies clés
+  étrangères, pas la convention polymorphe `entityType`/`entityId` déjà
+  utilisée pour `Attachment` — jugée trop faible en intégrité référentielle
+  pour une notion aussi centrale) : `LeadContactRelation`
+  (`Contact`↔`Lead`, rôle optionnel) et `CompanyContactRelation`
+  (`Contact`↔`Company`, rôle optionnel).
+- La fiche 360° (`AR-0164`) affiche les deux : le contact opérationnel
+  `LeadContact` (utilisé par la messagerie) ET un panneau "Personnes
+  liées" listant les `Contact` partagés, le cas échéant.
 
 ### Pipeline : garder `LeadStage` (enum fixe), ajouter un évènement de transition granulaire
 
@@ -130,10 +146,10 @@ plutôt que par principe :
 
 ## Conséquences
 
-- La migration `LeadContact` → `Contact`/`LeadContactLink` est une
-  rupture de schéma qui nécessite d'auditer et de mettre à jour tout le
-  code appelant `LeadContact` (services, routes, UI) dans le même
-  changement — pas de période de coexistence des deux modèles.
+- `Contact` et `LeadContact` coexistent durablement, avec des rôles
+  différents et non ambigus (`LeadContact` = contact opérationnel de
+  messagerie, `Contact` = personne partageable entre fiches) — documenté
+  ici pour qu'un futur changement ne les confonde pas.
 - L'ajout d'un `StorageProvider` réel introduit une nouvelle catégorie de
   secret à gérer par organisation (identifiants S3) — suit exactement le
   même patron de masquage que les secrets `Integration` existants
@@ -149,10 +165,18 @@ plutôt que par principe :
   organisation)** : écartée — casserait le câblage existant des
   automatisations sur `LeadStage` pour un besoin (vocabulaire adapté à UN
   vertical) que `PipelineStage.label` couvre déjà.
-- **Conserver `LeadContact` en parallèle de `Contact`** : écartée — deux
-  sources de vérité pour la même notion de "personne" est de la dette
-  technique évitable, contraire à l'exigence explicite du brief
-  ("élimine la dette technique évitable").
+- **Migrer `LeadContact` vers `Contact` puis retirer `LeadContact`**
+  (décision initialement envisagée) : écartée après audit du code
+  appelant — plus de 15 fichiers lisent `lead.contacts` directement pour
+  la résolution d'email/téléphone opérationnelle (messagerie,
+  `sequence-engine.ts`, désinscription, scoring). Réécrire ces 15+
+  points d'appel pour un bénéfice (partage de contact entre fiches) que
+  la majorité des fiches Provence 360 n'utilisera pas immédiatement
+  aurait été une prise de risque disproportionnée pour "zéro
+  régression" — contraire à l'esprit de l'exigence de non-régression,
+  même si l'exigence "élimine la dette technique évitable" pouvait
+  suggérer le contraire : ici, la dette (deux modèles à rôles distincts
+  et non ambigus) reste inférieure au risque d'une réécriture large.
 - **SDK `aws-sdk`/`@aws-sdk/client-s3` pour le stockage réel** : écarté —
   même raisonnement que pour Stripe/Sentry/Gmail/Outlook, une signature
   SigV4 calculée à la main est un algorithme standard et documenté, pas
