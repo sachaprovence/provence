@@ -92,6 +92,8 @@ export const attachmentCreateSchema = z.object({
   category: attachmentCategorySchema,
   fileName: z.string().min(1).max(300),
   url: z.string().url(),
+  /// Clé brute chez le fournisseur de stockage (v1.2, AR-0164) — voir `Attachment.storageKey`.
+  storageKey: z.string().min(1).max(500).optional().nullable(),
   mimeType: z.string().max(150).optional().nullable(),
   sizeBytes: z.coerce.number().int().min(0).optional().nullable(),
 });

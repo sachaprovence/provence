@@ -17,9 +17,22 @@ export async function register() {
     try {
       const env = loadEnv();
       logger.info(
-        { nodeEnv: env.NODE_ENV, aiProvider: env.AI_PROVIDER, emailProvider: env.EMAIL_PROVIDER },
+        {
+          nodeEnv: env.NODE_ENV,
+          aiProvider: env.AI_PROVIDER,
+          emailProvider: env.EMAIL_PROVIDER,
+          storageProvider: env.STORAGE_PROVIDER,
+        },
         "Configuration d'environnement validée."
       );
+
+      // Alerte critique (jamais bloquante, voir production-guard.ts) : un
+      // stockage démo en production perd silencieusement les pièces
+      // jointes à chaque redéploiement si personne ne le remarque.
+      const { isProductionWithDemoStorage, PRODUCTION_DEMO_STORAGE_WARNING } = await import("@/lib/storage/production-guard");
+      if (isProductionWithDemoStorage(env.NODE_ENV, env.STORAGE_PROVIDER)) {
+        logger.error({ storageProvider: env.STORAGE_PROVIDER }, PRODUCTION_DEMO_STORAGE_WARNING);
+      }
     } catch (error) {
       logger.error({ err: error }, "Configuration d'environnement invalide — arrêt du serveur.");
       throw error;

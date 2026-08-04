@@ -679,6 +679,13 @@ model Attachment {
   category       AttachmentCategory
   fileName       String
   url            String
+  /// Clé brute chez le fournisseur de stockage (ex. `<organizationId>/<uuid>-<nom>`),
+  /// distincte de `url` — permet un téléchargement/suppression fiables auprès du
+  /// StorageProvider sans dépendre du format d'URL publique, qui varie par
+  /// fournisseur et peut changer (rotation de bucket/CDN). Nullable : les pièces
+  /// jointes créées avant AR-0164 (v1.2) n'en ont pas — gérées en lecture seule
+  /// pour la suppression physique (voir attachment-service.ts).
+  storageKey     String?
   mimeType       String?
   sizeBytes      Int?
   uploadedById   String?

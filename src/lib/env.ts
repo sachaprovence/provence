@@ -21,6 +21,7 @@ const envSchema = z.object({
 
   AI_PROVIDER: z.string().default("demo"),
   EMAIL_PROVIDER: z.string().default("demo"),
+  STORAGE_PROVIDER: z.string().default("demo"),
 
   NEXT_PUBLIC_APP_URL: z
     .string()

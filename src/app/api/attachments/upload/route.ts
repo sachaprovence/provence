@@ -4,11 +4,10 @@ import { toApiErrorResponse } from "@/lib/errors";
 import { attachmentEntityTypeSchema, attachmentCategorySchema } from "@/lib/validations/crm";
 import { createAttachment } from "@/lib/crm/attachment-service";
 import { getStorageProvider } from "@/lib/storage";
+import { validateUpload } from "@/lib/storage/validation";
 import { writeAuditLog } from "@/lib/audit";
 
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-
-/** Upload réel d'une pièce jointe (v1.1, AR-0162) — combine stockage (StorageProvider) + création de l'Attachment en un seul appel. */
+/** Upload réel d'une pièce jointe (v1.1, AR-0162 ; validation centralisée + clé de stockage persistée v1.2, AR-0164). */
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
@@ -19,9 +18,10 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Fichier requis." }, { status: 400 });
     }
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json({ error: "Fichier trop volumineux (20 Mo maximum)." }, { status: 400 });
-    }
+    const mimeType = file.type || "application/octet-stream";
+    // Lève ValidationError (taille/type MIME/nom) — capturée par toApiErrorResponse ci-dessous (400),
+    // AVANT toute lecture du corps du fichier ou appel réseau au fournisseur de stockage.
+    validateUpload({ fileName: file.name, mimeType, sizeBytes: file.size });
 
     const entityTypeParsed = attachmentEntityTypeSchema.safeParse(formData.get("entityType"));
     const categoryParsed = attachmentCategorySchema.safeParse(formData.get("category"));
@@ -32,10 +32,10 @@ export async function POST(request: Request) {
 
     const data = Buffer.from(await file.arrayBuffer());
     const provider = getStorageProvider();
-    const { url } = await provider.upload({
+    const { url, key } = await provider.upload({
       organizationId: actor.organization.id,
       fileName: file.name,
-      mimeType: file.type || "application/octet-stream",
+      mimeType,
       data,
     });
 
@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       category: categoryParsed.data,
       fileName: file.name,
       url,
+      storageKey: key,
       mimeType: file.type || undefined,
       sizeBytes: file.size,
     });
