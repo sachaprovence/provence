@@ -276,3 +276,51 @@ prisma` lui-même n'a pas ce garde-fou, ce qui rend l'import direct possible
 depuis `tsx` sans le patch `NODE_OPTIONS=--require=...` utilisé ailleurs
 (AR-0172) pour des modules qui, eux, importent réellement `"server-only"`
 en aval.
+
+## Décision — AR-0175 : reprise après sinistre (automatisation, rétention, RTO/RPO)
+
+v1.2 (AR-0166) avait déjà livré l'exigence la plus critique — jamais
+déclarer une sauvegarde valide sans une restauration réelle prouvée — mais
+seulement comme deux commandes manuelles, sans planification automatisée
+ni politique de purge. v1.3 complète les deux pièces manquantes plutôt que
+de refaire ce qui existe déjà :
+
+- **`scripts/run-scheduled-backup.ts`** (`npm run backup:scheduled`) —
+  chaîne sauvegarde + vérification par restauration réelle en une seule
+  commande (code de sortie non nul si l'une ou l'autre échoue), conçue
+  pour être LA seule ligne à programmer en cron/systemd timer. Réutilise
+  `backupDatabase()` directement mais relance `verify-database-backup.ts`
+  en sous-processus plutôt que dupliquer sa logique de restauration
+  (~80 lignes) — un seul endroit sait restaurer/vérifier une sauvegarde.
+  **Vérifié pour de vrai** contre la base de développement : les deux
+  étapes réussissent, `BackupRun` (AR-0174) enregistre les deux exécutions.
+- **`scripts/lib/backup-retention.ts` + `scripts/prune-old-backups.ts`**
+  (`npm run backup:prune`) — politique de purge absente jusqu'ici (les
+  fichiers `.dump` s'accumulaient indéfiniment). Trois garde-fous
+  non-contournables, dans cet ordre : (1) jamais une sauvegarde non
+  vérifiée par restauration réelle, (2) jamais les 3 sauvegardes vérifiées
+  les plus récentes quel que soit leur âge, (3) au-delà, purge celles plus
+  anciennes que la fenêtre de rétention. **Dry-run par défaut** —
+  `--apply` requis explicitement pour supprimer réellement (jamais le
+  comportement par défaut d'un script exécutable sans supervision directe
+  en CI/cron). Logique extraite dans `scripts/lib/` (sans `main()`, même
+  convention qu'ailleurs) pour rester testable unitairement sans toucher
+  au système de fichiers réel.
+- **RTO/RPO explicites** (`docs/operations/BACKUP_RESTORE.md` §9) : RPO de
+  24h avec une planification quotidienne — un engagement chiffré plutôt
+  qu'une vague promesse de "sauvegardes régulières". RTO explicitement
+  documenté comme mesuré sur l'environnement de développement (quelques
+  secondes) et À RE-MESURER sur un volume de données représentatif avant
+  tout engagement contractuel — jamais affirmé sans réserve pour un volume
+  de production non encore observé.
+
+### Conséquences (AR-0175)
+
+- La planification (cron/systemd) reste une étape MANUELLE de mise en
+  service (documentée, pas automatiquement câblée par ce dépôt lui-même)
+  — cohérent avec le principe déjà établi qu'aucune restauration/purge
+  destructive ne doit être déclenchable sans une action explicite d'un
+  opérateur ayant accès à l'infrastructure de déploiement.
+- `npm run backup:metrics-report` (AR-0174) devient l'outil de vérification
+  que la planification fonctionne réellement dans la durée — documenté
+  comme tel, pas seulement comme un rapport ponctuel.
