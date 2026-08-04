@@ -22,7 +22,7 @@ export default function AppSegmentError({
   }, [error]);
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-p360-lavender-light bg-white px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-p360-lavender-light bg-p360-surface px-6 py-16 text-center">
       <p className="text-sm font-medium uppercase tracking-wide text-p360-danger">Erreur</p>
       <h2 className="text-lg font-semibold text-p360-ink">Cette page n&apos;a pas pu s&apos;afficher.</h2>
       <p className="max-w-md text-sm text-p360-muted">

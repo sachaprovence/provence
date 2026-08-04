@@ -16,6 +16,63 @@
   --color-p360-success: #2f7d52;
   --color-p360-warning: #b8860b;
   --color-p360-danger: #b0413e;
+  --color-p360-danger-light: #fbeceb;
+
+  /* Surfaces/bordures (v1.1, AR-0184) — extraites des valeurs codées en dur (`white`/hex) pour que
+     le mode sombre puisse les redéfinir sans toucher aux composants, qui ne consomment que ces
+     variables (jamais une couleur en dur). */
+  --color-p360-surface: #ffffff;
+  --color-p360-border: #d8d2e8;
+}
+
+/* Mode sombre (v1.1, AR-0184) — appliqué par défaut si l'utilisateur préfère le sombre au niveau
+   système ET n'a pas explicitement choisi le mode clair ("système" reste le défaut). Un choix
+   manuel (`data-theme`, posé par `ThemeProvider` sur `<html>`, persisté en localStorage) prime
+   toujours sur la préférence système, dans les deux sens. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #14161f;
+    --foreground: #e5e7eb;
+
+    --color-p360-blue: #7ea0d1;
+    --color-p360-blue-dark: #5c82b8;
+    --color-p360-lavender: #b3a3e0;
+    --color-p360-lavender-light: #2b2740;
+    --color-p360-sand: #d8c6a0;
+    --color-p360-sand-light: #2e2a22;
+    --color-p360-offwhite: #14161f;
+    --color-p360-ink: #e5e7eb;
+    --color-p360-muted: #9aa3af;
+    --color-p360-success: #55b586;
+    --color-p360-warning: #dba648;
+    --color-p360-danger: #e28683;
+    --color-p360-danger-light: #3a2323;
+
+    --color-p360-surface: #1c1f2b;
+    --color-p360-border: #343849;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #14161f;
+  --foreground: #e5e7eb;
+
+  --color-p360-blue: #7ea0d1;
+  --color-p360-blue-dark: #5c82b8;
+  --color-p360-lavender: #b3a3e0;
+  --color-p360-lavender-light: #2b2740;
+  --color-p360-sand: #d8c6a0;
+  --color-p360-sand-light: #2e2a22;
+  --color-p360-offwhite: #14161f;
+  --color-p360-ink: #e5e7eb;
+  --color-p360-muted: #9aa3af;
+  --color-p360-success: #55b586;
+  --color-p360-warning: #dba648;
+  --color-p360-danger: #e28683;
+  --color-p360-danger-light: #3a2323;
+
+  --color-p360-surface: #1c1f2b;
+  --color-p360-border: #343849;
 }
 
 @theme inline {
@@ -36,6 +93,9 @@
   --color-p360-success: var(--color-p360-success);
   --color-p360-warning: var(--color-p360-warning);
   --color-p360-danger: var(--color-p360-danger);
+  --color-p360-danger-light: var(--color-p360-danger-light);
+  --color-p360-surface: var(--color-p360-surface);
+  --color-p360-border: var(--color-p360-border);
 }
 
 body {
@@ -45,8 +105,8 @@ body {
 }
 
 .card {
-  background: white;
-  border: 1px solid #eae5f5;
+  background: var(--color-p360-surface);
+  border: 1px solid var(--color-p360-lavender-light);
   border-radius: 0.75rem;
   box-shadow: 0 1px 2px rgba(31, 58, 92, 0.05);
 }
@@ -68,7 +128,7 @@ body {
 }
 
 .btn-secondary {
-  background: white;
+  background: var(--color-p360-surface);
   color: var(--color-p360-blue);
   border: 1px solid var(--color-p360-blue);
   border-radius: 0.5rem;
@@ -81,7 +141,7 @@ body {
 }
 
 .btn-danger {
-  background: white;
+  background: var(--color-p360-surface);
   color: var(--color-p360-danger);
   border: 1px solid var(--color-p360-danger);
   border-radius: 0.5rem;
@@ -89,7 +149,7 @@ body {
   font-weight: 500;
 }
 .btn-danger:hover {
-  background: #fbeceb;
+  background: var(--color-p360-danger-light);
 }
 
 .btn-ghost {
@@ -109,11 +169,11 @@ body {
 }
 
 .input {
-  border: 1px solid #d8d2e8;
+  border: 1px solid var(--color-p360-border);
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
   width: 100%;
-  background: white;
+  background: var(--color-p360-surface);
   color: var(--color-p360-ink);
 }
 .input:focus {

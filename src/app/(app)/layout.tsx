@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CommandPalette } from "@/components/command-palette";
 import { CommandPaletteTrigger } from "@/components/command-palette-trigger";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const ROLE_LABEL: Record<string, string> = {
   OWNER_ADMIN: "Administrateur",
@@ -17,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-64 shrink-0 border-r border-p360-lavender-light bg-white flex flex-col">
+      <aside className="w-64 shrink-0 border-r border-p360-lavender-light bg-p360-surface flex flex-col">
         <div className="px-5 py-5 border-b border-p360-lavender-light">
           <div className="text-lg font-semibold text-p360-blue">Provence 360</div>
           <div className="text-xs text-p360-muted mt-0.5">{actor.organization.name}</div>
@@ -40,6 +41,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {actor.user.firstName} {actor.user.lastName}
           </div>
           <div className="text-xs text-p360-muted mb-2">{ROLE_LABEL[actor.membership.role]}</div>
+          <div className="mb-2">
+            <ThemeToggle />
+          </div>
           <LogoutButton />
         </div>
       </aside>

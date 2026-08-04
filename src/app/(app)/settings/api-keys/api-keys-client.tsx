@@ -64,7 +64,7 @@ export function ApiKeysClient() {
           <p className="text-sm text-p360-muted mb-2">
             Copiez cette clé maintenant — elle ne sera plus jamais affichée en clair.
           </p>
-          <code className="block bg-white border border-p360-lavender rounded-lg p-3 text-sm break-all">{revealedKey}</code>
+          <code className="block bg-p360-surface border border-p360-lavender rounded-lg p-3 text-sm break-all">{revealedKey}</code>
           <button className="btn-secondary text-xs mt-3" onClick={() => setRevealedKey(null)}>
             J&apos;ai copié la clé
           </button>

@@ -452,7 +452,7 @@ function InboxPanel({ lead }: { lead: LeadDetail }) {
           <li key={c.id} className={clsx("text-sm rounded-lg p-3", c.direction === "inbound" ? "bg-p360-lavender-light/40" : "bg-gray-50")}>
             <div className="flex justify-between items-center mb-1">
               <span className="text-xs font-semibold text-p360-blue">{c.direction === "inbound" ? "Reçu" : "Envoyé"}</span>
-              {c.intent && <span className="badge bg-white border border-p360-lavender text-p360-blue">{INTENT_LABEL[c.intent] ?? c.intent}</span>}
+              {c.intent && <span className="badge bg-p360-surface border border-p360-lavender text-p360-blue">{INTENT_LABEL[c.intent] ?? c.intent}</span>}
             </div>
             <p className="text-p360-ink whitespace-pre-wrap">{c.body}</p>
             <div className="text-xs text-p360-muted mt-1">{formatDate(c.createdAt)}</div>

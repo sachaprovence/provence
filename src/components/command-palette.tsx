@@ -93,7 +93,7 @@ export function CommandPalette({ role }: { role: MembershipRole }) {
       label="Palette de commandes"
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-24"
     >
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl border border-p360-lavender-light overflow-hidden">
+      <div className="w-full max-w-lg rounded-xl bg-p360-surface shadow-2xl border border-p360-lavender-light overflow-hidden">
         <Command.Input
           value={query}
           onValueChange={setQuery}

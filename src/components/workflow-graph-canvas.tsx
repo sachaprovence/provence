@@ -119,7 +119,7 @@ export function WorkflowGraphCanvas({
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-p360-lavender-light bg-p360-sand-light/30" style={{ height: 560 }}>
-      <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-md bg-white p-1 shadow">
+      <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-md bg-p360-surface p-1 shadow">
         <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={() => zoom(0.15)}>
           ➕
         </button>
@@ -201,7 +201,7 @@ export function WorkflowGraphCanvas({
                   }
                 }}
                 className={clsx(
-                  "absolute flex select-none flex-col justify-center rounded-lg border-2 bg-white px-3 py-2 shadow-sm",
+                  "absolute flex select-none flex-col justify-center rounded-lg border-2 bg-p360-surface px-3 py-2 shadow-sm",
                   isSelected && "ring-2 ring-offset-1",
                   isConnecting && "animate-pulse"
                 )}

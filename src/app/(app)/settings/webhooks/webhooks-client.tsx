@@ -71,7 +71,7 @@ export function WebhooksClient() {
             Copiez ce secret maintenant — utilisez-le pour vérifier l&apos;en-tête <code>X-Autorun-Signature</code>{" "}
             (HMAC-SHA256 de <code>idempotencyKey.corps</code>). Il ne sera plus jamais affiché.
           </p>
-          <code className="block bg-white border border-p360-lavender rounded-lg p-3 text-sm break-all">{revealedSecret}</code>
+          <code className="block bg-p360-surface border border-p360-lavender rounded-lg p-3 text-sm break-all">{revealedSecret}</code>
           <button className="btn-secondary text-xs mt-3" onClick={() => setRevealedSecret(null)}>
             J&apos;ai copié le secret
           </button>
