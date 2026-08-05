@@ -77,61 +77,62 @@ model Organization {
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
-  memberships          Membership[]
-  workspaces           Workspace[]
-  agentDefinitions     AgentDefinition[]
-  agentInstallations   AgentInstallation[]
-  commercialProspects  CommercialProspect[]
-  commercialActions    CommercialAction[]
-  workflowDefinitions  WorkflowDefinition[]
-  workflowRuns         WorkflowRun[]
-  memoryEntries        MemoryEntry[]
-  knowledgeDocuments   KnowledgeDocument[]
-  embeddingRequests    EmbeddingRequest[]
-  automations          Automation[]
-  automationRuns       AutomationRun[]
-  automationJobs       AutomationJob[]
-  territories          Territory[]
-  icps                 IdealCustomerProfile[]
-  leads                Lead[]
-  tags                 Tag[]
-  campaigns            Campaign[]
-  sequences            Sequence[]
-  emailAccounts        EmailAccount[]
-  tasks                Task[]
-  appointments         Appointment[]
-  opportunities        Opportunity[]
-  quotes               Quote[]
-  quoteVersions        QuoteVersion[]
-  invoices             Invoice[]
-  invoicePayments      InvoicePayment[]
-  customers            Customer[]
-  missions             Mission[]
-  services_            Service[]
-  providers            Provider[]
-  automationRules      AutomationRule[]
-  notifications        Notification[]
-  suppressionEntries   SuppressionEntry[]
-  consentRecords       ConsentRecord[]
-  auditLogs            AuditLog[]
-  aiRequests           AIRequest[]
-  integrations         Integration[]
+  memberships                 Membership[]
+  workspaces                  Workspace[]
+  agentDefinitions            AgentDefinition[]
+  agentInstallations          AgentInstallation[]
+  commercialProspects         CommercialProspect[]
+  commercialActions           CommercialAction[]
+  workflowDefinitions         WorkflowDefinition[]
+  workflowRuns                WorkflowRun[]
+  memoryEntries               MemoryEntry[]
+  knowledgeDocuments          KnowledgeDocument[]
+  embeddingRequests           EmbeddingRequest[]
+  automations                 Automation[]
+  automationRuns              AutomationRun[]
+  automationJobs              AutomationJob[]
+  territories                 Territory[]
+  icps                        IdealCustomerProfile[]
+  leads                       Lead[]
+  tags                        Tag[]
+  campaigns                   Campaign[]
+  sequences                   Sequence[]
+  emailAccounts               EmailAccount[]
+  tasks                       Task[]
+  appointments                Appointment[]
+  opportunities               Opportunity[]
+  quotes                      Quote[]
+  quoteVersions               QuoteVersion[]
+  invoices                    Invoice[]
+  invoicePayments             InvoicePayment[]
+  customers                   Customer[]
+  missions                    Mission[]
+  services_                   Service[]
+  providers                   Provider[]
+  automationRules             AutomationRule[]
+  notifications               Notification[]
+  suppressionEntries          SuppressionEntry[]
+  consentRecords              ConsentRecord[]
+  auditLogs                   AuditLog[]
+  aiRequests                  AIRequest[]
+  integrations                Integration[]
   integrationDiagnosticChecks IntegrationDiagnosticCheck[]
-  webhookEvents        WebhookEvent[]
-  loginEvents          LoginEvent[]
-  pipelineStages         PipelineStage[]
-  businessHours          BusinessHours[]
-  notificationPreferences NotificationPreference[]
-  companies            Company[]
-  properties           Property[]
-  contacts             Contact[]
-  attachments          Attachment[]
-  virtualTours         VirtualTour[]
-  apiRequestMetrics    ApiRequestMetric[]
-  plan                 Plan?                  @relation(fields: [planId], references: [id])
-  apiKeys              ApiKey[]
-  webhookSubscriptions WebhookSubscription[]
-  webhookDeliveries    WebhookDelivery[]
+  webhookEvents               WebhookEvent[]
+  loginEvents                 LoginEvent[]
+  pipelineStages              PipelineStage[]
+  businessHours               BusinessHours[]
+  notificationPreferences     NotificationPreference[]
+  companies                   Company[]
+  properties                  Property[]
+  contacts                    Contact[]
+  attachments                 Attachment[]
+  virtualTours                VirtualTour[]
+  apiRequestMetrics           ApiRequestMetric[]
+  plan                        Plan?                        @relation(fields: [planId], references: [id])
+  apiKeys                     ApiKey[]
+  webhookSubscriptions        WebhookSubscription[]
+  webhookDeliveries           WebhookDelivery[]
+  onboardingProgress          OnboardingProgress?
 
   @@index([name])
   @@index([planId])
@@ -146,6 +147,12 @@ model User {
   phone            String?
   avatarUrl        String?
   isActive         Boolean  @default(true)
+  /// Administrateur de la PLATEFORME (v1.4) — distinct de tout rôle d'organisation/workspace :
+  /// accès en lecture/écriture à `/admin/**`, à travers TOUTES les organisations. Jamais posé
+  /// via l'API ou l'UI applicative — seulement via `scripts/promote-platform-admin.ts` (CLI,
+  /// même convention que les autres scripts d'administration one-off de ce dépôt). `false` par
+  /// défaut : comportement inchangé pour tout utilisateur existant.
+  isPlatformAdmin  Boolean  @default(false)
   /// Secret TOTP (base32) — non `null` uniquement pendant/après l'inscription 2FA (v0.10, AR-0058). Jamais exposé via l'API.
   twoFactorSecret  String?
   /// `true` seulement après confirmation du code lors de l'inscription — voir `src/lib/two-factor.ts`. Non appliqué à la connexion (préparation, pas encore obligatoire).
@@ -153,38 +160,38 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  memberships                 Membership[]
-  workspaceMemberships        WorkspaceMembership[]
-  workspaceInvitationsSent    WorkspaceInvitation[]      @relation("WorkspaceInvitationInvitedBy")
-  agentInstallationsInstalled AgentInstallation[]        @relation("AgentInstalledBy")
-  agentRunsCreated            AgentRun[]                 @relation("AgentRunCreatedBy")
-  agentInterventionsAssigned  AgentInterventionRequest[] @relation("AgentInterventionAssignedTo")
-  agentInterventionsResolved  AgentInterventionRequest[] @relation("AgentInterventionResolvedBy")
-  commercialActionsDecided    CommercialAction[]         @relation("CommercialActionDecidedBy")
-  promptTemplatesCreated      PromptTemplate[]           @relation("PromptTemplateCreatedBy")
-  workflowDefinitionsCreated  WorkflowDefinition[]       @relation("WorkflowDefinitionCreatedBy")
-  workflowVersionsCreated     WorkflowVersion[]          @relation("WorkflowVersionCreatedBy")
-  workflowRunsCreated         WorkflowRun[]              @relation("WorkflowRunCreatedBy")
-  memoryEntriesCreated        MemoryEntry[]              @relation("MemoryEntryCreatedBy")
-  knowledgeDocumentsCreated   KnowledgeDocument[]        @relation("KnowledgeDocumentCreatedBy")
-  automationsCreated          Automation[]               @relation("AutomationCreatedBy")
+  memberships                    Membership[]
+  workspaceMemberships           WorkspaceMembership[]
+  workspaceInvitationsSent       WorkspaceInvitation[]        @relation("WorkspaceInvitationInvitedBy")
+  agentInstallationsInstalled    AgentInstallation[]          @relation("AgentInstalledBy")
+  agentRunsCreated               AgentRun[]                   @relation("AgentRunCreatedBy")
+  agentInterventionsAssigned     AgentInterventionRequest[]   @relation("AgentInterventionAssignedTo")
+  agentInterventionsResolved     AgentInterventionRequest[]   @relation("AgentInterventionResolvedBy")
+  commercialActionsDecided       CommercialAction[]           @relation("CommercialActionDecidedBy")
+  promptTemplatesCreated         PromptTemplate[]             @relation("PromptTemplateCreatedBy")
+  workflowDefinitionsCreated     WorkflowDefinition[]         @relation("WorkflowDefinitionCreatedBy")
+  workflowVersionsCreated        WorkflowVersion[]            @relation("WorkflowVersionCreatedBy")
+  workflowRunsCreated            WorkflowRun[]                @relation("WorkflowRunCreatedBy")
+  memoryEntriesCreated           MemoryEntry[]                @relation("MemoryEntryCreatedBy")
+  knowledgeDocumentsCreated      KnowledgeDocument[]          @relation("KnowledgeDocumentCreatedBy")
+  automationsCreated             Automation[]                 @relation("AutomationCreatedBy")
   integrationDiagnosticChecksRun IntegrationDiagnosticCheck[] @relation("IntegrationDiagnosticCheckRunBy")
-  automationVersionsCreated   AutomationVersion[]        @relation("AutomationVersionCreatedBy")
-  automationRunsCreated       AutomationRun[]            @relation("AutomationRunCreatedBy")
-  sessions                    Session[]
-  passwordResets              PasswordResetToken[]
-  loginEvents                 LoginEvent[]
-  auditLogs                   AuditLog[]
-  aiRequests                  AIRequest[]
-  tasksAssigned               Task[]                     @relation("TaskAssignee")
-  appointments                Appointment[]              @relation("AppointmentOwner")
-  notifications               Notification[]
-  notificationPreferences     NotificationPreference[]
-  messagesValidated           Message[]                  @relation("MessageValidatedBy")
-  notesAuthored               LeadNote[]
-  attachmentsUploaded         Attachment[]
-  apiKeysCreated              ApiKey[]                   @relation("ApiKeyCreatedBy")
-  webhookSubscriptionsCreated WebhookSubscription[]      @relation("WebhookSubscriptionCreatedBy")
+  automationVersionsCreated      AutomationVersion[]          @relation("AutomationVersionCreatedBy")
+  automationRunsCreated          AutomationRun[]              @relation("AutomationRunCreatedBy")
+  sessions                       Session[]
+  passwordResets                 PasswordResetToken[]
+  loginEvents                    LoginEvent[]
+  auditLogs                      AuditLog[]
+  aiRequests                     AIRequest[]
+  tasksAssigned                  Task[]                       @relation("TaskAssignee")
+  appointments                   Appointment[]                @relation("AppointmentOwner")
+  notifications                  Notification[]
+  notificationPreferences        NotificationPreference[]
+  messagesValidated              Message[]                    @relation("MessageValidatedBy")
+  notesAuthored                  LeadNote[]
+  attachmentsUploaded            Attachment[]
+  apiKeysCreated                 ApiKey[]                     @relation("ApiKeyCreatedBy")
+  webhookSubscriptionsCreated    WebhookSubscription[]        @relation("WebhookSubscriptionCreatedBy")
 }
 
 // ---------------------------------------------------------------------------
@@ -1898,16 +1905,18 @@ model WebhookDelivery {
 }
 
 enum PlanKey {
+  TRIAL
   STARTER
   PRO
   ENTERPRISE
 }
 
-/// Plan d'abonnement SaaS Autorun (AR-0062) — ses quotas sont copiés sur
-/// `Organization` quand le plan est (ré)appliqué (`applyPlanToOrganization`),
-/// pour réutiliser tel quel tout le code d'application des quotas déjà
-/// existant (`sequence-engine.ts`, `src/lib/ai/quota.ts`, `src/lib/email/quota.ts`)
-/// sans lui faire connaître la notion de plan.
+/// Plan d'abonnement SaaS Autorun (AR-0062, étendu v1.4 AR-0183) — ses quotas
+/// sont copiés sur `Organization` quand le plan est (ré)appliqué
+/// (`applyPlanToOrganization`), pour réutiliser tel quel tout le code
+/// d'application des quotas déjà existant (`sequence-engine.ts`,
+/// `src/lib/ai/quota.ts`, `src/lib/email/quota.ts`) sans lui faire connaître
+/// la notion de plan.
 model Plan {
   id                 String   @id @default(cuid())
   key                PlanKey  @unique
@@ -1915,6 +1924,18 @@ model Plan {
   maxUsers           Int
   dailySendLimit     Int
   aiMonthlyBudgetUsd Float?
+  /// Exécutions d'automatisation (Automation Engine, v0.8) autorisées par mois glissant (30j) —
+  /// `null` = illimité (v1.4, AR-0183). Vérifié par `src/lib/billing/quota-enforcement.ts` à
+  /// chaque création de `AutomationRun` (`createAutomationRun`), jamais au niveau du job
+  /// individuel (un run peut produire plusieurs jobs — la limite porte sur le déclenchement,
+  /// pas sur le travail interne).
+  maxAutomationRuns  Int?
+  /// Stockage total (pièces jointes, `Attachment.sizeBytes`) autorisé en mégaoctets — `null` =
+  /// illimité (v1.4, AR-0183). Vérifié à l'upload (`src/app/api/attachments/upload/route.ts`).
+  maxStorageMb       Int?
+  /// Connecteurs tiers configurés (`Integration` avec `status != DEMO`) autorisés simultanément —
+  /// `null` = illimité (v1.4, AR-0183).
+  maxConnectors      Int?
   /// Prix mensuel en centimes (informatif, affichage UI).
   priceMonthlyUsd    Int
   /// Identifiant du Price Stripe correspondant — requis seulement en mode `BILLING_PROVIDER=stripe`.
@@ -3320,4 +3341,42 @@ model BackupRun {
   createdAt    DateTime      @default(now())
 
   @@index([kind, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding guidé (v1.4, AR-0178) — progression persistée pour permettre à
+// un nouveau client de reprendre le parcours d'une session à l'autre (jamais
+// un état en mémoire/session uniquement). Une seule ligne par organisation :
+// le parcours guidé est une propriété de l'organisation, pas de l'utilisateur
+// qui l'a commencé (un coéquipier invité en cours de route doit voir la même
+// progression).
+// ---------------------------------------------------------------------------
+
+enum OnboardingStepKey {
+  PROFILE
+  INVITE_TEAM
+  CONNECT_TOOL
+  CHOOSE_TEMPLATE
+  LAUNCH_DEMO
+  VIEW_RESULT
+}
+
+model OnboardingProgress {
+  id                  String              @id @default(cuid())
+  organizationId      String              @unique
+  currentStep         OnboardingStepKey   @default(PROFILE)
+  completedSteps      OnboardingStepKey[] @default([])
+  /// Clé du template d'automatisation choisi à l'étape CHOOSE_TEMPLATE (ex. "template-nouveau-prospect").
+  selectedTemplateKey String?
+  /// Automatisation clonée dans le workspace à partir du template choisi (étape LAUNCH_DEMO).
+  demoAutomationId    String?
+  /// Exécution de démonstration déclenchée manuellement (étape LAUNCH_DEMO), consultée à l'étape VIEW_RESULT.
+  demoRunId           String?
+  completedAt         DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
