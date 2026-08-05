@@ -125,6 +125,19 @@ runIfDatabase("organization-service (v1.4, AR-0178)", () => {
       expect(remaining).toBeNull();
     });
 
+    it("refuse si l'acteur n'est pas OWNER_ADMIN (défense en profondeur — la route le vérifie déjà, mais le service ne doit jamais s'y fier seul)", async () => {
+      const fixture = await createWorkflowTestFixture("remove-forbidden");
+      organizationIds.push(fixture.organization.id);
+      userIds.push(fixture.user.id);
+      const { membership: targetMembership } = await addMember(fixture.organization.id, fixture.workspace.id, "target-forbidden-remove");
+      const nonOwnerActor = { ...fixture.actor, membership: { ...fixture.actor.membership, role: MembershipRole.SALES } };
+
+      await expect(removeOrganizationMember(nonOwnerActor, targetMembership.id)).rejects.toThrow(ForbiddenError);
+
+      const stillThere = await prisma.membership.findUnique({ where: { id: targetMembership.id } });
+      expect(stillThere).not.toBeNull();
+    });
+
     it("ne trouve jamais une Membership d'une AUTRE organisation (isolation multi-tenant)", async () => {
       const fixtureA = await createWorkflowTestFixture("remove-tenant-a");
       const fixtureB = await createWorkflowTestFixture("remove-tenant-b");

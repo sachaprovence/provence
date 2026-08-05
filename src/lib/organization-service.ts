@@ -59,6 +59,10 @@ export async function transferOrganizationOwnership(actor: CurrentActor, toUserI
  * l'organisation (sinon plus personne ne pourrait plus l'administrer).
  */
 export async function removeOrganizationMember(actor: CurrentActor, membershipId: string) {
+  if (actor.membership.role !== MembershipRole.OWNER_ADMIN) {
+    throw new ForbiddenError("Seul un administrateur de l'organisation peut retirer un membre.");
+  }
+
   const membership = await prisma.membership.findFirst({
     where: { id: membershipId, organizationId: actor.organization.id },
   });
