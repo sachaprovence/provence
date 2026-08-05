@@ -15,12 +15,25 @@ import { scanContent, type SecretFinding } from "./lib/secret-scan";
  */
 const EXCLUDED_PATH_PREFIXES = ["node_modules/", ".next/", "prisma/migrations/"];
 
+/**
+ * Exclusion exacte (jamais un préfixe large) : les tests DU SCANNER
+ * lui-même contiennent volontairement des chaînes synthétiques qui
+ * imitent la forme d'une clé AWS/PEM réelle (y compris l'exemple
+ * officiel AWS documenté publiquement comme non fonctionnel, utilisé
+ * dans toute la documentation AWS) pour vérifier que la détection haute
+ * confiance fonctionne — jamais un vrai secret. Même principe que
+ * l'allowlist de tests intégrée à gitleaks/trufflehog pour leur propre
+ * suite de tests.
+ */
+const EXCLUDED_EXACT_PATHS = ["tests/scripts/secret-scan.test.ts"];
+
 function listTrackedFiles(): string[] {
   const output = execFileSync("git", ["ls-files"], { encoding: "utf-8" });
   return output
     .split("\n")
     .filter(Boolean)
-    .filter((f) => !EXCLUDED_PATH_PREFIXES.some((prefix) => f.startsWith(prefix)));
+    .filter((f) => !EXCLUDED_PATH_PREFIXES.some((prefix) => f.startsWith(prefix)))
+    .filter((f) => !EXCLUDED_EXACT_PATHS.includes(f));
 }
 
 function main() {
