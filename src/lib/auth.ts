@@ -64,6 +64,10 @@ export type CurrentActor = {
   // jour le workspace actif (voir src/lib/workspace-context.ts). Additif :
   // ne casse aucun code existant qui ne lit que user/membership/organization.
   sessionId: string;
+  // Administrateur de la PLATEFORME (v1.4, AR-0185) — jamais posé par
+  // l'application elle-même, voir `User.isPlatformAdmin`. Additif : `false`
+  // pour tout code existant qui ne le lit pas.
+  isPlatformAdmin: boolean;
 };
 
 export async function getCurrentActor(): Promise<CurrentActor | null> {
@@ -103,6 +107,7 @@ export async function getCurrentActor(): Promise<CurrentActor | null> {
     },
     organization: { id: membership.organization.id, name: membership.organization.name },
     sessionId: session.id,
+    isPlatformAdmin: session.user.isPlatformAdmin,
   };
 }
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { assertConnectorLimitAvailable } from "@/lib/billing/quota-enforcement";
 
 /**
  * Configuration réelle d'envoi d'email (brief v0.9 : "Supprimer
@@ -70,6 +71,7 @@ export async function updateEmailIntegrationConfig(
     await prisma.integration.update({ where: { id: existing.id }, data: { config: merged as never, status: "CONNECTED" } });
     return;
   }
+  await assertConnectorLimitAvailable(organizationId, "EMAIL");
   await prisma.integration.create({ data: { organizationId, kind: "EMAIL", name: "Email", status: "CONNECTED", config: merged as never } });
 }
 

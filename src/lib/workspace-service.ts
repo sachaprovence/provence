@@ -7,6 +7,7 @@ import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatch
 import { NotFoundError, ConflictError, ValidationError } from "@/lib/errors";
 import { WORKSPACE_AUDIT_ACTIONS } from "@/lib/workspace-permissions";
 import { assertMemberLimitAvailable } from "@/lib/billing/plan-service";
+import { createNotification } from "@/lib/notifications/notification-service";
 import { WorkspaceRole, MembershipRole } from "@/generated/prisma/enums";
 
 const INVITATION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 jours
@@ -200,6 +201,19 @@ export async function inviteWorkspaceMember(
     entityId: invitation.id,
     metadata: { email: input.email, role: input.role },
   });
+
+  // Notification in-app (v1.4, AR-0184) — uniquement si la personne invitée a DÉJÀ un compte
+  // (un compte existant peut appartenir à une autre organisation) : sans compte, rien à notifier
+  // avant l'inscription elle-même, qui n'a pas de destinataire "notification" avant de se produire.
+  if (existingUser) {
+    await createNotification({
+      organizationId: actor.organization.id,
+      userId: existingUser.id,
+      type: "workspace_invitation.received",
+      title: `Invitation à rejoindre "${actor.organization.name}"`,
+      link: `/workspace-invitations/${token}`,
+    });
+  }
 
   return invitation;
 }

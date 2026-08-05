@@ -1,9 +1,8 @@
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { InviteUserForm } from "@/components/invite-user-form";
+import { TeamMembersTable } from "@/components/team-members-table";
 import { MembershipRole } from "@/generated/prisma/enums";
-
-const ROLE_LABEL: Record<string, string> = { OWNER_ADMIN: "Administrateur", SALES: "Commercial", PROVIDER: "Prestataire régional" };
 
 export default async function UsersPage() {
   const actor = await requireRole([MembershipRole.OWNER_ADMIN]);
@@ -17,28 +16,16 @@ export default async function UsersPage() {
     <div className="max-w-3xl space-y-6">
       <h1 className="text-2xl font-semibold text-p360-ink">Utilisateurs</h1>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-p360-lavender-light/40 text-p360-muted text-xs uppercase">
-            <tr>
-              <th className="text-left px-4 py-2">Nom</th>
-              <th className="text-left px-4 py-2">Email</th>
-              <th className="text-left px-4 py-2">Rôle</th>
-              <th className="text-left px-4 py-2">Territoire</th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((m) => (
-              <tr key={m.id} className="border-t border-p360-lavender-light">
-                <td className="px-4 py-2 text-p360-ink">{m.user.firstName} {m.user.lastName}</td>
-                <td className="px-4 py-2 text-p360-muted">{m.user.email}</td>
-                <td className="px-4 py-2"><span className="badge bg-p360-lavender-light text-p360-blue">{ROLE_LABEL[m.role]}</span></td>
-                <td className="px-4 py-2 text-p360-muted">{m.territory?.name ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TeamMembersTable
+        currentUserId={actor.user.id}
+        members={members.map((m) => ({
+          id: m.id,
+          role: m.role,
+          userId: m.userId,
+          user: { firstName: m.user.firstName, lastName: m.user.lastName, email: m.user.email, isActive: m.user.isActive },
+          territory: m.territory ? { name: m.territory.name } : null,
+        }))}
+      />
 
       <div className="card p-6">
         <h2 className="text-lg font-semibold text-p360-ink mb-4">Ajouter un utilisateur</h2>

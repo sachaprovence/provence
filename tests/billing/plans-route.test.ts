@@ -11,11 +11,11 @@ import { PlanKey } from "@/generated/prisma/enums";
 const runIfDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
 runIfDatabase("GET /api/plans", () => {
-  it("liste les 3 plans de référence sans nécessiter de session", async () => {
+  it("liste les 4 plans de référence sans nécessiter de session (TRIAL ajouté en v1.4)", async () => {
     const response = await plansRoute();
     expect(response.status).toBe(200);
     const body = await response.json();
     const keys = body.plans.map((plan: { key: string }) => plan.key).sort();
-    expect(keys).toEqual([PlanKey.ENTERPRISE, PlanKey.PRO, PlanKey.STARTER].sort());
+    expect(keys).toEqual([PlanKey.ENTERPRISE, PlanKey.PRO, PlanKey.STARTER, PlanKey.TRIAL].sort());
   });
 });

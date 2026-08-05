@@ -52,20 +52,20 @@ runIfDatabase("Automatisations métier prêtes à l'emploi (v0.9)", () => {
     if (definitionIds.length > 0) await prisma.agentDefinition.deleteMany({ where: { id: { in: definitionIds } } });
   });
 
-  it("seed les 11 automatisations prêtes à l'emploi demandées par le brief (dont Livraison effectuée, v1.1 AR-0175), de façon idempotente", async () => {
-    expect(AUTOMATION_TEMPLATE_KEYS.length).toBe(11);
+  it("seed les 15 automatisations prêtes à l'emploi demandées par le brief (dont Livraison effectuée v1.1 AR-0175, et les 4 modèles v1.4 AR-0181), de façon idempotente", async () => {
+    expect(AUTOMATION_TEMPLATE_KEYS.length).toBe(15);
 
     await ensureAutomationTemplates();
     const firstCount = await prisma.automation.count({
       where: { isTemplate: true, workspaceId: null, key: { in: [...AUTOMATION_TEMPLATE_KEYS] } },
     });
-    expect(firstCount).toBe(11);
+    expect(firstCount).toBe(15);
 
     await ensureAutomationTemplates();
     const secondCount = await prisma.automation.count({
       where: { isTemplate: true, workspaceId: null, key: { in: [...AUTOMATION_TEMPLATE_KEYS] } },
     });
-    expect(secondCount).toBe(11);
+    expect(secondCount).toBe(15);
   });
 
   it("chaque graphe de template est structurellement valide (déclencheur, fin, aucune arête orpheline)", async () => {
@@ -74,7 +74,7 @@ runIfDatabase("Automatisations métier prêtes à l'emploi (v0.9)", () => {
       where: { isTemplate: true, workspaceId: null, key: { in: [...AUTOMATION_TEMPLATE_KEYS] } },
       include: { activeVersion: true },
     });
-    expect(templates.length).toBe(11);
+    expect(templates.length).toBe(15);
     for (const template of templates) {
       expect(template.activeVersionId).not.toBeNull();
       const issues = validateAutomationGraph(template.activeVersion!.graph as unknown as AutomationGraph);
@@ -158,5 +158,52 @@ runIfDatabase("Automatisations métier prêtes à l'emploi (v0.9)", () => {
     await markVirtualTourDelivered(fixture.organization.id, tour.id);
     const runsAfterSecondCall = await prisma.automationRun.count({ where: { automationId: cloned.automation.id } });
     expect(runsAfterSecondCall).toBe(1);
+  });
+
+  it("Prospect devenu prioritaire (v1.4, AR-0181) : l'évènement lead.became_priority déclenche réellement une notification", async () => {
+    await ensureAutomationTemplates();
+    const fixture = await createWorkflowTestFixture("automation-template-prospect-prioritaire");
+    organizationIds.push(fixture.organization.id);
+    userIds.push(fixture.user.id);
+
+    const source = await prisma.automation.findFirstOrThrow({ where: { key: "template-prospect-prioritaire", isTemplate: true, workspaceId: null } });
+    const cloned = await cloneAutomationDefinition(fixture.actor, source.id, { newKey: "prospect-prioritaire-clone", newName: "Prospect prioritaire (clone)" });
+    await activateAutomationVersion(fixture.actor, cloned.automation.id, cloned.version.id);
+
+    const lead = await prisma.lead.create({ data: { organizationId: fixture.organization.id, establishmentName: "Prospect prioritaire" } });
+    const fireResult = await fireAutomationsForEvent("lead.became_priority", { organizationId: fixture.organization.id, leadId: lead.id, scoreValue: 85 });
+    expect(fireResult.triggered).toBe(1);
+
+    const run = await prisma.automationRun.findFirstOrThrow({ where: { automationId: cloned.automation.id } });
+    const finished = await driveToTerminal(run.id);
+    expect(finished.status).toBe("SUCCEEDED");
+
+    const notifications = await prisma.notification.findMany({ where: { organizationId: fixture.organization.id, title: "Prospect prioritaire à traiter" } });
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].link).toBe(`/leads/${lead.id}`);
+  });
+
+  it("Création automatique d'une tâche de suivi (v1.4, AR-0181) : un rendez-vous confirmé crée réellement une Task", async () => {
+    await ensureAutomationTemplates();
+    const fixture = await createWorkflowTestFixture("automation-template-tache-de-suivi");
+    organizationIds.push(fixture.organization.id);
+    userIds.push(fixture.user.id);
+
+    const source = await prisma.automation.findFirstOrThrow({ where: { key: "template-tache-de-suivi", isTemplate: true, workspaceId: null } });
+    const cloned = await cloneAutomationDefinition(fixture.actor, source.id, { newKey: "tache-de-suivi-clone", newName: "Tâche de suivi (clone)" });
+    await activateAutomationVersion(fixture.actor, cloned.automation.id, cloned.version.id);
+
+    const lead = await prisma.lead.create({ data: { organizationId: fixture.organization.id, establishmentName: "RDV à préparer" } });
+    const fireResult = await fireAutomationsForEvent("appointment.created", { organizationId: fixture.organization.id, leadId: lead.id });
+    expect(fireResult.triggered).toBe(1);
+
+    const run = await prisma.automationRun.findFirstOrThrow({ where: { automationId: cloned.automation.id } });
+    const finished = await driveToTerminal(run.id);
+    expect(finished.status).toBe("SUCCEEDED");
+
+    const tasks = await prisma.task.findMany({ where: { organizationId: fixture.organization.id, leadId: lead.id } });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].title).toBe("Préparer le rendez-vous");
+    expect(tasks[0].dueAt).not.toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { assertConnectorLimitAvailable } from "@/lib/billing/quota-enforcement";
 import type { GoogleCalendarConfig } from "./types";
 
 /** Config Google Calendar par organisation (`Integration.config`, kind CALENDAR), repli sur l'environnement. */
@@ -24,6 +25,7 @@ export async function storeGoogleCalendarTokens(organizationId: string, refreshT
   if (existing) {
     return prisma.integration.update({ where: { id: existing.id }, data: { config: config as never, status: "CONNECTED" } });
   }
+  await assertConnectorLimitAvailable(organizationId, "CALENDAR");
   return prisma.integration.create({
     data: { organizationId, kind: "CALENDAR", name: "Google Calendar", status: "CONNECTED", config: config as never },
   });

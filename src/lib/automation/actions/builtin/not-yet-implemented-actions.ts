@@ -37,12 +37,6 @@ export const notYetImplementedActions: AutomationJobHandler[] = [
     "provence360"
   ),
   notYetImplemented(
-    "task.create",
-    "Créer une tâche",
-    "Nécessite d'abord d'extraire la logique de création de tâche de Provence 360 en un service réutilisable.",
-    "provence360"
-  ),
-  notYetImplemented(
     "quote.create",
     "Créer un devis",
     "Nécessite d'abord d'extraire la logique de création de devis de Provence 360 en un service réutilisable.",

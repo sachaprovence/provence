@@ -60,6 +60,7 @@ runIfDatabase("isolation multi-tenant — Workspace", () => {
       membership: { id: params.membershipId, role: MembershipRole.OWNER_ADMIN, territoryId: null },
       organization: { id: params.organizationId, name: params.organizationName },
       sessionId: params.sessionId,
+      isPlatformAdmin: false,
     };
   }
 
