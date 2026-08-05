@@ -4,6 +4,8 @@ import { createSale, listSales } from "@/lib/compta/sale-service";
 import { createExpense, listExpenses } from "@/lib/compta/expense-service";
 import { createProduct, listProducts } from "@/lib/compta/product-service";
 import { createSupplier, listSuppliers } from "@/lib/compta/supplier-service";
+import { createIngredient, listIngredients } from "@/lib/compta/stock-service";
+import { createCustomer, listCustomers } from "@/lib/compta/customer-service";
 import { expectNoCrossTenantLeak } from "../helpers/tenant-isolation";
 
 /**
@@ -85,8 +87,8 @@ runIfDatabase("Compta Vellano — isolation multi-tenant", () => {
     const { organization: orgA, user: userA } = await createOrgAndUser("products-a");
     const { organization: orgB, user: userB } = await createOrgAndUser("products-b");
 
-    const productA = await createProduct(orgA.id, { name: "A", category: "Pizza", price: 500, vatRate: 10, aliases: [], isActive: true }, userA.id);
-    const productB = await createProduct(orgB.id, { name: "B", category: "Pizza", price: 500, vatRate: 10, aliases: [], isActive: true }, userB.id);
+    const productA = await createProduct(orgA.id, { name: "A", category: "Pizza", price: 500, vatRate: 10, aliases: [], isActive: true, isFavorite: false }, userA.id);
+    const productB = await createProduct(orgB.id, { name: "B", category: "Pizza", price: 500, vatRate: 10, aliases: [], isActive: true, isFavorite: false }, userB.id);
 
     await expectNoCrossTenantLeak({
       actorAItems: () => listProducts(orgA.id),
@@ -109,6 +111,38 @@ runIfDatabase("Compta Vellano — isolation multi-tenant", () => {
       actorBItems: () => listSuppliers(orgB.id),
       actorAOwnResourceId: supplierA.id,
       actorBOwnResourceId: supplierB.id,
+      getId: (item) => item.id,
+    });
+  });
+
+  it("ingrédients (v2) : chaque organisation ne voit que ses propres ingrédients", async () => {
+    const { organization: orgA, user: userA } = await createOrgAndUser("ingredients-a");
+    const { organization: orgB, user: userB } = await createOrgAndUser("ingredients-b");
+
+    const ingredientA = await createIngredient(orgA.id, { name: "A", unit: "kg", stockQuantity: 1 }, userA.id);
+    const ingredientB = await createIngredient(orgB.id, { name: "B", unit: "kg", stockQuantity: 1 }, userB.id);
+
+    await expectNoCrossTenantLeak({
+      actorAItems: () => listIngredients(orgA.id),
+      actorBItems: () => listIngredients(orgB.id),
+      actorAOwnResourceId: ingredientA.id,
+      actorBOwnResourceId: ingredientB.id,
+      getId: (item) => item.id,
+    });
+  });
+
+  it("clients (v2) : chaque organisation ne voit que ses propres clients", async () => {
+    const { organization: orgA, user: userA } = await createOrgAndUser("customers-a");
+    const { organization: orgB, user: userB } = await createOrgAndUser("customers-b");
+
+    const customerA = await createCustomer(orgA.id, { name: "A" }, userA.id);
+    const customerB = await createCustomer(orgB.id, { name: "B" }, userB.id);
+
+    await expectNoCrossTenantLeak({
+      actorAItems: () => listCustomers(orgA.id),
+      actorBItems: () => listCustomers(orgB.id),
+      actorAOwnResourceId: customerA.id,
+      actorBOwnResourceId: customerB.id,
       getId: (item) => item.id,
     });
   });

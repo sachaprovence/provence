@@ -5,9 +5,16 @@ import { writeAuditLog } from "@/lib/audit";
 import type { comptaProductSchema, comptaProductUpdateSchema } from "@/lib/validations/compta";
 import type { z } from "zod";
 
-export async function listProducts(organizationId: string, filters: { includeInactive?: boolean } = {}) {
+export async function listProducts(
+  organizationId: string,
+  filters: { includeInactive?: boolean; favoritesOnly?: boolean } = {}
+) {
   return prisma.comptaProduct.findMany({
-    where: { organizationId, isActive: filters.includeInactive ? undefined : true },
+    where: {
+      organizationId,
+      isActive: filters.includeInactive ? undefined : true,
+      isFavorite: filters.favoritesOnly ? true : undefined,
+    },
     orderBy: { name: "asc" },
   });
 }
