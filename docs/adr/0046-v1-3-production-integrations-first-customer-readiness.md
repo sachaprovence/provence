@@ -106,14 +106,13 @@ commun de toute l'API publique v1) n'a nécessité qu'une modification, pas
 ### CSP stricte à base de nonce (v1.2 l'avait différée, voir ADR 0045)
 
 v1.2 avait explicitement reporté la CSP, faute de vérification page par
-page qu'aucun script/style externe ou `unsafe-inline` n'était nécessaire.
-Cette vérification a été faite en v1.3 : aucune iframe, aucun `<Script>`
-externe, aucun WebSocket côté client, un seul `dangerouslySetInnerHTML`
-dans tout le dépôt (`src/app/layout.tsx`, script bloquant d'init du thème).
-Toutes les URLs `https://` référencées dans `src/` sont des appels
-serveur-à-serveur vers des fournisseurs tiers (Stripe, Gmail, Outlook,
-Twilio...), jamais des ressources chargées par le navigateur — donc hors
-périmètre de la CSP.
+page qu'aucun script externe ou `unsafe-inline` n'était nécessaire. Cette
+vérification a été faite en v1.3 : aucune iframe, aucun `<Script>` externe,
+aucun WebSocket côté client, un seul `dangerouslySetInnerHTML` dans tout le
+dépôt (`src/app/layout.tsx`, script bloquant d'init du thème). Toutes les
+URLs `https://` référencées dans `src/` sont des appels serveur-à-serveur
+vers des fournisseurs tiers (Stripe, Gmail, Outlook, Twilio...), jamais des
+ressources chargées par le navigateur — donc hors périmètre de la CSP.
 
 - **Générée par requête dans `src/proxy.ts`** (`src/lib/security/csp.ts#buildCspHeader`),
   jamais dans `next.config.ts#headers()` : un nonce doit être unique par
@@ -122,7 +121,23 @@ périmètre de la CSP.
 - **`script-src 'self' 'nonce-X' 'strict-dynamic'`** (+ `'unsafe-eval'` en
   développement uniquement, requis par React pour la reconstruction des
   piles d'erreur serveur→navigateur) — jamais `'unsafe-inline'`, ni en
-  développement ni en production.
+  développement ni en production. C'est la directive à plus fort impact
+  sécurité (XSS) ; elle reste strictement nonce-only.
+- **`style-src 'self' 'unsafe-inline'`** (sans nonce), dans les deux
+  environnements — corrigé pendant la validation finale v1.3 : la suite E2E
+  `two-organizations-isolation.mjs` a révélé des violations CSP réelles sur
+  `/dashboard`, provenant de composants avec des styles inline à valeur
+  **dynamique** (`tag-manager.tsx`, `leads-kanban-board.tsx`,
+  `director-plan-graph.tsx` — couleurs issues de la base, jamais des
+  constantes). Un nonce/hash sur `style-src` ne peut PAS couvrir un
+  attribut `style="..."` (seul `'unsafe-hashes'` le permettrait, et
+  seulement pour un ensemble fixe de valeurs connues au build — inapplicable
+  à une couleur qui varie avec les données). L'affirmation initiale de cette
+  ADR ("aucun script/style externe... vérifié page par page") était donc
+  incomplète : la vérification n'avait couvert que le golden path, pas le
+  test d'isolation multi-tenant. Compromis assumé et courant en production :
+  `script-src` strict (protection XSS, l'enjeu principal), `style-src`
+  permissif (l'injection CSS a un impact bien moindre qu'une injection JS).
 - Le nonce est transmis au gestionnaire de route/page via l'en-tête
   `x-nonce` (même mécanisme que `X-Request-Id`) ; `src/app/layout.tsx` le
   lit via `headers()` (Server Component) et l'applique au script inline du
@@ -195,11 +210,13 @@ travail, seule sa disponibilité pour du NOUVEAU trafic doit être signalée.
 - Toute nouvelle route API DOIT désormais passer `request` à
   `toApiErrorResponse` — une erreur TypeScript (paramètre manquant) le
   rappelle immédiatement à la revue de code plutôt qu'un oubli silencieux.
-- Toute nouvelle iframe, script externe, ou style inline non nonced fera
-  échouer silencieusement la ressource correspondante (bloquée par le
-  navigateur) — à surveiller via les futurs rapports d'erreurs `report-to`/
-  `report-uri` (non câblés dans cette passe, identifié comme travail futur
-  pour AR-0174/monitoring).
+- Toute nouvelle iframe ou script externe non nonced fera échouer
+  silencieusement la ressource correspondante (bloquée par le navigateur) —
+  à surveiller via les futurs rapports d'erreurs `report-to`/`report-uri`
+  (non câblés dans cette passe, identifié comme travail futur pour
+  AR-0174/monitoring). `style-src` reste volontairement permissif (voir
+  ci-dessus), donc un nouveau style inline ne fera jamais échouer de
+  ressource.
 - Un orchestrateur de déploiement (Kubernetes, load balancer) DOIT
   interroger `/api/health/ready` (jamais `/api/health/live`) pour décider
   de router du trafic — c'était déjà vrai depuis AR-0167 (v1.2), mais

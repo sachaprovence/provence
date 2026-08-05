@@ -5,12 +5,17 @@ import { buildCspHeader } from "@/lib/security/csp";
  * Content-Security-Policy par nonce (v1.3, AR-0173) — générée par requête
  * dans `src/proxy.ts`. Voir `tests/security/http-headers.test.ts` pour les
  * en-têtes statiques posés par `next.config.ts`.
+ *
+ * `style-src` autorise `'unsafe-inline'` (sans nonce) en dev ET en prod —
+ * plusieurs composants utilisent des styles inline à valeur dynamique
+ * (couleurs de tags/étapes issues de la base) qu'un CSP par nonce/hash ne
+ * peut pas couvrir (voir le commentaire de `buildCspHeader`). `script-src`
+ * reste strict (nonce + `strict-dynamic`) dans les deux environnements.
  */
 describe("buildCspHeader (AR-0173)", () => {
-  it("inclut le nonce fourni dans script-src et style-src en production", () => {
+  it("inclut le nonce fourni dans script-src en production", () => {
     const csp = buildCspHeader("abc123", false);
     expect(csp).toContain("script-src 'self' 'nonce-abc123' 'strict-dynamic'");
-    expect(csp).toContain("style-src 'self' 'nonce-abc123'");
   });
 
   it("n'autorise jamais 'unsafe-inline' pour les scripts, ni en dev ni en prod", () => {
@@ -18,14 +23,14 @@ describe("buildCspHeader (AR-0173)", () => {
     expect(buildCspHeader("n2", false)).not.toMatch(/script-src[^;]*unsafe-inline/);
   });
 
-  it("autorise unsafe-eval et unsafe-inline (styles) UNIQUEMENT en développement (React/Fast Refresh)", () => {
+  it("autorise unsafe-eval (scripts) UNIQUEMENT en développement, et unsafe-inline (styles) dans les deux", () => {
     const dev = buildCspHeader("n1", true);
     expect(dev).toContain("'unsafe-eval'");
     expect(dev).toContain("style-src 'self' 'unsafe-inline'");
 
     const prod = buildCspHeader("n1", false);
     expect(prod).not.toContain("unsafe-eval");
-    expect(prod).not.toContain("unsafe-inline");
+    expect(prod).toContain("style-src 'self' 'unsafe-inline'");
   });
 
   it("ajoute upgrade-insecure-requests uniquement en production", () => {
