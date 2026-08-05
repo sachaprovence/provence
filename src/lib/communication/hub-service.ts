@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { ValidationError } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
+import { assertConnectorLimitAvailable } from "@/lib/billing/quota-enforcement";
 import { registerBuiltInCommunicationProviders } from "./bootstrap";
 import { getCommunicationProvider, listRegisteredCommunicationProviderKeys } from "./registry";
 import type { CommunicationChannel, OutboundCommunication, CommunicationSendResult } from "./types";
@@ -118,6 +119,8 @@ export async function updateChannelConfig(
   data: { provider: string; config?: Record<string, unknown> }
 ): Promise<ChannelConfigPreview> {
   const existing = await prisma.integration.findFirst({ where: { organizationId, kind: channel } });
+  if (!existing) await assertConnectorLimitAvailable(organizationId, channel);
+
   const previous = (existing?.config as Record<string, unknown> | null) ?? {};
   const config: Record<string, unknown> = { ...previous, provider: data.provider };
   for (const [key, value] of Object.entries(data.config ?? {})) {

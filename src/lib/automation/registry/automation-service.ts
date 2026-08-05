@@ -7,6 +7,7 @@ import type { WorkspaceActor } from "@/lib/workspace-context";
 import { validateAutomationGraph } from "../graph-validation";
 import type { AutomationGraph } from "../graph-types";
 import { ensureWebhookTriggerConfig } from "@/lib/security/webhook-secret";
+import { assertAutomationRunAllowed } from "@/lib/billing/quota-enforcement";
 
 /**
  * Automation Registry (v0.8) : cycle de vie d'un `Automation` — créé,
@@ -49,6 +50,7 @@ export async function createAutomationRun(params: {
   parentRunId?: string;
   createdById?: string;
 }) {
+  await assertAutomationRunAllowed(params.organizationId);
   return prisma.automationRun.create({
     data: {
       organizationId: params.organizationId,

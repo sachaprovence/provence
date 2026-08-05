@@ -17,10 +17,10 @@ import { MembershipRole, PlanKey } from "@/generated/prisma/enums";
 const runIfDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
 runIfDatabase("listPlans / getPlanByKey", () => {
-  it("les 3 plans de référence existent (seedés par migration, pas par db:seed)", async () => {
+  it("les 4 plans de référence existent (seedés par migration, pas par db:seed — TRIAL ajouté en v1.4)", async () => {
     const plans = await listPlans();
     const keys = plans.map((p) => p.key).sort();
-    expect(keys).toEqual([PlanKey.ENTERPRISE, PlanKey.PRO, PlanKey.STARTER].sort());
+    expect(keys).toEqual([PlanKey.ENTERPRISE, PlanKey.PRO, PlanKey.STARTER, PlanKey.TRIAL].sort());
   });
 
   it("getPlanByKey renvoie le plan Starter avec ses quotas attendus", async () => {

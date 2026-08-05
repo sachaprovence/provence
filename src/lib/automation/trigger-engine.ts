@@ -57,8 +57,20 @@ export async function fireAutomationsForEvent(eventKey: string, payload: Record<
       automation: { status: "ACTIVE", ...(organizationId ? { organizationId } : {}) },
     },
   });
-  for (const binding of bindings) await fireBinding(binding, eventKey, payload, "EVENT");
-  return { triggered: bindings.length };
+  let triggered = 0;
+  for (const binding of bindings) {
+    try {
+      await fireBinding(binding, eventKey, payload, "EVENT");
+      triggered += 1;
+    } catch (error) {
+      // Quota dépassé (v1.4, AR-0183) ou toute autre erreur au déclenchement d'UNE automatisation
+      // abonnée : ne doit jamais empêcher les autres automatisations abonnées au même évènement de
+      // se déclencher (même principe que `processDueAutomationSchedules`, qui isole déjà chaque
+      // binding dans son propre try/catch).
+      logger.warn({ module: "automation-trigger-engine", bindingId: binding.id, eventKey, err: error }, "Déclenchement ignoré pour cette automatisation.");
+    }
+  }
+  return { triggered };
 }
 
 /** Déclenchement webhook : cible UNE SEULE automatisation (par workspace + clé), jamais une diffusion. */

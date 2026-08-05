@@ -6,6 +6,7 @@ import { createAttachment } from "@/lib/crm/attachment-service";
 import { getStorageProvider } from "@/lib/storage";
 import { validateUpload } from "@/lib/storage/validation";
 import { writeAuditLog } from "@/lib/audit";
+import { assertStorageAvailable } from "@/lib/billing/quota-enforcement";
 
 /** Upload réel d'une pièce jointe (v1.1, AR-0162 ; validation centralisée + clé de stockage persistée v1.2, AR-0164). */
 export async function POST(request: Request) {
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
     // Lève ValidationError (taille/type MIME/nom) — capturée par toApiErrorResponse ci-dessous (400),
     // AVANT toute lecture du corps du fichier ou appel réseau au fournisseur de stockage.
     validateUpload({ fileName: file.name, mimeType, sizeBytes: file.size });
+    // Quota de stockage (v1.4, AR-0183) — vérifié AVANT tout envoi réseau au fournisseur de
+    // stockage, jamais après (éviterait un envoi pour rien si le quota est déjà dépassé).
+    await assertStorageAvailable(actor.organization.id, file.size);
 
     const entityTypeParsed = attachmentEntityTypeSchema.safeParse(formData.get("entityType"));
     const categoryParsed = attachmentCategorySchema.safeParse(formData.get("category"));
