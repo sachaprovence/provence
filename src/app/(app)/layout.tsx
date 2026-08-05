@@ -37,6 +37,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <SidebarNav role={actor.membership.role} />
+        {actor.isPlatformAdmin && (
+          <a
+            href="/admin"
+            className="mt-2 block rounded-md px-3 py-2 text-sm font-medium text-p360-blue hover:bg-p360-lavender-light/60"
+          >
+            Administration plateforme
+          </a>
+        )}
       </div>
       <div className="px-5 py-4 border-t border-p360-lavender-light">
         <div className="flex items-center justify-between mb-2">

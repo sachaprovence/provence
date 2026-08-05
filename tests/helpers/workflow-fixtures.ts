@@ -29,6 +29,7 @@ export async function createWorkflowTestFixture(suffix: string) {
     membership: { id: membership.id, role: membership.role, territoryId: null },
     organization: { id: organization.id, name: organization.name },
     sessionId: "test-session",
+    isPlatformAdmin: false,
     workspace: workspaceSummary,
     availableWorkspaces: [workspaceSummary],
   };

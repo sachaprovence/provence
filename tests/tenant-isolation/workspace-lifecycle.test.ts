@@ -52,6 +52,7 @@ runIfDatabase("cycle de vie d'un workspace", () => {
       membership: { id: ownerMembership.id, role: MembershipRole.OWNER_ADMIN, territoryId: null },
       organization: { id: organization.id, name: organization.name },
       sessionId: "unused-in-this-test",
+      isPlatformAdmin: false,
     };
 
     const workspace = await createWorkspace(ownerActor, { name: "Équipe Nord", slug: "equipe-nord" });
@@ -96,6 +97,7 @@ runIfDatabase("cycle de vie d'un workspace", () => {
       membership: { id: ownerMembership.id, role: MembershipRole.OWNER_ADMIN, territoryId: null },
       organization: { id: organization.id, name: organization.name },
       sessionId: "unused-in-this-test",
+      isPlatformAdmin: false,
     };
 
     const invitedEmail = `invitee-${suffix}@example.test`;
@@ -167,6 +169,7 @@ runIfDatabase("cycle de vie d'un workspace", () => {
       membership: { id: ownerMembership.id, role: MembershipRole.OWNER_ADMIN, territoryId: null },
       organization: { id: organization.id, name: organization.name },
       sessionId: "unused-in-this-test",
+      isPlatformAdmin: false,
     };
 
     await removeWorkspaceMember(ownerActor, workspace.id, memberWorkspaceMembership.id);
