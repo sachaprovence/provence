@@ -91,6 +91,16 @@ Tout ce qui suit est réellement implémenté et testé (pas un plan) — voir
   webhooks entrants) ou fournisseur démo sans configuration, onboarding
   self-service (inscription → choix de plan → provisionnement
   automatique) et interface de gestion de la facturation.
+- **Prêt pour un premier client pilote (v1.4)** : parcours d'onboarding
+  guidé en 6 étapes reprenable (profil, équipe, outils, modèle
+  d'automatisation, démonstration, résultat), gestion complète des
+  membres d'organisation (transfert de propriété, retrait sécurisé),
+  4 modèles d'automatisation métier supplémentaires, quotas d'usage par
+  plan (exécutions/stockage/connecteurs, plan d'essai TRIAL) avec
+  avertissement avant dépassement, boîte de réception de notifications,
+  et une administration plateforme dédiée (organisations, utilisateurs,
+  changement de plan, suspension/réactivation, journaux d'audit,
+  métriques globales) — voir [`docs/guides/`](docs/guides/).
 
 ## Démarrage rapide (Docker)
 
