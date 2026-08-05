@@ -6,6 +6,7 @@ import { createProduct, listProducts } from "@/lib/compta/product-service";
 import { createSupplier, listSuppliers } from "@/lib/compta/supplier-service";
 import { createIngredient, listIngredients } from "@/lib/compta/stock-service";
 import { createCustomer, listCustomers } from "@/lib/compta/customer-service";
+import { createPurchaseOrder, listPurchaseOrders } from "@/lib/compta/purchase-service";
 import { expectNoCrossTenantLeak } from "../helpers/tenant-isolation";
 
 /**
@@ -143,6 +144,24 @@ runIfDatabase("Compta Vellano — isolation multi-tenant", () => {
       actorBItems: () => listCustomers(orgB.id),
       actorAOwnResourceId: customerA.id,
       actorBOwnResourceId: customerB.id,
+      getId: (item) => item.id,
+    });
+  });
+
+  it("commandes fournisseur (v2) : chaque organisation ne voit que ses propres commandes", async () => {
+    const { organization: orgA, user: userA } = await createOrgAndUser("purchase-orders-a");
+    const { organization: orgB, user: userB } = await createOrgAndUser("purchase-orders-b");
+
+    const supplierA = await createSupplier(orgA.id, { name: "A", balanceDue: 0 }, userA.id);
+    const supplierB = await createSupplier(orgB.id, { name: "B", balanceDue: 0 }, userB.id);
+    const orderA = await createPurchaseOrder(orgA.id, { supplierId: supplierA.id, lines: [{ label: "X", quantity: 1, unitCost: 100 }] }, userA.id);
+    const orderB = await createPurchaseOrder(orgB.id, { supplierId: supplierB.id, lines: [{ label: "Y", quantity: 1, unitCost: 100 }] }, userB.id);
+
+    await expectNoCrossTenantLeak({
+      actorAItems: () => listPurchaseOrders(orgA.id),
+      actorBItems: () => listPurchaseOrders(orgB.id),
+      actorAOwnResourceId: orderA.id,
+      actorBOwnResourceId: orderB.id,
       getId: (item) => item.id,
     });
   });
