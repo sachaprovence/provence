@@ -128,6 +128,11 @@ model Organization {
   attachments                 Attachment[]
   virtualTours                VirtualTour[]
   apiRequestMetrics           ApiRequestMetric[]
+  comptaProducts              ComptaProduct[]
+  comptaSales                 ComptaSale[]
+  comptaSuppliers             ComptaSupplier[]
+  comptaExpenses              ComptaExpense[]
+  comptaCashCounts            ComptaCashCount[]
   plan                        Plan?                        @relation(fields: [planId], references: [id])
   apiKeys                     ApiKey[]
   webhookSubscriptions        WebhookSubscription[]
@@ -192,6 +197,9 @@ model User {
   attachmentsUploaded            Attachment[]
   apiKeysCreated                 ApiKey[]                     @relation("ApiKeyCreatedBy")
   webhookSubscriptionsCreated    WebhookSubscription[]        @relation("WebhookSubscriptionCreatedBy")
+  comptaSalesCreated             ComptaSale[]
+  comptaExpensesCreated          ComptaExpense[]
+  comptaCashCountsCreated        ComptaCashCount[]
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +249,10 @@ model Workspace {
   virtualTours              VirtualTour[]
   quoteVersions             QuoteVersion[]
   invoices                  Invoice[]
+  comptaSales               ComptaSale[]
+  comptaSuppliers           ComptaSupplier[]
+  comptaExpenses            ComptaExpense[]
+  comptaCashCounts          ComptaCashCount[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -3379,4 +3391,197 @@ model OnboardingProgress {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Compta Vellano — module de comptabilité simplifiée pour pizzeria (ajouté à
+// la demande directe du client, hors backlog Autorun/Provence 360 — voir
+// docs/adr/0043-compta-vellano-module.md). Vertical métier isolé et
+// namespacé (préfixe `Compta*`) : réutilise l'organisation/l'authentification/
+// le stockage/les logs existants, mais aucune donnée partagée avec le CRM
+// Provence 360 (pas de FK vers `Lead`/`Company`/etc.). Conçu pour rester
+// extensible sans migration destructrice : scanner OCR/IA et assistant IA
+// arriveront comme des couches supplémentaires au-dessus de ce même modèle
+// (voir `src/lib/compta/`), jamais en renommant/supprimant des champs
+// existants ici.
+// ---------------------------------------------------------------------------
+
+enum ComptaPaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+enum ComptaExpenseCategory {
+  INGREDIENTS
+  RENT
+  UTILITIES
+  SALARIES
+  EQUIPMENT
+  MARKETING
+  TAXES
+  OTHER
+}
+
+/// Catalogue produits (pizzas, boissons, desserts...) — source pour la saisie
+/// de vente et, plus tard, pour le rapprochement automatique des lignes
+/// reconnues par le scanner OCR/IA (`aliases`, déjà prévu ici pour éviter une
+/// migration future).
+model ComptaProduct {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  category       String
+  /// Prix de vente TTC, en centimes.
+  price          Int
+  /// Taux de TVA appliqué, en pourcentage (10 = restauration sur place, 5.5 = à emporter...).
+  vatRate        Float    @default(10)
+  /// Coût matière estimé, en centimes — sert au calcul de marge (`price - costPrice`). Nullable : pas toujours connu à la création.
+  costPrice      Int?
+  /// Autres libellés reconnus pour ce produit (ticket manuscrit, abréviations...) — alimenté manuellement pour l'instant, par les corrections du scanner une fois livré.
+  aliases        String[] @default([])
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  saleLines    ComptaSaleLine[]
+
+  @@index([organizationId])
+}
+
+/// Vente enregistrée manuellement (v1) ou, plus tard, validée depuis le
+/// scanner OCR/IA — toujours après validation explicite, jamais un
+/// enregistrement automatique (même principe que `Quote`/`Invoice` dans le
+/// CRM). `subtotalAmount`/`vatAmount`/`totalAmount` sont dérivés des lignes
+/// au moment de la création, jamais recalculés à la volée en lecture.
+model ComptaSale {
+  id              String              @id @default(cuid())
+  organizationId  String
+  workspaceId     String?
+  soldAt          DateTime
+  paymentMethod   ComptaPaymentMethod
+  /// Remise globale de la vente, en pourcentage (0-100).
+  discountPercent Float               @default(0)
+  /// Somme des lignes avant remise/TVA, en centimes.
+  subtotalAmount  Int                 @default(0)
+  vatAmount       Int                 @default(0)
+  /// Total TTC après remise, en centimes.
+  totalAmount     Int                 @default(0)
+  notes           String?
+  createdById     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?       @relation(fields: [workspaceId], references: [id])
+  createdBy    User?            @relation(fields: [createdById], references: [id])
+  lines        ComptaSaleLine[]
+
+  @@index([organizationId, soldAt])
+  @@index([workspaceId])
+}
+
+model ComptaSaleLine {
+  id          String  @id @default(cuid())
+  saleId      String
+  productId   String?
+  /// Nom du produit au moment de la vente (copie figée) — la ligne reste lisible même si le produit est renommé/désactivé ensuite.
+  productName String
+  quantity    Int     @default(1)
+  /// Prix unitaire TTC au moment de la vente, en centimes.
+  unitPrice   Int
+  vatRate     Float
+  /// Total de la ligne TTC (quantité × prix unitaire), en centimes.
+  lineTotal   Int
+
+  sale    ComptaSale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product ComptaProduct? @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+/// Fournisseurs (v1 : coordonnées + solde restant dû, saisi manuellement).
+/// Historique factures/paiements détaillé prévu comme extension future
+/// (liens `ComptaExpense.supplierId` déjà en place pour ça).
+model ComptaSupplier {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  name           String
+  contactName    String?
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  /// Solde restant dû à ce fournisseur, en centimes — mis à jour manuellement en v1 (pas de rapprochement automatique des paiements).
+  balanceDue     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?      @relation(fields: [workspaceId], references: [id])
+  expenses     ComptaExpense[]
+
+  @@index([organizationId])
+  @@index([workspaceId])
+}
+
+/// Dépense (v1 : saisie manuelle ; la photo de facture, une fois prise en
+/// charge, sera stockée via le modèle `Attachment` générique existant avec
+/// `entityType = "ComptaExpense"` — pas de nouveau modèle de stockage à
+/// prévoir ici).
+model ComptaExpense {
+  id             String                @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  spentAt        DateTime
+  /// Montant TTC, en centimes.
+  amount         Int
+  vatRate        Float                 @default(20)
+  /// TVA récupérable, en centimes (dérivée de `amount`/`vatRate` au moment de la saisie).
+  vatAmount      Int                   @default(0)
+  category       ComptaExpenseCategory @default(OTHER)
+  description    String
+  supplierId     String?
+  createdById    String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?      @relation(fields: [workspaceId], references: [id])
+  supplier     ComptaSupplier? @relation(fields: [supplierId], references: [id])
+  createdBy    User?           @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, spentAt])
+  @@index([workspaceId])
+  @@index([supplierId])
+}
+
+/// Comptage de caisse (billets/pièces) — `denominations` garde le détail
+/// billet-par-billet/pièce-par-pièce pour l'écran de comptage, `differenceAmount`
+/// est dérivé une seule fois à la création (`countedAmount - theoreticalAmount`),
+/// jamais recalculé à la volée.
+model ComptaCashCount {
+  id                String   @id @default(cuid())
+  organizationId    String
+  workspaceId       String?
+  countedAt         DateTime @default(now())
+  theoreticalAmount Int
+  countedAmount     Int
+  differenceAmount  Int
+  /// Détail du comptage billets/pièces, ex. `{"bills": {"50": 2, "20": 5}, "coins": {"2": 10}}` — libre, pas de schéma imposé côté base.
+  denominations     Json?
+  notes             String?
+  createdById       String?
+  createdAt         DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id])
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, countedAt])
+  @@index([workspaceId])
 }

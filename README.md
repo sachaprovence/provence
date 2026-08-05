@@ -101,6 +101,16 @@ Tout ce qui suit est réellement implémenté et testé (pas un plan) — voir
   et une administration plateforme dédiée (organisations, utilisateurs,
   changement de plan, suspension/réactivation, journaux d'audit,
   métriques globales) — voir [`docs/guides/`](docs/guides/).
+- **Compta Vellano** (`/compta`) : module de comptabilité simplifiée pour
+  une pizzeria familiale — ventes (saisie multi-lignes, remise, TVA
+  auto-calculée), dépenses (TVA récupérable), catalogue produits,
+  fournisseurs, comptage de caisse (billets/pièces, écart), TVA collectée/
+  déductible par mois et par année, tableau de bord dédié. Module isolé
+  (modèles `Compta*`, sans lien avec le CRM) réutilisant l'infrastructure
+  existante — voir [`docs/adr/0048-compta-vellano-module-comptabilite-pizzeria.md`](docs/adr/0048-compta-vellano-module-comptabilite-pizzeria.md).
+  Scanner OCR/IA et assistant IA comptable : pas encore livrés (pages
+  "bientôt disponible", flags `COMPTA_OCR_ENABLED`/
+  `COMPTA_AI_ASSISTANT_ENABLED`).
 
 ## Démarrage rapide (Docker)
 
@@ -182,6 +192,7 @@ npm run format:check         # Prettier — vérifie sans modifier (utilisé en 
 npm run test              # tests unitaires (Vitest)
 npm run test:watch         # tests unitaires en mode watch
 npm run test:e2e            # test de bout en bout (voir ci-dessous)
+npm run test:e2e:compta      # test de bout en bout — module Compta Vellano
 npm run db:generate          # régénérer le client Prisma après modif du schéma
 npm run db:migrate            # créer/appliquer une migration en dev
 npm run db:seed                 # charger les données de démonstration

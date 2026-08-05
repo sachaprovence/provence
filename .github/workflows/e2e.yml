@@ -1,15 +1,16 @@
 name: E2E
 
-# Rejoue les 4 suites E2E (golden path, isolation multi-tenant, Automation
-# Engine, onboarding self-service) contre une instance réellement démarrée
-# et seedée — sur chaque pull request ET après merge sur `main` (v0.10,
-# AR-0157 : auparavant seul golden-path.mjs tournait, et uniquement après
-# merge — une régression du parcours principal ou de l'isolation
-# multi-tenant n'était donc détectée qu'APRÈS avoir atteint `main`). Voir
-# ROADMAP.md MOD-00 / BACKLOG.md AR-0002. La suite onboarding (v1.0,
-# AR-0064/AR-0066) a été ajoutée pour couvrir le parcours d'inscription
-# self-service de bout en bout, y compris le provisionnement automatique
-# de l'abonnement.
+# Rejoue les 5 suites E2E (golden path, isolation multi-tenant, Automation
+# Engine, onboarding self-service, Compta Vellano) contre une instance
+# réellement démarrée et seedée — sur chaque pull request ET après merge sur
+# `main` (v0.10, AR-0157 : auparavant seul golden-path.mjs tournait, et
+# uniquement après merge — une régression du parcours principal ou de
+# l'isolation multi-tenant n'était donc détectée qu'APRÈS avoir atteint
+# `main`). Voir ROADMAP.md MOD-00 / BACKLOG.md AR-0002. La suite onboarding
+# (v1.0, AR-0064/AR-0066) a été ajoutée pour couvrir le parcours
+# d'inscription self-service de bout en bout, y compris le provisionnement
+# automatique de l'abonnement. La suite Compta Vellano (ADR 0048) couvre le
+# module de comptabilité pizzeria isolé du CRM.
 
 on:
   push:
@@ -108,3 +109,6 @@ jobs:
 
       - name: Run self-service onboarding E2E
         run: npm run test:e2e:onboarding
+
+      - name: Run Compta Vellano E2E
+        run: npm run test:e2e:compta
