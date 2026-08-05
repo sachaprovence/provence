@@ -1,6 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { QuotaExceededError } from "@/lib/errors";
+import { notifyQuotaWarningOnce } from "@/lib/notifications/notification-service";
+
+const WARNING_RATIO = 0.8;
 
 /**
  * Points d'application des limites de plan (v1.4, AR-0183) — chaque
@@ -23,6 +26,13 @@ export async function assertAutomationRunAllowed(organizationId: string): Promis
       `Limite de ${limit} exécution(s) d'automatisation/30 jours du plan "${organization.plan?.name}" atteinte. Passez à un plan supérieur pour continuer.`
     );
   }
+  if (count >= limit * WARNING_RATIO) {
+    await notifyQuotaWarningOnce(
+      organizationId,
+      "automation_runs",
+      `${count}/${limit} exécutions d'automatisation utilisées ce mois-ci (plan "${organization.plan?.name}").`
+    );
+  }
 }
 
 export async function assertStorageAvailable(organizationId: string, additionalBytes: number): Promise<void> {
@@ -36,6 +46,13 @@ export async function assertStorageAvailable(organizationId: string, additionalB
   if (usedMb + additionalMb > limitMb) {
     throw new QuotaExceededError(
       `Limite de stockage de ${limitMb} Mo du plan "${organization.plan?.name}" atteinte. Passez à un plan supérieur ou supprimez des pièces jointes.`
+    );
+  }
+  if (usedMb + additionalMb >= limitMb * WARNING_RATIO) {
+    await notifyQuotaWarningOnce(
+      organizationId,
+      "storage",
+      `${Math.round(usedMb + additionalMb)}/${limitMb} Mo de stockage utilisés (plan "${organization.plan?.name}").`
     );
   }
 }

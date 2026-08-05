@@ -6,6 +6,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CommandPalette } from "@/components/command-palette";
 import { CommandPaletteTrigger } from "@/components/command-palette-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/notification-bell";
 import { AppShell } from "@/components/app-shell";
 import { KeyboardShortcutsProvider } from "@/components/keyboard-shortcuts-provider";
 
@@ -38,10 +39,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SidebarNav role={actor.membership.role} />
       </div>
       <div className="px-5 py-4 border-t border-p360-lavender-light">
-        <div className="text-sm font-medium text-p360-ink">
-          {actor.user.firstName} {actor.user.lastName}
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <div className="text-sm font-medium text-p360-ink">
+              {actor.user.firstName} {actor.user.lastName}
+            </div>
+            <div className="text-xs text-p360-muted">{ROLE_LABEL[actor.membership.role]}</div>
+          </div>
+          <NotificationBell />
         </div>
-        <div className="text-xs text-p360-muted mb-2">{ROLE_LABEL[actor.membership.role]}</div>
         <div className="mb-2">
           <ThemeToggle />
         </div>
