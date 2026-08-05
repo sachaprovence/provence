@@ -31,6 +31,19 @@ const envSchema = z.object({
   CRON_SECRET: z.string().optional(),
 
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+
+  // Compta Vellano — sous-fonctionnalités pas encore livrées (voir src/app/(app)/compta/scanner
+  // et .../assistant) : réglage de déploiement, jamais un `if (vertical === ...)` en dur.
+  // `z.coerce.boolean()` n'est PAS utilisé ici volontairement : une variable d'env est toujours
+  // une string, et Boolean("false") vaut `true` — seule la string exacte "true" active le flag.
+  COMPTA_OCR_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  COMPTA_AI_ASSISTANT_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 export type Env = z.infer<typeof envSchema>;
