@@ -60,6 +60,9 @@ const BUILT_IN_AUTOMATION_TRIGGER_TYPES = [
   // v1.1, AR-0167 — distinct de `virtual_tour.published` (livraison client formelle, jamais republié deux fois pour la même visite).
   { key: "virtual_tour.delivered", name: "Visite 3D livrée", description: "Une visite 3D vient d'être marquée comme livrée au client.", category: "production", kind: "event" },
   { key: "property.created", name: "Bien immobilier créé", description: "Un bien immobilier vient d'être créé.", category: "crm", kind: "event" },
+  // v1.4, AR-0181 — publié une seule fois, à la première transition du score au-delà du seuil
+  // (voir `src/app/api/leads/[id]/score/route.ts`), jamais à chaque nouveau calcul de score.
+  { key: "lead.became_priority", name: "Prospect devenu prioritaire", description: "Le score d'un prospect vient de franchir le seuil de priorité pour la première fois.", category: "crm", kind: "event" },
 ] as const;
 
 export function registerBuiltInAutomationTriggerTypes(): void {

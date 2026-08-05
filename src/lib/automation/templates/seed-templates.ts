@@ -218,6 +218,81 @@ const TEMPLATES: { key: string; name: string; description: string; category: str
       edges: [edge("e1", "t1", "notify"), edge("e2", "notify", "end1")],
     },
   },
+  // v1.4, AR-0181 — 4 modèles nommément demandés pour la première mise à
+  // disposition client (qualification, résumé quotidien, prospect
+  // prioritaire, tâche de suivi) : mêmes principes que les 11 modèles
+  // ci-dessus, chaque déclencheur/action est réellement câblé dès
+  // aujourd'hui (voir `task-actions.ts`, `report-actions.ts`,
+  // `lead.became_priority` dans `builtin-triggers.ts`/`trigger-engine.ts`).
+  {
+    key: "template-qualification-demande-entrante",
+    name: "Qualification de demandes entrantes",
+    description: "Nouveau prospect créé → l'Agent Analyse qualifie la demande, puis une tâche de suivi est créée pour le commercial assigné.",
+    category: "commercial",
+    graph: {
+      nodes: [
+        trigger("t1", "lead.created"),
+        action("qualify", 1, "agent.call", { category: "analyse", input: { action: "detect_stalled_leads", staleAfterDays: 0 } }),
+        action("task", 2, "task.create", {
+          title: "Qualifier ce nouveau prospect",
+          leadId: "{{ context.leadId }}",
+          dueInDays: 1,
+        }),
+        end("end1", 3),
+      ],
+      edges: [edge("e1", "t1", "qualify"), edge("e2", "qualify", "task"), edge("e3", "task", "end1")],
+    },
+  },
+  {
+    key: "template-resume-quotidien",
+    name: "Résumé quotidien de l'activité",
+    description: "Chaque matin → diffuse un résumé de l'activité des dernières 24h (nouveaux prospects, messages, rendez-vous, automatisations).",
+    category: "reporting",
+    graph: {
+      nodes: [
+        trigger("t1", "schedule.cron", { cronExpression: "0 7 * * *" }),
+        action("summary", 1, "report.daily_summary", {}),
+        end("end1", 2),
+      ],
+      edges: [edge("e1", "t1", "summary"), edge("e2", "summary", "end1")],
+    },
+  },
+  {
+    key: "template-prospect-prioritaire",
+    name: "Prospect devenu prioritaire",
+    description: "Le score d'un prospect franchit le seuil de priorité → notifier l'équipe immédiatement.",
+    category: "commercial",
+    graph: {
+      nodes: [
+        trigger("t1", "lead.became_priority"),
+        action("notify", 1, "notification.create", {
+          title: "Prospect prioritaire à traiter",
+          body: "Ce prospect vient de franchir le seuil de priorité — un traitement rapide est recommandé.",
+          link: "/leads/{{ context.leadId }}",
+        }),
+        end("end1", 2),
+      ],
+      edges: [edge("e1", "t1", "notify"), edge("e2", "notify", "end1")],
+    },
+  },
+  {
+    key: "template-tache-de-suivi",
+    name: "Création automatique d'une tâche de suivi",
+    description: "Rendez-vous confirmé → crée automatiquement une tâche de préparation pour l'équipe, avec échéance à J-1.",
+    category: "commercial",
+    graph: {
+      nodes: [
+        trigger("t1", "appointment.created"),
+        action("task", 1, "task.create", {
+          title: "Préparer le rendez-vous",
+          leadId: "{{ context.leadId }}",
+          dueInDays: 1,
+        }),
+        end("end1", 2),
+      ],
+      edges: [edge("e1", "t1", "task"), edge("e2", "task", "end1")],
+    },
+  },
 ];
 
 /** Idempotent : recherche par `key` (workspaceId nul), crée si absent — ne modifie jamais un template déjà seedé (l'utilisateur a pu le cloner et le personnaliser). */

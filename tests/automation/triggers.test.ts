@@ -5,9 +5,9 @@ import { publishAutomationEvent, subscribeAutomationEvent } from "@/lib/automati
 import { clearAllDomainEventListeners } from "@/lib/events/domain-events";
 
 describe("Automation Trigger Engine", () => {
-  it("enregistre les 26 types de déclencheurs du brief, plus les évènements métier v0.9 (task #91) et v1.1 (AR-0165/AR-0167/AR-0169)", () => {
+  it("enregistre les 26 types de déclencheurs du brief, plus les évènements métier v0.9 (task #91), v1.1 (AR-0165/AR-0167/AR-0169) et v1.4 (AR-0181)", () => {
     registerBuiltInAutomationTriggers();
-    expect(listAutomationTriggerTypes().length).toBe(40);
+    expect(listAutomationTriggerTypes().length).toBe(41);
     const keys = listAutomationTriggerTypes().map((t) => t.key);
     expect(keys).toContain("schedule.cron");
     expect(keys).toContain("lead.created");

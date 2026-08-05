@@ -6,6 +6,10 @@ import { isSuppressed } from "@/lib/suppression";
 import { onLeadScoreComputed } from "@/lib/automation-engine";
 import { writeAuditLog } from "@/lib/audit";
 import { LAUNCH_ZONES } from "@/lib/bootstrap";
+import { publishAutomationEvent } from "@/lib/automation/triggers/event-dispatcher";
+
+/** Seuil de score à partir duquel un prospect est considéré prioritaire (v1.4, AR-0181) — même seuil que `onLeadScoreComputed` (Task de validation, système historique distinct). */
+const PRIORITY_SCORE_THRESHOLD = 80;
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -52,6 +56,12 @@ export async function POST(_request: Request, { params }: Params) {
     rules
   );
 
+  // Calculé AVANT la création du nouveau score — sinon `result.value` lui-même y apparaîtrait
+  // déjà et la transition "devient prioritaire" ne serait jamais détectée.
+  const wasAlreadyPriority =
+    result.value >= PRIORITY_SCORE_THRESHOLD &&
+    (await prisma.leadScore.findFirst({ where: { leadId: lead.id, value: { gte: PRIORITY_SCORE_THRESHOLD } } })) !== null;
+
   const score = await prisma.leadScore.create({
     data: {
       leadId: lead.id,
@@ -62,6 +72,14 @@ export async function POST(_request: Request, { params }: Params) {
   });
 
   await onLeadScoreComputed(lead.id, actor.organization.id, result.value);
+
+  // Évènement Automation Engine (v1.4, AR-0181) — distinct du système historique ci-dessus
+  // (`onLeadScoreComputed`, Task de validation, activable/désactivable par règle d'organisation) :
+  // publié uniquement à la PREMIÈRE transition vers le seuil de priorité, jamais à chaque
+  // nouveau score déjà au-dessus (évite de redéclencher le template à chaque re-scoring).
+  if (result.value >= PRIORITY_SCORE_THRESHOLD && !wasAlreadyPriority) {
+    await publishAutomationEvent("lead.became_priority", { organizationId: actor.organization.id, leadId: lead.id, scoreValue: result.value });
+  }
 
   await writeAuditLog({
     organizationId: actor.organization.id,

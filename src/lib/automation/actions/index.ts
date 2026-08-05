@@ -10,6 +10,8 @@ import { automationCallAction } from "./builtin/automation-action";
 import { knowledgeIndexAction } from "./builtin/knowledge-action";
 import { memorySetAction } from "./builtin/memory-action";
 import { leadCreateAction, leadUpdateAction, leadDeleteAction } from "./builtin/lead-actions";
+import { taskCreateAction } from "./builtin/task-actions";
+import { dailySummaryReportAction } from "./builtin/report-actions";
 import { notYetImplementedActions } from "./builtin/not-yet-implemented-actions";
 
 let registered = false;
@@ -31,6 +33,8 @@ export function registerBuiltInAutomationActions(): void {
   registerAutomationJobHandler(leadCreateAction);
   registerAutomationJobHandler(leadUpdateAction);
   registerAutomationJobHandler(leadDeleteAction);
+  registerAutomationJobHandler(taskCreateAction);
+  registerAutomationJobHandler(dailySummaryReportAction);
   for (const action of notYetImplementedActions) registerAutomationJobHandler(action);
 }
 

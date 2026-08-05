@@ -27,9 +27,9 @@ runIfDatabase("Automation Engine — registre de jobs/actions (plugins)", () => 
     await cleanupWorkflowTestFixtures(organizationIds, userIds);
   });
 
-  it("enregistre les 12 gestionnaires réels et les 8 stubs honnêtes (20 au total)", () => {
+  it("enregistre les 14 gestionnaires réels et les 7 stubs honnêtes (21 au total)", () => {
     registerBuiltInAutomationActions();
-    expect(listAutomationJobHandlers().length).toBe(20);
+    expect(listAutomationJobHandlers().length).toBe(21);
   });
 
   it("variable.set appelle context.setVariable avec le nom et la valeur", async () => {
@@ -213,7 +213,6 @@ runIfDatabase("Automation Engine — registre de jobs/actions (plugins)", () => 
       "file.write",
       "document.generate",
       "customer.update",
-      "task.create",
       "quote.create",
       "invoice.create",
       "appointment.create",
@@ -222,5 +221,60 @@ runIfDatabase("Automation Engine — registre de jobs/actions (plugins)", () => 
       expect(action, `action "${key}" doit être enregistrée`).toBeTruthy();
       await expect(action.execute({}, testContext())).rejects.toThrow(/n'est pas encore développée/);
     }
+  });
+
+  it("task.create écrit une Task réelle, rattachée au lead fourni (v1.4, AR-0181)", async () => {
+    const fixture = await createWorkflowTestFixture("automation-action-task-create");
+    organizationIds.push(fixture.organization.id);
+    userIds.push(fixture.user.id);
+    const source = await prisma.leadSource.create({ data: { organizationId: fixture.organization.id, type: "MANUAL", label: "test" } });
+    const lead = await prisma.lead.create({ data: { organizationId: fixture.organization.id, establishmentName: "Test", sourceId: source.id } });
+
+    const action = getAutomationJobHandler("task.create")!;
+    const result = (await action.execute(
+      { title: "Relancer ce prospect", leadId: lead.id, dueInDays: 2 },
+      testContext({ organizationId: fixture.organization.id, workspaceId: fixture.workspace.id })
+    )) as { taskId: string };
+
+    const row = await prisma.task.findUniqueOrThrow({ where: { id: result.taskId } });
+    expect(row.title).toBe("Relancer ce prospect");
+    expect(row.leadId).toBe(lead.id);
+    expect(row.organizationId).toBe(fixture.organization.id);
+    expect(row.dueAt).not.toBeNull();
+  });
+
+  it("task.create rejette un leadId d'une AUTRE organisation (isolation multi-tenant)", async () => {
+    const fixtureA = await createWorkflowTestFixture("automation-action-task-tenant-a");
+    const fixtureB = await createWorkflowTestFixture("automation-action-task-tenant-b");
+    organizationIds.push(fixtureA.organization.id, fixtureB.organization.id);
+    userIds.push(fixtureA.user.id, fixtureB.user.id);
+    const source = await prisma.leadSource.create({ data: { organizationId: fixtureB.organization.id, type: "MANUAL", label: "test" } });
+    const leadB = await prisma.lead.create({ data: { organizationId: fixtureB.organization.id, establishmentName: "Test B", sourceId: source.id } });
+
+    const action = getAutomationJobHandler("task.create")!;
+    await expect(
+      action.execute(
+        { title: "Ne doit jamais se créer", leadId: leadB.id },
+        testContext({ organizationId: fixtureA.organization.id, workspaceId: fixtureA.workspace.id })
+      )
+    ).rejects.toThrow(/introuvable/);
+  });
+
+  it("report.daily_summary agrège l'activité des 24h et diffuse une notification (v1.4, AR-0181)", async () => {
+    const fixture = await createWorkflowTestFixture("automation-action-daily-summary");
+    organizationIds.push(fixture.organization.id);
+    userIds.push(fixture.user.id);
+    const source = await prisma.leadSource.create({ data: { organizationId: fixture.organization.id, type: "MANUAL", label: "test" } });
+    await prisma.lead.create({ data: { organizationId: fixture.organization.id, establishmentName: "Nouveau", sourceId: source.id } });
+
+    const action = getAutomationJobHandler("report.daily_summary")!;
+    const result = (await action.execute({}, testContext({ organizationId: fixture.organization.id, workspaceId: fixture.workspace.id }))) as {
+      notificationId: string;
+    };
+
+    const row = await prisma.notification.findUniqueOrThrow({ where: { id: result.notificationId } });
+    expect(row.organizationId).toBe(fixture.organization.id);
+    expect(row.userId).toBeNull();
+    expect(row.body).toMatch(/nouveau/);
   });
 });

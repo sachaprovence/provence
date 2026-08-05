@@ -145,6 +145,7 @@ const REAL_EMISSION_EVENT_KEYS = [
   "lead.updated",
   "lead.deleted",
   "lead.stage_changed",
+  "lead.became_priority",
   "import.completed",
   "appointment.created",
   "quote.sent",
