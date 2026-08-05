@@ -46,6 +46,6 @@ export async function POST(request: Request, { params }: Params) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workspace-invitations/[token]" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workspace-invitations/[token]" });
   }
 }

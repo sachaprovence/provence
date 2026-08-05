@@ -25,6 +25,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     return NextResponse.json({ intervention });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/agents/interventions/[id]/resolve" });
+    return toApiErrorResponse(error, request, { route: "POST /api/agents/interventions/[id]/resolve" });
   }
 }

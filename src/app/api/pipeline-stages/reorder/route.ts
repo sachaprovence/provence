@@ -20,6 +20,6 @@ export async function POST(request: Request) {
     const stages = await reorderPipelineStages(actor.organization.id, parsed.data.orderedStageKeys);
     return NextResponse.json({ stages });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/pipeline-stages/reorder" });
+    return toApiErrorResponse(error, request, { route: "POST /api/pipeline-stages/reorder" });
   }
 }

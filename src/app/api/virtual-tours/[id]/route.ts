@@ -6,7 +6,7 @@ import { getVirtualTour, updateVirtualTour } from "@/lib/production/virtual-tour
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: Params) {
     const virtualTour = await getVirtualTour(actor.organization.id, id);
     return NextResponse.json({ virtualTour });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/virtual-tours/[id]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/virtual-tours/[id]" });
   }
 }
 
@@ -34,6 +34,6 @@ export async function PUT(request: Request, { params }: Params) {
     const virtualTour = await updateVirtualTour(actor.organization.id, id, parsed.data);
     return NextResponse.json({ virtualTour });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PUT /api/virtual-tours/[id]" });
+    return toApiErrorResponse(error, request, { route: "PUT /api/virtual-tours/[id]" });
   }
 }

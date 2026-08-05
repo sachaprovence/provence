@@ -6,7 +6,7 @@ import { resolvePlanOrThrow } from "@/lib/agents/director/planning-engine";
 import { retryStepDelegation } from "@/lib/agents/director/delegation-engine";
 
 /** Relance déclenchée par un humain depuis le tableau de bord — réutilise le même moteur de délégation que le Director lui-même. */
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string; stepId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string; stepId: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -22,6 +22,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const updated = await retryStepDelegation(director, step);
     return NextResponse.json({ step: updated });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/agents/director/plans/[id]/steps/[stepId]/retry" });
+    return toApiErrorResponse(error, request, { route: "POST /api/agents/director/plans/[id]/steps/[stepId]/retry" });
   }
 }

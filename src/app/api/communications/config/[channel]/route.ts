@@ -7,7 +7,7 @@ import { updateChannelConfig, getChannelConfigPreview } from "@/lib/communicatio
 
 type Params = { params: Promise<{ channel: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { channel } = await params;
@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: Params) {
     const config = await getChannelConfigPreview(actor.organization.id, parsedChannel.data);
     return NextResponse.json({ config });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/communications/config/[channel]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/communications/config/[channel]" });
   }
 }
 
@@ -46,6 +46,6 @@ export async function PUT(request: Request, { params }: Params) {
     const integration = await updateChannelConfig(actor.organization.id, parsedChannel.data, parsed.data);
     return NextResponse.json({ integration });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PUT /api/communications/config/[channel]" });
+    return toApiErrorResponse(error, request, { route: "PUT /api/communications/config/[channel]" });
   }
 }

@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { getAutomationRunDetail } from "@/lib/automation/registry/automation-service";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -13,6 +13,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     const detail = await getAutomationRunDetail(actor, runId);
     return NextResponse.json(detail);
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/automations/runs/[runId]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/automations/runs/[runId]" });
   }
 }

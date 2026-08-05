@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { retryAutomationRun } from "@/lib/automation/executor";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -13,6 +13,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ru
     const run = await retryAutomationRun(actor, runId);
     return NextResponse.json({ run }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/automations/runs/[runId]/retry" });
+    return toApiErrorResponse(error, request, { route: "POST /api/automations/runs/[runId]/retry" });
   }
 }

@@ -16,6 +16,6 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({ interventions });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/interventions" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/interventions" });
   }
 }

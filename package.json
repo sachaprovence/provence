@@ -25,7 +25,13 @@
     "backup:db:verify": "tsx scripts/verify-database-backup.ts",
     "backup:s3": "tsx scripts/backup-s3-objects.ts",
     "backup:s3:verify": "tsx scripts/verify-s3-backup.ts",
-    "backup:consistency-check": "tsx scripts/check-storage-db-consistency.ts"
+    "backup:consistency-check": "tsx scripts/check-storage-db-consistency.ts",
+    "backup:metrics-report": "tsx scripts/backup-metrics-report.ts",
+    "backup:scheduled": "tsx scripts/run-scheduled-backup.ts",
+    "backup:prune": "tsx scripts/prune-old-backups.ts",
+    "security:scan-secrets": "tsx scripts/scan-secrets.ts",
+    "integrations:validate": "NODE_OPTIONS=--require=./prisma/seed-server-only-cjs-hook.cjs tsx scripts/validate-integrations.ts",
+    "verify:graceful-shutdown": "node scripts/verify-graceful-shutdown.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

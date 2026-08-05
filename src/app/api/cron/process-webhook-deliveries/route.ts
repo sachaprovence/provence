@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth";
+import { isValidCronRequest } from "@/lib/security/webhook-secret";
 import { processDueWebhookDeliveries } from "@/lib/jobs/webhook-delivery-job";
 
 /**
@@ -9,9 +10,7 @@ import { processDueWebhookDeliveries } from "@/lib/jobs/webhook-delivery-job";
  * convention que `POST /api/cron/process-sequences`.
  */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
+  const isCron = isValidCronRequest(request);
 
   if (!isCron) {
     const actor = await getCurrentActor();

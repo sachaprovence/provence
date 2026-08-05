@@ -7,7 +7,7 @@ import { writeAuditLog } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   if (!canManageOrganization(actor)) return forbidden();
@@ -24,6 +24,6 @@ export async function DELETE(_request: Request, { params }: Params) {
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "DELETE /api/settings/webhooks/[id]" });
+    return toApiErrorResponse(error, request, { route: "DELETE /api/settings/webhooks/[id]" });
   }
 }

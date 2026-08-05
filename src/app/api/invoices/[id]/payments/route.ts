@@ -6,7 +6,7 @@ import { listInvoicePayments, recordInvoicePayment } from "@/lib/crm/invoice-ser
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: Params) {
     const payments = await listInvoicePayments(actor.organization.id, id);
     return NextResponse.json({ payments });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/invoices/[id]/payments" });
+    return toApiErrorResponse(error, request, { route: "GET /api/invoices/[id]/payments" });
   }
 }
 
@@ -34,6 +34,6 @@ export async function POST(request: Request, { params }: Params) {
     const payment = await recordInvoicePayment(actor.organization.id, id, parsed.data, actor.user.id);
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/invoices/[id]/payments" });
+    return toApiErrorResponse(error, request, { route: "POST /api/invoices/[id]/payments" });
   }
 }

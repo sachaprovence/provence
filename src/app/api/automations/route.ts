@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const automations = await listAutomationsForWorkspace(actor.workspace.id, { includeTemplates });
     return NextResponse.json({ automations });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/automations" });
+    return toApiErrorResponse(error, request, { route: "GET /api/automations" });
   }
 }
 
@@ -33,6 +33,6 @@ export async function POST(request: Request) {
     const { automation, version } = await createAutomationDefinition(actor, parsed.data);
     return NextResponse.json({ automation, version }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/automations" });
+    return toApiErrorResponse(error, request, { route: "POST /api/automations" });
   }
 }

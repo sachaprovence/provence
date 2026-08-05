@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth";
+import { isValidCronRequest } from "@/lib/security/webhook-secret";
 import { processDueSequences } from "@/lib/sequence-engine";
 import { checkStaleQuotes } from "@/lib/automation-engine";
 import { prisma } from "@/lib/prisma";
@@ -11,9 +12,7 @@ import { prisma } from "@/lib/prisma";
  *   `Authorization: Bearer <CRON_SECRET>` (variable d'environnement à définir).
  */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
+  const isCron = isValidCronRequest(request);
 
   if (!isCron) {
     const actor = await getCurrentActor();

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth";
+import { isValidCronRequest } from "@/lib/security/webhook-secret";
 import { processQueuedAgentRuns } from "@/lib/agents/execution-engine";
 import { clearExpiredMemory } from "@/lib/agents/memory";
 
@@ -10,9 +11,7 @@ import { clearExpiredMemory } from "@/lib/agents/memory";
  * l'en-tête `Authorization: Bearer <CRON_SECRET>`.
  */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
+  const isCron = isValidCronRequest(request);
 
   if (!isCron) {
     const actor = await getCurrentActor();

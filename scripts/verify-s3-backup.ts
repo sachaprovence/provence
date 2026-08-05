@@ -3,6 +3,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { requireS3BackupConfig, putObjectAtKey, getObject, deleteObjectAtKey, sha256HexOf } from "./lib/s3-backup-client";
 import type { S3BackupManifest } from "./backup-s3-objects";
+import { recordBackupRun } from "@/lib/observability/backup-metrics";
 
 /**
  * Vérification de sauvegarde S3 par aller-retour RÉEL écriture/lecture
@@ -28,10 +29,26 @@ function fail(message: string): never {
 const VERIFY_PREFIX_ROOT = "__provence_backup_verify__";
 
 async function main() {
+  const startedAt = new Date();
   const manifestPath = process.argv[2];
   if (!manifestPath) fail("Usage : npx tsx scripts/verify-s3-backup.ts <manifest.json>");
   if (!fs.existsSync(manifestPath)) fail(`Manifeste introuvable : ${manifestPath}`);
 
+  try {
+    await verifyManifest(manifestPath, startedAt);
+  } catch (err) {
+    await recordBackupRun({
+      kind: "S3_RESTORE_VERIFY",
+      success: false,
+      startedAt,
+      finishedAt: new Date(),
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+async function verifyManifest(manifestPath: string, startedAt: Date): Promise<void> {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as S3BackupManifest;
   const objectsDir = manifestPath.replace(/manifest\.json$/, "objects");
   const config = requireS3BackupConfig();
@@ -85,6 +102,7 @@ async function main() {
     const updated: S3BackupManifest = { ...manifest, restoreVerified: true, restoreVerifiedAt: new Date().toISOString() };
     fs.writeFileSync(manifestPath, JSON.stringify(updated, null, 2));
     console.log(`   Manifeste mis à jour : ${manifestPath}`);
+    await recordBackupRun({ kind: "S3_RESTORE_VERIFY", success: true, startedAt, finishedAt: new Date(), sizeBytes: manifest.totalSizeBytes });
   } finally {
     if (uploadedVerifyKeys.length > 0) {
       console.log(`\n→ nettoyage des ${uploadedVerifyKeys.length} copie(s) de vérification...`);

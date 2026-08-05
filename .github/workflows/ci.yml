@@ -71,6 +71,9 @@ jobs:
         # Provence 360 après migration (voir tests/workspace-migration.test.ts).
         run: npm run db:seed
 
+      - name: Scan de secrets
+        run: npm run security:scan-secrets
+
       - name: Lint
         run: npm run lint
 

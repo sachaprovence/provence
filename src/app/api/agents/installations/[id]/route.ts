@@ -9,7 +9,7 @@ import {
 import { getInstallationStats } from "@/lib/agents/observability";
 import { updateAgentConfigSchema, updateAgentGrantsSchema } from "@/lib/validations/agent";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const stats = await getInstallationStats(id);
     return NextResponse.json({ installation, stats });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/installations/[id]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/installations/[id]" });
   }
 }
 
@@ -47,6 +47,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     return NextResponse.json({ error: "Corps de requête invalide : fournir {toolKeys, permissions} ou {config}." }, { status: 400 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PATCH /api/agents/installations/[id]" });
+    return toApiErrorResponse(error, request, { route: "PATCH /api/agents/installations/[id]" });
   }
 }

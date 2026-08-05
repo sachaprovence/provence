@@ -1,3 +1,5 @@
+import type { Instrumentation } from "next";
+
 /**
  * Exécuté une fois au démarrage d'une instance serveur Next.js (avant que le
  * serveur ne commence à traiter des requêtes) — voir
@@ -72,5 +74,51 @@ export async function register() {
     } catch (error) {
       logger.error({ err: error }, "Échec de l'initialisation de l'Automation Engine.");
     }
+
+    // Bascule la disponibilité ("readiness") sur "non prêt" DÈS la réception
+    // du signal d'arrêt (v1.3, AR-0173) — avant même que `next start` ne
+    // termine de drainer les requêtes en cours (voir `server.close()`,
+    // `node_modules/next/dist/server/lib/start-server.js`). Un simple
+    // écouteur supplémentaire, jamais `process.exit()` ici : le nettoyage
+    // et la sortie du processus restent entièrement gérés par Next.js
+    // lui-même ; on ne fait qu'avertir plus tôt le mécanisme de sonde de
+    // disponibilité pour qu'un rolling update cesse de router du nouveau
+    // trafic vers cette instance dès le début de sa période de grâce.
+    const { markShuttingDown } = await import("@/lib/health/shutdown-state");
+    process.on("SIGTERM", () => {
+      logger.info("SIGTERM reçu — bascule readiness sur non-prêt, drain des requêtes en cours par Next.js.");
+      markShuttingDown();
+    });
+    process.on("SIGINT", () => {
+      logger.info("SIGINT reçu — bascule readiness sur non-prêt, drain des requêtes en cours par Next.js.");
+      markShuttingDown();
+    });
   }
 }
+
+/**
+ * Filet de sécurité pour les erreurs que `toApiErrorResponse` ne voit
+ * JAMAIS (v1.3, AR-0173) : celles levées pendant le rendu d'un Server
+ * Component, une Server Action, ou par le Proxy lui-même — en dehors de
+ * tout `try/catch` applicatif, elles n'atteignaient jusqu'ici ni le journal
+ * structuré (`logger`) ni Sentry (`captureExceptionBestEffort`, AR-0048),
+ * seulement la sortie console brute de Next.js. `onRequestError` est le
+ * seul point d'entrée officiel de Next.js pour ce cas — voir la doc
+ * `node_modules/next/dist/docs/.../instrumentation.md`.
+ */
+export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
+  const { logger } = await import("@/lib/logger");
+  const { captureExceptionBestEffort } = await import("@/lib/observability/error-tracking");
+
+  const errorContext = {
+    route: request.path,
+    method: request.method,
+    routerKind: context.routerKind,
+    routePath: context.routePath,
+    routeType: context.routeType,
+    requestId: Array.isArray(request.headers["x-request-id"]) ? request.headers["x-request-id"][0] : request.headers["x-request-id"],
+  };
+
+  logger.error({ err: error, ...errorContext }, "Erreur non interceptée par un gestionnaire applicatif (rendu/action/proxy).");
+  captureExceptionBestEffort(error, errorContext);
+};

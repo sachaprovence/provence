@@ -34,6 +34,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
     const result = await triggerWorkflowWebhook(workspaceId, workflowKey, payload);
     return NextResponse.json(result, { status: 202 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/webhooks/workflows/[workspaceId]/[workflowKey]" });
+    return toApiErrorResponse(error, request, { route: "POST /api/webhooks/workflows/[workspaceId]/[workflowKey]" });
   }
 }

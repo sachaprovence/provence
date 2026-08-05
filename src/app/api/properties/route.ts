@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const properties = await listProperties(actor.organization.id, { leadId, companyId });
     return NextResponse.json({ properties });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/properties" });
+    return toApiErrorResponse(error, request, { route: "GET /api/properties" });
   }
 }
 
@@ -46,6 +46,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ property }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/properties" });
+    return toApiErrorResponse(error, request, { route: "POST /api/properties" });
   }
 }

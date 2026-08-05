@@ -19,6 +19,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const definition = await activateVersion(actor, id, parsed.data.versionId);
     return NextResponse.json({ definition });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workflows/[id]/activate" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workflows/[id]/activate" });
   }
 }

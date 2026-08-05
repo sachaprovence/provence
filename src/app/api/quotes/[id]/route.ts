@@ -12,7 +12,7 @@ const updateSchema = z.object({
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: Params) {
     const quote = await getQuote(actor.organization.id, id);
     return NextResponse.json({ quote });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/quotes/[id]" });
+    return toApiErrorResponse(error, request, { route: "GET /api/quotes/[id]" });
   }
 }
 
@@ -63,6 +63,6 @@ export async function PATCH(request: Request, { params }: Params) {
 
     return NextResponse.json({ quote });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PATCH /api/quotes/[id]" });
+    return toApiErrorResponse(error, request, { route: "PATCH /api/quotes/[id]" });
   }
 }

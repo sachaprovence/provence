@@ -97,12 +97,28 @@ docker run -d --name provence-app-rollback \
 # 4. Basculer le trafic (bascule de load balancer / DNS / reverse-proxy).
 ```
 
-**Arrêt propre du conteneur précédent** (v1.2, AR-0169) : `docker stop`
-envoie `SIGTERM`, relayé par `tini` (PID 1 du conteneur, voir Dockerfile)
-au processus `next start` (qui a remplacé le shell via `exec` — voir le
-commentaire du `CMD`) : les requêtes en cours ont le temps de se terminer
-avant l'arrêt effectif (délai de grâce par défaut de `docker stop` : 10
-secondes, configurable via `docker stop -t <secondes>`).
+**Arrêt propre du conteneur précédent** (v1.2, AR-0169 ; v1.3, AR-0173) :
+`docker stop` envoie `SIGTERM`, relayé par `tini` (PID 1 du conteneur, voir
+Dockerfile) au processus `next start` (qui a remplacé le shell via `exec` —
+voir le commentaire du `CMD`) : les requêtes en cours ont le temps de se
+terminer avant l'arrêt effectif. Deux effets à la réception du signal,
+vérifiés empiriquement sous charge réelle par
+`npm run verify:graceful-shutdown` (voir ADR 0046) :
+
+1. **Immédiatement** (quelques ms) : `GET /api/health/ready` bascule sur
+   `503` (`checks.shutdown: "error"`) — un orchestrateur qui interroge
+   cette route avant de router du trafic cesse d'envoyer de NOUVELLES
+   requêtes à cette instance dès le début de l'arrêt, sans attendre que la
+   connexion soit effectivement refusée.
+2. **Pendant le délai de grâce** (`docker-compose.yml#stop_grace_period:
+   30s`, ou `docker stop -t <secondes>` en CLI) : les requêtes déjà en
+   cours de traitement se terminent normalement (`next start` cesse
+   d'accepter de nouvelles connexions mais ne coupe jamais les
+   existantes), puis le processus quitte de lui-même.
+
+`GET /api/health/live` (liveness) reste volontairement à `200` pendant tout
+ce temps — seule la readiness reflète l'arrêt en cours, jamais la
+vivacité du processus (voir §1).
 
 ## 5. Procédure de déploiement sans perte de données (résumé)
 

@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { listPlans } from "@/lib/agents/director/planning-engine";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -12,6 +12,6 @@ export async function GET() {
     const plans = await listPlans({ workspaceId: actor.workspace.id });
     return NextResponse.json({ plans });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/director/plans" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/director/plans" });
   }
 }

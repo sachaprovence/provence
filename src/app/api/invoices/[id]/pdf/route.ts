@@ -6,7 +6,7 @@ import { generateInvoicePdf } from "@/lib/crm/invoice-pdf";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -27,6 +27,6 @@ export async function GET(_request: Request, { params }: Params) {
       },
     });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/invoices/[id]/pdf" });
+    return toApiErrorResponse(error, request, { route: "GET /api/invoices/[id]/pdf" });
   }
 }

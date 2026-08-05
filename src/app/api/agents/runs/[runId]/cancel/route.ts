@@ -4,7 +4,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse, NotFoundError } from "@/lib/errors";
 import { cancelAgentRun } from "@/lib/agents/execution-engine";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -23,6 +23,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ru
     const run = await cancelAgentRun(runId);
     return NextResponse.json({ run });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/agents/runs/[runId]/cancel" });
+    return toApiErrorResponse(error, request, { route: "POST /api/agents/runs/[runId]/cancel" });
   }
 }

@@ -20,6 +20,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { definition, version } = await cloneWorkflowDefinition(actor, id, parsed.data);
     return NextResponse.json({ definition, version }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workflows/[id]/clone" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workflows/[id]/clone" });
   }
 }

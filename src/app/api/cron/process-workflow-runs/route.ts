@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth";
+import { isValidCronRequest } from "@/lib/security/webhook-secret";
 import { processQueuedWorkflowRuns, processDueWorkflowWaits } from "@/lib/workflows/execution-engine";
 import { processDueWorkflowCronTriggers } from "@/lib/workflows/trigger-engine";
 
@@ -11,9 +12,7 @@ import { processDueWorkflowCronTriggers } from "@/lib/workflows/trigger-engine";
  * Suppose un appel au plus une fois par minute (voir `triggers/cron.ts`).
  */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
+  const isCron = isValidCronRequest(request);
 
   if (!isCron) {
     const actor = await getCurrentActor();

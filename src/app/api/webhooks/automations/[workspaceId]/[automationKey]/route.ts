@@ -35,6 +35,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
     const run = await fireAutomationWebhook(workspaceId, automationKey, payload);
     return NextResponse.json({ run }, { status: 202 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/webhooks/automations/[workspaceId]/[automationKey]" });
+    return toApiErrorResponse(error, request, { route: "POST /api/webhooks/automations/[workspaceId]/[automationKey]" });
   }
 }

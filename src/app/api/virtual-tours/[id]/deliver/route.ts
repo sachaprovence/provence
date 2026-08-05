@@ -6,7 +6,7 @@ import { markVirtualTourDelivered } from "@/lib/production/virtual-tour-service"
 type Params = { params: Promise<{ id: string }> };
 
 /** Livraison client explicite (v1.1, AR-0167) — idempotent, jamais republiée. */
-export async function POST(_request: Request, { params }: Params) {
+export async function POST(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -15,6 +15,6 @@ export async function POST(_request: Request, { params }: Params) {
     const virtualTour = await markVirtualTourDelivered(actor.organization.id, id);
     return NextResponse.json({ virtualTour });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/virtual-tours/[id]/deliver" });
+    return toApiErrorResponse(error, request, { route: "POST /api/virtual-tours/[id]/deliver" });
   }
 }

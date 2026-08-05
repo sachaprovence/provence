@@ -5,7 +5,7 @@ import { companyCreateSchema } from "@/lib/validations/crm";
 import { listCompanies, createCompany } from "@/lib/crm/company-service";
 import { writeAuditLog } from "@/lib/audit";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
 
@@ -13,7 +13,7 @@ export async function GET() {
     const companies = await listCompanies(actor.organization.id);
     return NextResponse.json({ companies });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/companies" });
+    return toApiErrorResponse(error, request, { route: "GET /api/companies" });
   }
 }
 
@@ -39,6 +39,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ company }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/companies" });
+    return toApiErrorResponse(error, request, { route: "POST /api/companies" });
   }
 }

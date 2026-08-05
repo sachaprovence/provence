@@ -28,6 +28,6 @@ export async function POST(request: Request) {
     const workspace = await createWorkspace(actor, parsed.data);
     return NextResponse.json({ workspace }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workspaces" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workspaces" });
   }
 }

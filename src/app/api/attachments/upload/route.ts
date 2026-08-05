@@ -61,6 +61,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ attachment }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/attachments/upload" });
+    return toApiErrorResponse(error, request, { route: "POST /api/attachments/upload" });
   }
 }

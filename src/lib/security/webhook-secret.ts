@@ -29,3 +29,22 @@ export function timingSafeStringEqual(a: string, b: string): boolean {
   if (bufferA.length !== bufferB.length) return false;
   return crypto.timingSafeEqual(bufferA, bufferB);
 }
+
+/**
+ * Authentifie un appel des 7 routes `POST /api/cron/*` par
+ * `Authorization: Bearer <CRON_SECRET>` (v1.3, AR-0176) — remplace une
+ * comparaison `===` identique dupliquée dans chacune des 7 routes
+ * (constat P1 de la revue OWASP v0.10, `docs/security/
+ * owasp-review-2026-08-03.md` : non exploitable en pratique — ces routes
+ * ne sont jamais appelées par un navigateur — mais incohérent avec
+ * `timingSafeStringEqual`, déjà utilisé pour les secrets de webhook).
+ * Sans `CRON_SECRET` configuré, refuse toujours (jamais un contournement
+ * d'authentification silencieux faute de configuration).
+ */
+export function isValidCronRequest(request: Request): boolean {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader) return false;
+  return timingSafeStringEqual(authHeader, `Bearer ${cronSecret}`);
+}

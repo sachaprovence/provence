@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth";
+import { isValidCronRequest } from "@/lib/security/webhook-secret";
 import { registerBuiltInAutomationComponents } from "@/lib/automation/bootstrap";
 import { processQueuedAutomationRuns, processDueAutomationRunWaits, processAutomationJobs } from "@/lib/automation/executor";
 import { processDueAutomationSchedules } from "@/lib/automation/trigger-engine";
@@ -13,9 +14,7 @@ import { processDueAutomationSchedules } from "@/lib/automation/trigger-engine";
  * par minute (voir `scheduler/schedule-engine.ts`).
  */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
+  const isCron = isValidCronRequest(request);
 
   if (!isCron) {
     const actor = await getCurrentActor();

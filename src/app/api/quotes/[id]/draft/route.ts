@@ -21,6 +21,6 @@ export async function PUT(request: Request, { params }: Params) {
     const quote = await updateQuoteDraft(actor.organization.id, id, parsed.data);
     return NextResponse.json({ quote });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PUT /api/quotes/[id]/draft" });
+    return toApiErrorResponse(error, request, { route: "PUT /api/quotes/[id]/draft" });
   }
 }

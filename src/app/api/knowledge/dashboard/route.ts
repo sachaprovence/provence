@@ -4,7 +4,7 @@ import { toApiErrorResponse } from "@/lib/errors";
 import { getKnowledgeDashboard } from "@/lib/knowledge/dashboard-service";
 import { getMemoryDashboard } from "@/lib/memory/dashboard-service";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -16,6 +16,6 @@ export async function GET() {
     ]);
     return NextResponse.json({ knowledge, memory });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/knowledge/dashboard" });
+    return toApiErrorResponse(error, request, { route: "GET /api/knowledge/dashboard" });
   }
 }

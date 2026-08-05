@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { getAiCostMetrics, getEmailMetrics, getApiLatencyMetrics, getObservabilityMetrics } from "@/lib/observability/metrics-service";
+import { getAiCostMetrics, getEmailMetrics, getApiLatencyMetrics, getObservabilityMetrics, getQueueWorkerMetrics } from "@/lib/observability/metrics-service";
 import { recordApiMetric } from "@/lib/observability/api-metrics";
 import { MembershipRole, WorkspaceRole } from "@/generated/prisma/enums";
 
@@ -109,6 +109,61 @@ runIfDatabase("Observability — métriques de base", () => {
     expect(metrics.errorCount).toBe(1);
     expect(metrics.byRoute["GET /api/leads"].count).toBe(2);
     expect(metrics.byRoute["GET /api/leads"].avgDurationMs).toBeCloseTo(150, 5);
+  });
+
+  it("calcule errorRate (v1.3, AR-0174) — null sans aucune requête, sinon errorCount/requestCount", async () => {
+    const { organization } = await createOrg("api-error-rate");
+    organizationIds.push(organization.id);
+
+    const emptyMetrics = await getApiLatencyMetrics(organization.id);
+    expect(emptyMetrics.errorRate).toBeNull();
+
+    await recordApiMetric({ organizationId: organization.id, route: "GET /api/leads", method: "GET", statusCode: 200, durationMs: 10 });
+    await recordApiMetric({ organizationId: organization.id, route: "GET /api/leads", method: "GET", statusCode: 500, durationMs: 10 });
+    await recordApiMetric({ organizationId: organization.id, route: "GET /api/leads", method: "GET", statusCode: 503, durationMs: 10 });
+    await recordApiMetric({ organizationId: organization.id, route: "GET /api/leads", method: "GET", statusCode: 200, durationMs: 10 });
+
+    const metrics = await getApiLatencyMetrics(organization.id);
+    expect(metrics.errorRate).toBeCloseTo(0.5, 5);
+  });
+
+  it("getQueueWorkerMetrics (v1.3, AR-0174) agrège AutomationJob par organisation", async () => {
+    const { organization, workspace } = await createOrg("queue-worker");
+    organizationIds.push(organization.id);
+
+    await prisma.automationJob.create({
+      data: { organizationId: organization.id, workspaceId: workspace.id, jobType: "notification.create", status: "QUEUED" },
+    });
+    await prisma.automationJob.create({
+      data: { organizationId: organization.id, workspaceId: workspace.id, jobType: "notification.create", status: "SUCCEEDED" },
+    });
+    await prisma.automationJob.create({
+      data: { organizationId: organization.id, workspaceId: workspace.id, jobType: "notification.create", status: "FAILED" },
+    });
+
+    const metrics = await getQueueWorkerMetrics(organization.id);
+    expect(metrics.queue.counts.queued).toBe(1);
+    expect(metrics.queue.counts.succeeded).toBe(1);
+    expect(metrics.queue.counts.failed).toBe(1);
+    expect(metrics.queue.counts.total).toBe(3);
+    expect(metrics.queue.failureRate).toBeCloseTo(1 / 3, 5);
+    expect(metrics.queue.dueNow).toBe(1);
+    expect(metrics.workers.poolSize).toBeGreaterThan(0);
+    expect(metrics.workers.active).toBe(0); // aucun job réclamé (claimedBy) dans ce test
+  });
+
+  it("getQueueWorkerMetrics : isolation multi-tenant — les jobs d'une autre organisation ne fuient jamais", async () => {
+    const orgA = await createOrg("queue-tenant-a");
+    const orgB = await createOrg("queue-tenant-b");
+    organizationIds.push(orgA.organization.id, orgB.organization.id);
+
+    await prisma.automationJob.create({
+      data: { organizationId: orgA.organization.id, workspaceId: orgA.workspace.id, jobType: "notification.create", status: "QUEUED" },
+    });
+
+    const metricsB = await getQueueWorkerMetrics(orgB.organization.id);
+    expect(metricsB.queue.counts.total).toBe(0);
+    expect(metricsB.queue.dueNow).toBe(0);
   });
 
   it("isolation multi-tenant : les métriques d'une organisation ne fuient jamais vers une autre", async () => {

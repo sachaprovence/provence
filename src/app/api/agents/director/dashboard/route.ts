@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { getDirectorDashboard, resolveDirectorInstallation } from "@/lib/agents/director/dashboard-service";
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -17,6 +17,6 @@ export async function GET() {
 
     return NextResponse.json({ director, dashboard });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/agents/director/dashboard" });
+    return toApiErrorResponse(error, request, { route: "GET /api/agents/director/dashboard" });
   }
 }

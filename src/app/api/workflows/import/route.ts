@@ -18,6 +18,6 @@ export async function POST(request: Request) {
     const { definition, version } = await importWorkflowDefinition(actor, { ...parsed.data, description: parsed.data.description ?? null });
     return NextResponse.json({ definition, version }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workflows/import" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workflows/import" });
   }
 }

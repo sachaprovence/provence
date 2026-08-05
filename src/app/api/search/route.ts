@@ -13,6 +13,6 @@ export async function GET(request: Request) {
     const results = await globalSearch(actor.organization.id, query);
     return NextResponse.json({ results });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/search" });
+    return toApiErrorResponse(error, request, { route: "GET /api/search" });
   }
 }

@@ -18,6 +18,6 @@ export async function POST(request: Request) {
     const { automation, version } = await importAutomationDefinition(actor, { ...parsed.data, description: parsed.data.description ?? null });
     return NextResponse.json({ automation, version }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/automations/import" });
+    return toApiErrorResponse(error, request, { route: "POST /api/automations/import" });
   }
 }

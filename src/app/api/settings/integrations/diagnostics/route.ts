@@ -10,7 +10,7 @@ import { listIntegrationDiagnostics } from "@/lib/diagnostics/integration-diagno
  * l'administrateur de l'organisation. Ne renvoie jamais aucun secret : voir
  * `src/lib/diagnostics/types.ts#IntegrationDiagnosticSummary`.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   if (!isAdmin(actor)) return forbidden();
@@ -19,6 +19,6 @@ export async function GET() {
     const diagnostics = await listIntegrationDiagnostics(actor.organization.id);
     return NextResponse.json({ diagnostics });
   } catch (error) {
-    return toApiErrorResponse(error, { organizationId: actor.organization.id, route: "settings/integrations/diagnostics" });
+    return toApiErrorResponse(error, request, { organizationId: actor.organization.id, route: "settings/integrations/diagnostics" });
   }
 }

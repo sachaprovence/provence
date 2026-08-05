@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const attachments = await listAttachments(actor.organization.id, entityType, entityId);
     return NextResponse.json({ attachments });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "GET /api/attachments" });
+    return toApiErrorResponse(error, request, { route: "GET /api/attachments" });
   }
 }
 
@@ -47,6 +47,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ attachment }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/attachments" });
+    return toApiErrorResponse(error, request, { route: "POST /api/attachments" });
   }
 }

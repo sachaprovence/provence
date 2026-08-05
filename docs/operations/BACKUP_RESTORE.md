@@ -262,6 +262,69 @@ officiel") — testée localement contre un serveur HTTP simulant l'API S3
 (voir `tests/scripts/s3-backup-client.test.ts`) et manuellement contre un
 bucket réel avant la mise en production effective.
 
+## 9. Automatisation de la sauvegarde/vérification (v1.3, AR-0175)
+
+**Objectif RPO/RTO explicite** (jamais implicite) : avec une planification
+quotidienne (voir ci-dessous), la perte de données maximale acceptée
+("Recovery Point Objective") est de **24 heures**. Le temps de restauration
+("Recovery Time Objective") dépend de la taille de la base — mesuré
+empiriquement à quelques secondes sur l'environnement de développement
+(voir `scripts/run-scheduled-backup.ts`, étape 2/2) ; à re-mesurer sur un
+volume de données représentatif de la production avant tout engagement
+contractuel de RTO auprès d'un client.
+
+**Script combiné** : `scripts/run-scheduled-backup.ts` (`npm run
+backup:scheduled`) — chaîne sauvegarde (§1) et vérification par
+restauration réelle (§2) en une seule commande, code de sortie non nul si
+l'une ou l'autre étape échoue. Conçu pour être la SEULE ligne à programmer
+(cron/systemd timer), remplaçant les deux commandes manuelles historiques.
+
+**Exemple de planification quotidienne (crontab)**, à 3h du matin,
+horaire à faible charge :
+
+```cron
+0 3 * * * cd /chemin/vers/provence && npm run backup:scheduled -- /var/backups/provence360 >> /var/log/provence-backup.log 2>&1
+```
+
+**Alternative systemd timer** (`provence-backup.timer` + `.service`,
+préférable si `journalctl`/la supervision systemd sont déjà en place) :
+suivre le même principe — `ExecStart=npm run backup:scheduled --
+/var/backups/provence360`, `OnCalendar=*-*-* 03:00:00`.
+
+**Vérifier que l'automatisation fonctionne réellement** (ne jamais se fier
+au seul fait que le cron est configuré) : `npm run backup:metrics-report`
+— si le type "Sauvegarde PostgreSQL" ou "Vérification par restauration
+PostgreSQL" n'a aucune exécution récente, la planification a un problème
+(cron non déclenché, échec silencieux du script, permissions).
+
+## 10. Politique de rétention (v1.3, AR-0175)
+
+**Script** : `scripts/prune-old-backups.ts` (`npm run backup:prune`)
+
+**Garde-fous** (jamais contournables, même avec `--apply`), dans cet ordre
+de priorité :
+1. Une sauvegarde jamais vérifiée par restauration réelle n'est **jamais**
+   supprimée — pourrait être la seule copie exploitable si une sauvegarde
+   plus récente s'avère corrompue.
+2. Les **3 sauvegardes vérifiées les plus récentes** sont **toujours**
+   conservées, quel que soit leur âge.
+3. Au-delà de ces deux garde-fous, une sauvegarde vérifiée plus ancienne
+   que la fenêtre de rétention (30 jours par défaut) est purgée.
+
+**Mode sans danger par défaut** : sans `--apply`, le script affiche ce qui
+serait supprimé sans rien supprimer (`dry-run`). Toujours exécuter d'abord
+sans `--apply` pour relire la liste avant toute suppression réelle.
+
+```bash
+npm run backup:prune -- /var/backups/provence360 30          # dry-run
+npm run backup:prune -- /var/backups/provence360 30 --apply  # suppression réelle
+```
+
+**Planification recommandée** : hebdomadaire, après plusieurs exécutions
+réussies de la sauvegarde quotidienne (§9) — jamais le même jour que la
+mise en service initiale d'un nouveau cycle de sauvegarde (laisser le
+temps d'accumuler au moins `MIN_KEEP` sauvegardes vérifiées).
+
 ## Résumé des commandes
 
 | Action | Commande |
@@ -270,4 +333,7 @@ bucket réel avant la mise en production effective.
 | Vérifier une sauvegarde PostgreSQL | `npm run backup:db:verify -- <fichier.dump>` |
 | Sauvegarder les objets S3 | `npm run backup:s3 -- <répertoire>` |
 | Vérifier une sauvegarde S3 | `npm run backup:s3:verify -- <manifest.json>` |
+| Sauvegarde + vérification en une commande (v1.3) | `npm run backup:scheduled -- <répertoire>` |
+| Purger les anciennes sauvegardes (v1.3) | `npm run backup:prune -- <répertoire> <jours> [--apply]` |
+| Rapport d'historique des sauvegardes (v1.3) | `npm run backup:metrics-report` |
 | Vérifier la cohérence base ↔ stockage | `npm run backup:consistency-check` |

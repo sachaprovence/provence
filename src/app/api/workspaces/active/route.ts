@@ -24,6 +24,6 @@ export async function POST(request: Request) {
     const workspace = await setActiveWorkspace(actor, parsed.data.workspaceId);
     return NextResponse.json({ workspace });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/workspaces/active" });
+    return toApiErrorResponse(error, request, { route: "POST /api/workspaces/active" });
   }
 }

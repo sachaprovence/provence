@@ -7,7 +7,7 @@ import { syncAppointmentToGoogle } from "@/lib/calendar/google";
 type Params = { params: Promise<{ id: string }> };
 
 /** Synchronisation manuelle vers Google Calendar (la synchronisation automatique est déclenchée à la création/modification). */
-export async function POST(_request: Request, { params }: Params) {
+export async function POST(request: Request, { params }: Params) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
   const { id } = await params;
@@ -20,6 +20,6 @@ export async function POST(_request: Request, { params }: Params) {
     const updated = await prisma.appointment.findUniqueOrThrow({ where: { id } });
     return NextResponse.json({ appointment: updated });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/appointments/[id]/sync-to-google" });
+    return toApiErrorResponse(error, request, { route: "POST /api/appointments/[id]/sync-to-google" });
   }
 }

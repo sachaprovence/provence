@@ -33,6 +33,6 @@ export async function POST(request: Request, { params }: Params) {
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/leads/[id]/tags" });
+    return toApiErrorResponse(error, request, { route: "POST /api/leads/[id]/tags" });
   }
 }

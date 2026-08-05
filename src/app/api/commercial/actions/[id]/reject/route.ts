@@ -3,7 +3,7 @@ import { requireWorkspaceActorApi, isWorkspaceActorResponse, requireWorkspacePer
 import { toApiErrorResponse } from "@/lib/errors";
 import { decideAction } from "@/lib/agents/commercial/commercial-service";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await requireWorkspaceActorApi();
   if (isWorkspaceActorResponse(actor)) return actor;
 
@@ -13,6 +13,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const action = await decideAction(actor, id, "REJECTED");
     return NextResponse.json({ action });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/commercial/actions/[id]/reject" });
+    return toApiErrorResponse(error, request, { route: "POST /api/commercial/actions/[id]/reject" });
   }
 }

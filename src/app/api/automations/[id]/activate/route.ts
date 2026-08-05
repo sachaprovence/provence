@@ -19,6 +19,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const automation = await activateAutomationVersion(actor, id, parsed.data.versionId);
     return NextResponse.json({ automation });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "POST /api/automations/[id]/activate" });
+    return toApiErrorResponse(error, request, { route: "POST /api/automations/[id]/activate" });
   }
 }

@@ -28,6 +28,6 @@ export async function PUT(request: Request, { params }: Params) {
     const stage = await updatePipelineStage(actor.organization.id, parsedStageKey.data, parsed.data);
     return NextResponse.json({ stage });
   } catch (error) {
-    return toApiErrorResponse(error, { route: "PUT /api/pipeline-stages/[stageKey]" });
+    return toApiErrorResponse(error, request, { route: "PUT /api/pipeline-stages/[stageKey]" });
   }
 }
