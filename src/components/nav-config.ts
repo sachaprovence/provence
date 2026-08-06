@@ -10,6 +10,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/properties", label: "Biens", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/commercial", label: "Agent Commercial", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/agents", label: "Agents IA", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/connectors", label: "Connecteurs", roles: ["OWNER_ADMIN"] },
   { href: "/workflows", label: "Workflows", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/automations", label: "Automatisations", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/pipeline", label: "Pipeline", roles: ["OWNER_ADMIN", "SALES"] },
