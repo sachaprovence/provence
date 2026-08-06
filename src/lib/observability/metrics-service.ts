@@ -117,6 +117,16 @@ export async function getQueueWorkerMetrics(organizationId: string) {
   };
 }
 
+/** Dernières requêtes API en erreur (5xx) — journal brut consultable, complément des agrégats (v1.6, mission "Observabilité"). */
+export async function getRecentApiErrors(organizationId: string, limit: number = 20) {
+  return prisma.apiRequestMetric.findMany({
+    where: { organizationId, statusCode: { gte: 500 } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: { id: true, route: true, method: true, statusCode: true, durationMs: true, createdAt: true },
+  });
+}
+
 export async function getObservabilityMetrics(organizationId: string, range: MetricsRange = defaultMetricsRange()) {
   const [ai, email, apiLatency, queueWorker] = await Promise.all([
     getAiCostMetrics(organizationId, range),
