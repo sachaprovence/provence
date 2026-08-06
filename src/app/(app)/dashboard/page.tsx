@@ -4,6 +4,7 @@ import { getOrgStats, defaultStatsRange } from "@/lib/stats";
 import { StatTile } from "@/components/stat-tile";
 import { PipelineBarChart } from "@/components/pipeline-bar-chart";
 import { ProcessSequencesButton } from "@/components/process-sequences-button";
+import { DiscoverAutorunButton } from "@/components/discover-autorun-button";
 import { prisma } from "@/lib/prisma";
 import { getUnifiedOverview } from "@/lib/dashboards/unified-overview-service";
 
@@ -33,7 +34,10 @@ export default async function DashboardPage() {
           <h1 className="text-2xl font-semibold text-p360-ink">Tableau de bord</h1>
           <p className="text-p360-muted text-sm mt-1">90 derniers jours — {actor.organization.name}</p>
         </div>
-        <ProcessSequencesButton />
+        <div className="flex gap-2">
+          <DiscoverAutorunButton />
+          <ProcessSequencesButton />
+        </div>
       </div>
 
       <div className="card p-5">
