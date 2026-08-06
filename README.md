@@ -147,17 +147,22 @@ cp .env.example .env
 psql -c "CREATE USER provence WITH PASSWORD 'provence' CREATEDB;"
 psql -c "CREATE DATABASE provence360 OWNER provence;"
 
-# 4. Migrations + génération du client Prisma
-npm run db:migrate
-
-# 5. (recommandé) Données de démonstration
-npm run db:seed
-
-# 6. Lancer le serveur de développement
-npm run dev
+# 4. Une seule commande pour tout démarrer (migrations + seed si base vide + serveur)
+npm run quickstart
 ```
 
-Application disponible sur <http://localhost:3000>.
+Application disponible sur <http://localhost:3000>. `npm run quickstart` (v1.6) applique les
+migrations, charge les données de démonstration UNIQUEMENT si la base est vide (rejouer le seed
+sur une base déjà initialisée échouerait — voir `scripts/quickstart.ts`), puis lance
+`next dev` — jamais besoin d'enchaîner plusieurs commandes manuellement.
+
+Pour les étapes séparément (migrations seules, seed seul, serveur seul) :
+
+```bash
+npm run db:migrate   # migrations + génération du client Prisma
+npm run db:seed       # données de démonstration (une seule fois, base vide)
+npm run dev           # serveur de développement seul
+```
 
 ## Comptes de démonstration
 

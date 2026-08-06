@@ -17,6 +17,7 @@
     "test:e2e:automation": "node tests/e2e/automation-golden-path.mjs",
     "test:e2e:onboarding": "node tests/e2e/self-service-onboarding.mjs",
     "test:e2e:compta": "node tests/e2e/golden-path-compta-vellano.mjs",
+    "quickstart": "tsx scripts/quickstart.ts",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "NODE_OPTIONS=--require=./prisma/seed-server-only-cjs-hook.cjs tsx prisma/seed.ts",
