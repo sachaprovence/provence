@@ -57,6 +57,7 @@ export default async function ComptaDashboardPage() {
           value={dashboard.cashBalance === null ? "—" : formatEuros(dashboard.cashBalance)}
           sub={dashboard.cashBalance === null ? "Aucun comptage enregistré" : "Dernier comptage"}
         />
+        <StatTile label="Solde bancaire" value="—" sub="Module Banque à venir" />
       </div>
 
       <div className="card p-5">

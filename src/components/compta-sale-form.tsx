@@ -127,7 +127,7 @@ export function ComptaSaleForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="card p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label className="label">Date et heure</label>
           <input required type="datetime-local" className="input" value={soldAt} onChange={(e) => setSoldAt(e.target.value)} />
@@ -143,15 +143,6 @@ export function ComptaSaleForm({
         <div>
           <label className="label">Remise (%)</label>
           <input type="number" min="0" max="100" step="0.1" className="input" value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Client (optionnel)</label>
-          <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">—</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -209,9 +200,20 @@ export function ComptaSaleForm({
         </button>
       </div>
 
-      <div>
-        <label className="label">Notes (optionnel)</label>
-        <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="label">Client (optionnel)</label>
+          <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+            <option value="">—</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Notes (optionnel)</label>
+          <textarea className="input" rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
       </div>
 
       <div className="card p-4 space-y-1">
