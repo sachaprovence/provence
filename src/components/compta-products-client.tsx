@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { formatEuros } from "@/lib/compta/money";
 
@@ -13,9 +14,10 @@ type Product = {
   vatRate: number;
   costPrice: number | null;
   isActive: boolean;
+  isFavorite: boolean;
 };
 
-const EMPTY_FORM = { name: "", category: "", price: "", vatRate: "10", costPrice: "" };
+const EMPTY_FORM = { name: "", category: "", price: "", vatRate: "10", costPrice: "", isFavorite: false };
 
 export function ComptaProductsClient({ products }: { products: Product[] }) {
   const router = useRouter();
@@ -35,6 +37,7 @@ export function ComptaProductsClient({ products }: { products: Product[] }) {
         price: Math.round(Number(form.price) * 100),
         vatRate: Number(form.vatRate),
         costPrice: form.costPrice ? Math.round(Number(form.costPrice) * 100) : undefined,
+        isFavorite: form.isFavorite,
         aliases: [],
       });
       setForm(EMPTY_FORM);
@@ -51,6 +54,18 @@ export function ComptaProductsClient({ products }: { products: Product[] }) {
     setBusy(true);
     try {
       await apiPatch(`/api/compta/products/${product.id}`, { isActive: !product.isActive });
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleFavorite(product: Product) {
+    setBusy(true);
+    try {
+      await apiPatch(`/api/compta/products/${product.id}`, { isFavorite: !product.isFavorite });
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erreur.");
@@ -89,6 +104,12 @@ export function ComptaProductsClient({ products }: { products: Product[] }) {
             <label className="label">Coût matière (€, optionnel)</label>
             <input type="number" step="0.01" min="0" className="input" value={form.costPrice} onChange={(e) => setForm((f) => ({ ...f, costPrice: e.target.value }))} />
           </div>
+          <div className="flex items-end pb-2">
+            <label className="flex items-center gap-2 text-sm text-p360-ink">
+              <input type="checkbox" checked={form.isFavorite} onChange={(e) => setForm((f) => ({ ...f, isFavorite: e.target.checked }))} />
+              Favori (vente rapide)
+            </label>
+          </div>
           {error && <p className="text-sm text-p360-danger col-span-full">{error}</p>}
           <button type="submit" disabled={busy} className="btn-primary w-fit col-span-full">{busy ? "Ajout…" : "Ajouter le produit"}</button>
         </form>
@@ -110,7 +131,10 @@ export function ComptaProductsClient({ products }: { products: Product[] }) {
           <tbody>
             {products.map((product) => (
               <tr key={product.id} className="border-t border-p360-lavender-light">
-                <td className="px-4 py-2 text-p360-ink">{product.name}</td>
+                <td className="px-4 py-2 text-p360-ink">
+                  {product.isFavorite && <span title="Favori">⭐ </span>}
+                  {product.name}
+                </td>
                 <td className="px-4 py-2 text-p360-muted">{product.category}</td>
                 <td className="px-4 py-2 tabular-nums">{formatEuros(product.price)}</td>
                 <td className="px-4 py-2 tabular-nums">{product.vatRate} %</td>
@@ -120,8 +144,14 @@ export function ComptaProductsClient({ products }: { products: Product[] }) {
                     {product.isActive ? "Actif" : "Inactif"}
                   </span>
                 </td>
-                <td className="px-4 py-2">
-                  <button className="text-xs text-p360-blue hover:underline" disabled={busy} onClick={() => toggleActive(product)}>
+                <td className="px-4 py-2 space-x-2 whitespace-nowrap">
+                  <button className="text-xs text-p360-blue hover:underline" disabled={busy} onClick={() => toggleFavorite(product)}>
+                    {product.isFavorite ? "Retirer des favoris" : "Mettre en favori"}
+                  </button>
+                  <Link href={`/compta/produits/${product.id}/recette`} className="text-xs text-p360-blue hover:underline">
+                    Recette
+                  </Link>
+                  <button className="text-xs text-p360-muted hover:underline" disabled={busy} onClick={() => toggleActive(product)}>
                     {product.isActive ? "Désactiver" : "Activer"}
                   </button>
                 </td>
