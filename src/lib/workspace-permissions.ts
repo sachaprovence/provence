@@ -52,6 +52,17 @@ export function hasWorkspacePermission(role: WorkspaceRole, permission: Workspac
   return ROLE_PERMISSIONS[role].includes(permission);
 }
 
+/**
+ * Permissions accordées à un rôle (v1.6) — utilisé pour construire un
+ * contexte `ToolHandler` compatible pour les agents personnalisés
+ * (`custom-agent-service.ts`) : la permission effective est toujours
+ * recalculée depuis le rôle ACTUEL de l'acteur qui exécute l'outil, jamais
+ * figée au moment de la création de l'agent.
+ */
+export function getPermissionsForRole(role: WorkspaceRole): readonly WorkspacePermission[] {
+  return ROLE_PERMISSIONS[role];
+}
+
 /** Libellés d'affichage (français) des rôles de workspace — UI uniquement. */
 export const WORKSPACE_ROLE_LABELS: Record<WorkspaceRole, string> = {
   OWNER: "Propriétaire",
