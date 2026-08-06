@@ -21,6 +21,7 @@ vertical) : [`docs/00-AUTORUN-VISION.md`](docs/00-AUTORUN-VISION.md)
 [`BACKLOG.md`](BACKLOG.md) (tâches) · [`MILESTONES.md`](MILESTONES.md)
 (jalons) · [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) (guide de travail)
 🔒 Revue de sécurité : [`docs/security/owasp-review-2026-08-03.md`](docs/security/owasp-review-2026-08-03.md)
+📚 Guides pas à pas (installation < 10 min, guide utilisateur, FAQ) : [`docs/guides/`](docs/guides/)
 
 Le projet fonctionne **entièrement en mode démonstration** dès l'installation
 (fournisseurs email et IA simulés) — aucune clé API ni service payant n'est
@@ -111,6 +112,17 @@ Tout ce qui suit est réellement implémenté et testé (pas un plan) — voir
   Scanner OCR/IA et assistant IA comptable : pas encore livrés (pages
   "bientôt disponible", flags `COMPTA_OCR_ENABLED`/
   `COMPTA_AI_ASSISTANT_ENABLED`).
+- **Première version réellement testable sans écrire de code (v1.6)** :
+  agents IA personnalisés créés depuis l'interface (`/agents` — choix du
+  fournisseur IA, des outils, de la mémoire, chat immédiat), écran
+  **Connecteurs** unifié pour Gmail/Google Calendar/Slack/Discord/Stripe,
+  tableau de bord unifié agrégeant workflows/automatisations/agents/
+  mémoire/connecteurs/coûts IA/erreurs en une seule vue, bouton
+  **Découvrir Autorun** qui provisionne en un clic un environnement de
+  démonstration complet et idempotent, et `npm run quickstart` pour
+  démarrer tout le projet en une seule commande — voir
+  [`docs/guides/USER_GUIDE.md`](docs/guides/USER_GUIDE.md) et
+  [`docs/guides/INSTALLATION.md`](docs/guides/INSTALLATION.md).
 
 ## Démarrage rapide (Docker)
 
@@ -229,6 +241,14 @@ npm run test:e2e                  # dans un autre terminal
 ```
 
 ## Parcours de démonstration recommandé
+
+Le chemin le plus rapide (un clic, aucune saisie) : se connecter, puis sur
+le **Tableau de bord** cliquer **Découvrir Autorun** — provisionne
+immédiatement une automatisation, un workflow déjà exécuté, un agent IA
+personnalisé avec une conversation, et 3 connecteurs simulés. Voir
+[`docs/guides/USER_GUIDE.md`](docs/guides/USER_GUIDE.md#découvrir-autorun-mode-démo-en-un-clic).
+
+Pour un parcours guidé plus complet couvrant le CRM :
 
 1. Se connecter avec le compte administrateur de démonstration.
 2. **Tableau de bord** — vue d'ensemble, bouton *Traiter les relances
