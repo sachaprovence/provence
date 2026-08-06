@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireActor } from "@/lib/auth";
 import { listSales } from "@/lib/compta/sale-service";
+import { canManageComptaFinance } from "@/lib/compta/permissions";
 import { ComptaSalesClient } from "@/components/compta-sales-client";
 
 export default async function ComptaSalesPage() {
@@ -13,7 +14,7 @@ export default async function ComptaSalesPage() {
         <h1 className="text-2xl font-semibold text-p360-ink">Ventes</h1>
         <Link href="/compta/ventes/nouvelle" className="btn-primary">Enregistrer une vente</Link>
       </div>
-      <ComptaSalesClient sales={sales} />
+      <ComptaSalesClient initialSales={sales} canDelete={canManageComptaFinance(actor.membership.role)} />
     </div>
   );
 }

@@ -9,6 +9,8 @@ const PAYMENT_LABEL: Record<string, string> = {
   CASH: "Espèces",
   CARD: "Carte",
   TRANSFER: "Virement",
+  MEAL_VOUCHER: "Ticket restaurant",
+  CHEQUE: "Chèque",
   OTHER: "Autre",
 };
 
@@ -18,28 +20,75 @@ export default async function ComptaDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-p360-ink">Compta Vellano</h1>
-        <p className="text-p360-muted text-sm mt-1">{actor.organization.name} — vue du jour</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-p360-ink">Compta Vellano</h1>
+          <p className="text-p360-muted text-sm mt-1">{actor.organization.name} — vue du jour</p>
+        </div>
+        <Link href="/compta/rapide" className="btn-primary text-base px-6 py-3">
+          ⚡ Vente rapide
+        </Link>
       </div>
+
+      {dashboard.alerts.length > 0 && (
+        <div className="flex gap-3 flex-wrap">
+          {dashboard.alerts.map((alert) => (
+            <span key={alert.type} className="badge bg-p360-sand-light text-p360-warning border border-p360-sand">
+              ⚠ {alert.message}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatTile label="CA du jour" value={formatEuros(dashboard.caToday)} />
+        <StatTile label="CA de la semaine" value={formatEuros(dashboard.caWeek)} />
         <StatTile label="CA du mois" value={formatEuros(dashboard.caMonth)} />
         <StatTile label="Dépenses du mois" value={formatEuros(dashboard.expensesMonth)} />
         <StatTile label="Bénéfice estimé (HT)" value={formatEuros(dashboard.profitEstimate)} />
+        <StatTile
+          label="Marge (HT)"
+          value={dashboard.marginPercent === null ? "—" : `${dashboard.marginPercent.toFixed(0)} %`}
+          sub={dashboard.marginPercent === null ? "Aucun coût matière renseigné" : formatEuros(dashboard.marginAmount)}
+        />
         <StatTile label="TVA à payer (mois)" value={formatEuros(dashboard.vatDueMonth)} />
         <StatTile
           label="Solde de caisse"
           value={dashboard.cashBalance === null ? "—" : formatEuros(dashboard.cashBalance)}
           sub={dashboard.cashBalance === null ? "Aucun comptage enregistré" : "Dernier comptage"}
         />
-        <StatTile label="Solde bancaire" value="—" sub="Module Banque à venir" />
       </div>
 
       <div className="card p-5">
         <h2 className="text-sm font-semibold text-p360-ink mb-4">CA des 14 derniers jours</h2>
         <ComptaSalesChart data={dashboard.dailySales} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-p360-ink mb-3">Produits les plus vendus (30 jours)</h2>
+          <ul className="space-y-1 text-sm">
+            {dashboard.topProducts.map((entry) => (
+              <li key={entry.product.id} className="flex justify-between text-p360-ink">
+                <span>{entry.product.name}</span>
+                <span className="tabular-nums text-p360-muted">{entry.quantitySold} vendus</span>
+              </li>
+            ))}
+            {dashboard.topProducts.length === 0 && <li className="text-p360-muted">Aucune donnée.</li>}
+          </ul>
+        </div>
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-p360-ink mb-3">Catégories les plus vendues (30 jours)</h2>
+          <ul className="space-y-1 text-sm">
+            {dashboard.topCategories.map((entry) => (
+              <li key={entry.category} className="flex justify-between text-p360-ink">
+                <span>{entry.category}</span>
+                <span className="tabular-nums text-p360-muted">{formatEuros(entry.total)}</span>
+              </li>
+            ))}
+            {dashboard.topCategories.length === 0 && <li className="text-p360-muted">Aucune donnée.</li>}
+          </ul>
+        </div>
       </div>
 
       <div className="card p-5">
@@ -63,7 +112,7 @@ export default async function ComptaDashboardPage() {
       <div className="flex gap-3 flex-wrap">
         <Link href="/compta/ventes/nouvelle" className="btn-primary">Enregistrer une vente</Link>
         <Link href="/compta/depenses/nouvelle" className="btn-secondary">Ajouter une dépense</Link>
-        <Link href="/compta/caisse" className="btn-secondary">Compter la caisse</Link>
+        <Link href="/compta/caisse" className="btn-secondary">Ouvrir/fermer la caisse</Link>
       </div>
     </div>
   );
