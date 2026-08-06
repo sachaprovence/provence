@@ -3,6 +3,7 @@ import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { toApiErrorResponse } from "@/lib/errors";
 import { comptaSaleSchema } from "@/lib/validations/compta";
 import { listSales, createSale } from "@/lib/compta/sale-service";
+import { canManageComptaOperations, comptaForbiddenResponse } from "@/lib/compta/permissions";
 
 export async function GET(request: Request) {
   const actor = await requireActorApi();
@@ -10,11 +11,15 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const search = searchParams.get("search");
+  const includeCancelled = searchParams.get("includeCancelled") === "true";
 
   try {
     const sales = await listSales(actor.organization.id, {
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
+      search: search || undefined,
+      includeCancelled,
     });
     return NextResponse.json({ sales });
   } catch (error) {
@@ -25,6 +30,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  if (!canManageComptaOperations(actor.membership.role)) return comptaForbiddenResponse();
   const body = await request.json().catch(() => null);
   const parsed = comptaSaleSchema.safeParse(body);
   if (!parsed.success) {

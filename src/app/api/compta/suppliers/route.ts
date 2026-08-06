@@ -3,6 +3,7 @@ import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { toApiErrorResponse } from "@/lib/errors";
 import { comptaSupplierSchema } from "@/lib/validations/compta";
 import { listSuppliers, createSupplier } from "@/lib/compta/supplier-service";
+import { canManageComptaFinance, comptaForbiddenResponse } from "@/lib/compta/permissions";
 
 export async function GET(request: Request) {
   const actor = await requireActorApi();
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  if (!canManageComptaFinance(actor.membership.role)) return comptaForbiddenResponse();
   const body = await request.json().catch(() => null);
   const parsed = comptaSupplierSchema.safeParse(body);
   if (!parsed.success) {

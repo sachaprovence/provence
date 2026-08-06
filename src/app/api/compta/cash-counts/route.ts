@@ -3,6 +3,7 @@ import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { toApiErrorResponse } from "@/lib/errors";
 import { comptaCashCountSchema } from "@/lib/validations/compta";
 import { listCashCounts, createCashCount } from "@/lib/compta/cash-service";
+import { canManageComptaOperations, comptaForbiddenResponse } from "@/lib/compta/permissions";
 
 export async function GET(request: Request) {
   const actor = await requireActorApi();
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const actor = await requireActorApi();
   if (isActorResponse(actor)) return actor;
+  if (!canManageComptaOperations(actor.membership.role)) return comptaForbiddenResponse();
   const body = await request.json().catch(() => null);
   const parsed = comptaCashCountSchema.safeParse(body);
   if (!parsed.success) {
