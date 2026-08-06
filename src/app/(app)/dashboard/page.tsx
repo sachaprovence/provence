@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { requireActor } from "@/lib/auth";
+import { requireWorkspaceActor } from "@/lib/workspace-context";
 import { getOrgStats, defaultStatsRange } from "@/lib/stats";
 import { StatTile } from "@/components/stat-tile";
 import { PipelineBarChart } from "@/components/pipeline-bar-chart";
 import { ProcessSequencesButton } from "@/components/process-sequences-button";
 import { prisma } from "@/lib/prisma";
+import { getUnifiedOverview } from "@/lib/dashboards/unified-overview-service";
 
 function formatEuros(cents: number) {
   return (cents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -14,9 +15,9 @@ function formatPercent(v: number) {
 }
 
 export default async function DashboardPage() {
-  const actor = await requireActor();
+  const actor = await requireWorkspaceActor();
   const { from, to } = defaultStatsRange();
-  const stats = await getOrgStats(actor.organization.id, from, to);
+  const [stats, overview] = await Promise.all([getOrgStats(actor.organization.id, from, to), getUnifiedOverview(actor)]);
 
   const pendingValidations = await prisma.message.count({
     where: { lead: { organizationId: actor.organization.id }, status: "PENDING_VALIDATION" },
@@ -33,6 +34,52 @@ export default async function DashboardPage() {
           <p className="text-p360-muted text-sm mt-1">90 derniers jours — {actor.organization.name}</p>
         </div>
         <ProcessSequencesButton />
+      </div>
+
+      <div className="card p-5">
+        <h2 className="text-sm font-semibold text-p360-ink mb-4">Vue d&apos;ensemble Autorun</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <Link href="/workflows" className="rounded-lg border border-p360-lavender-light p-3 hover:bg-p360-sand-light">
+            <p className="text-xs text-p360-muted">Workflows</p>
+            <p className="text-lg font-semibold text-p360-ink">{overview.workflows.active} actif(s)</p>
+            <p className="text-xs text-p360-muted">{overview.workflows.recentRuns} exécution(s) récente(s)</p>
+          </Link>
+          <Link href="/agents" className="rounded-lg border border-p360-lavender-light p-3 hover:bg-p360-sand-light">
+            <p className="text-xs text-p360-muted">Agents IA</p>
+            <p className="text-lg font-semibold text-p360-ink">{overview.agents.custom}</p>
+          </Link>
+          <Link href="/automations" className="rounded-lg border border-p360-lavender-light p-3 hover:bg-p360-sand-light">
+            <p className="text-xs text-p360-muted">Automatisations</p>
+            <p className="text-lg font-semibold text-p360-ink">{overview.automations.active} actif(s)</p>
+            <p className="text-xs text-p360-muted">{overview.automations.recentRuns} exécution(s) récente(s)</p>
+          </Link>
+          <Link href="/settings/knowledge" className="rounded-lg border border-p360-lavender-light p-3 hover:bg-p360-sand-light">
+            <p className="text-xs text-p360-muted">Mémoire</p>
+            <p className="text-lg font-semibold text-p360-ink">{overview.memory.entries} entrée(s)</p>
+          </Link>
+          <Link href="/connectors" className="rounded-lg border border-p360-lavender-light p-3 hover:bg-p360-sand-light">
+            <p className="text-xs text-p360-muted">Connecteurs</p>
+            <p className="text-lg font-semibold text-p360-ink">
+              {overview.connectors.connected}/{overview.connectors.total} connecté(s)
+            </p>
+          </Link>
+          <Link href="/settings/metrics" className="rounded-lg border border-p360-lavender-light p-3 hover:bg-p360-sand-light">
+            <p className="text-xs text-p360-muted">Coûts IA (mois)</p>
+            <p className="text-lg font-semibold text-p360-ink">{overview.aiCost.totalCostUsd.toFixed(2)} $</p>
+            <p className="text-xs text-p360-muted">{overview.aiCost.requestCount} requête(s)</p>
+          </Link>
+          <Link href="/settings/metrics" className="rounded-lg border border-p360-lavender-light p-3 hover:bg-p360-sand-light">
+            <p className="text-xs text-p360-muted">Erreurs API</p>
+            <p className="text-lg font-semibold text-p360-ink">{overview.errors.errorCount}</p>
+            <p className="text-xs text-p360-muted">
+              {overview.errors.errorRate !== null ? `${Math.round(overview.errors.errorRate * 100)} %` : "—"}
+            </p>
+          </Link>
+          <div className="rounded-lg border border-p360-lavender-light p-3">
+            <p className="text-xs text-p360-muted">Notifications</p>
+            <p className="text-lg font-semibold text-p360-ink">{overview.notifications.unread} non lue(s)</p>
+          </div>
+        </div>
       </div>
 
       {(pendingValidations > 0 || openTasks > 0) && (
