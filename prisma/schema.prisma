@@ -138,6 +138,8 @@ model Organization {
   webhookSubscriptions        WebhookSubscription[]
   webhookDeliveries           WebhookDelivery[]
   onboardingProgress          OnboardingProgress?
+  customAgents                CustomAgent[]
+  customAgentConversations    CustomAgentConversation[]
 
   @@index([name])
   @@index([planId])
@@ -200,6 +202,8 @@ model User {
   comptaSalesCreated             ComptaSale[]
   comptaExpensesCreated          ComptaExpense[]
   comptaCashCountsCreated        ComptaCashCount[]
+  customAgentsCreated             CustomAgent[]
+  customAgentConversationsCreated CustomAgentConversation[]
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +257,8 @@ model Workspace {
   comptaSuppliers           ComptaSupplier[]
   comptaExpenses            ComptaExpense[]
   comptaCashCounts          ComptaCashCount[]
+  customAgents              CustomAgent[]
+  customAgentConversations  CustomAgentConversation[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1750,6 +1756,10 @@ enum IntegrationKind {
   WHATSAPP
   PHONE
   WEBHOOK
+  /// Écran Connecteurs unifié (v1.6, ADR 0049) — `config.webhookUrl`, testée via
+  /// un envoi réel best-effort au même point que les autres diagnostics.
+  SLACK
+  DISCORD
 }
 
 enum IntegrationStatus {
@@ -3584,4 +3594,100 @@ model ComptaCashCount {
 
   @@index([organizationId, countedAt])
   @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Agents personnalisés + chat (v1.6, ADR 0049)
+// ---------------------------------------------------------------------------
+
+/// Agent créé par un utilisateur depuis l'UI (`/agents`), distinct des agents
+/// métier fixes (`AgentDefinition`/`AgentInstallation`, catalogue préconçu
+/// installé par organisation) : ici l'organisation choisit elle-même le nom,
+/// le prompt système, le fournisseur LLM/modèle (`providerKey`/`model`,
+/// registre `src/lib/agents/llm/`), les outils autorisés (sous-ensemble
+/// d'`AgentTool.key`) et si la mémoire est activée. Ne remplace pas le
+/// framework existant : réutilise directement le registre LLM, le registre
+/// d'outils et le Memory Engine générique (`src/lib/memory/memory-engine.ts`,
+/// v0.7), portée `MemoryScopeType.AGENT` avec `scopeId` = id de cet agent
+/// (`scopeId` est une chaîne libre, sans contrainte FK — contrairement à
+/// `AgentMemoryEntry.installationId` qui référence une vraie
+/// `AgentInstallation` et ne convient donc pas ici).
+model CustomAgent {
+  id             String    @id @default(cuid())
+  organizationId String
+  /// Requis (contrairement à `AgentDefinition.organizationId`, catalogue global) : un agent personnalisé appartient toujours à un workspace précis — permet de construire un contexte `{ organizationId, workspaceId, grantedToolKeys }` compatible `ToolHandler` (voir `custom-agent-service.ts`) sans dupliquer le Framework Agents.
+  workspaceId    String
+  name           String
+  description    String?
+  systemPrompt   String?
+  /// Clé de fournisseur LLM (`src/lib/agents/llm/registry.ts`, ex. "demo", "anthropic") — résolu via `getLlmProvider`, avec repli sur `getActiveLlmProvider()` si non enregistré/configuré.
+  providerKey    String    @default("demo")
+  /// Modèle explicite chez ce fournisseur ; `null` = `defaultModel` du fournisseur.
+  model          String?
+  /// Sous-ensemble d'`AgentTool.key` que cet agent peut invoquer explicitement pendant une conversation.
+  toolKeys       String[]  @default([])
+  memoryEnabled  Boolean   @default(true)
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  archivedAt     DateTime?
+
+  organization  Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User?                     @relation(fields: [createdById], references: [id])
+  conversations CustomAgentConversation[]
+
+  @@index([organizationId, archivedAt])
+  @@index([workspaceId, archivedAt])
+}
+
+/// Un fil de discussion avec un `CustomAgent`. `organizationId` dénormalisé
+/// (même convention que `workspaceId` sur `ComptaExpense`) pour les requêtes
+/// et l'isolation multi-tenant sans jointure systématique.
+model CustomAgentConversation {
+  id              String    @id @default(cuid())
+  customAgentId   String
+  organizationId  String
+  workspaceId     String
+  title           String    @default("Nouvelle conversation")
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastMessageAt   DateTime?
+
+  customAgent  CustomAgent              @relation(fields: [customAgentId], references: [id], onDelete: Cascade)
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User?                    @relation(fields: [createdById], references: [id])
+  messages     CustomAgentChatMessage[]
+
+  @@index([customAgentId, updatedAt])
+  @@index([organizationId])
+  @@index([workspaceId])
+}
+
+enum CustomAgentChatRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+/// Un message dans une `CustomAgentConversation`. Les messages `TOOL`
+/// enregistrent l'exécution explicite d'un outil déclenchée depuis l'UI de
+/// chat (jamais un appel de fonction autonome décidé par le LLM — voir ADR
+/// 0049 : le fournisseur LLM générique ne fait que de la complétion de
+/// texte, aucun function-calling structuré n'existe ailleurs dans ce dépôt).
+model CustomAgentChatMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  role           CustomAgentChatRole
+  content        String
+  toolKey        String?
+  toolInput      Json?
+  toolOutput     Json?
+  createdAt      DateTime             @default(now())
+
+  conversation CustomAgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireWorkspaceActor } from "@/lib/workspace-context";
 import { hasWorkspacePermission } from "@/lib/workspace-permissions";
 import { listCatalog, listInstallations } from "@/lib/agents/installation-service";
@@ -23,7 +24,8 @@ export default async function AgentsPage() {
         <p className="mt-1 text-sm text-p360-muted">
           Infrastructure du Framework Agents d&apos;Autorun — aucun agent métier n&apos;est encore proposé ici, seul
           un agent de référence sert à vérifier que l&apos;installation, l&apos;exécution, les outils, la mémoire et
-          les permissions fonctionnent correctement.
+          les permissions fonctionnent correctement. Pour créer votre propre agent conversationnel et discuter avec
+          lui, voir <Link href="/agents" className="underline hover:text-p360-blue">Agents IA</Link>.
         </p>
       </div>
 

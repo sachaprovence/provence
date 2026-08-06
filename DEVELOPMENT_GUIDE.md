@@ -624,6 +624,72 @@ Points à connaître pour tout nouveau code touchant ce périmètre :
   `docs/release/v1.1-recette.md` plutôt qu'ajoutés en dette de
   maintenance E2E permanente.
 
+## 0 quater decies. État de v1.6 (Agents IA personnalisés, Connecteurs unifiés, Tableau de bord unifié, mode démo)
+
+Voir `docs/adr/0049` pour le détail complet des décisions. Points à
+connaître pour tout nouveau code touchant ce périmètre :
+
+- **Un agent IA personnalisé (`CustomAgent`, `src/lib/agents/custom/`) ne
+  duplique jamais la couche LLM ni le registre d'outils** : il réutilise
+  directement `getLlmProvider`/`getActiveLlmProvider`
+  (`src/lib/agents/llm/`) et le registre de `ToolHandler` du Framework des
+  Agents (`registerToolHandler`, ADR 0007). `CustomAgent.workspaceId` est
+  **obligatoire** (contrairement à `AgentDefinition.organizationId`,
+  nullable pour le catalogue global) précisément pour pouvoir construire un
+  contexte compatible `ToolHandler` sans champ optionnel à vérifier à
+  chaque appel.
+- **`runTool` (`custom-agent-service.ts`) doit ré-appeler
+  `registerBuiltInAgentComponents()` en tête de fonction** — même gotcha
+  que documenté en ADR 0013 pour `execution-engine.ts` : ce module peut
+  être chargé dans un contexte d'exécution distinct de celui où
+  `src/instrumentation.ts` a fait l'enregistrement initial au démarrage.
+  Tout nouveau point d'entrée qui résout un outil ou un runtime d'agent
+  doit faire le même appel défensif, jamais supposer que le registre
+  en mémoire est déjà peuplé.
+- **La mémoire d'un agent personnalisé passe par le Memory Engine
+  générique (`src/lib/memory/memory-engine.ts`, v0.7), jamais par
+  `AgentMemoryEntry`** (v0.3, FK stricte vers `AgentInstallation`,
+  incompatible avec un `CustomAgent`) : `scopeType: "AGENT"`,
+  `scopeId: agent.id` — un `scopeId` volontairement sans contrainte de
+  clé étrangère, choix documenté en ADR 0049.
+- **Les connecteurs Slack/Discord (`src/lib/integrations/connectors-service.ts`)
+  réutilisent le modèle `Integration` existant** (nouvelles valeurs
+  `SLACK`/`DISCORD` de `IntegrationKind`), jamais un modèle dédié — même
+  patron que les connecteurs email/calendrier déjà en place. Le test de
+  connexion (`testWebhookIntegration`) est limité par
+  `isRateLimited` (`src/lib/security/rate-limiter.ts`, 5 tests/5 min) pour
+  éviter d'inonder un vrai webhook Slack/Discord pendant un test répété
+  depuis l'interface.
+- **⚠️ Piège vécu : `triggerWorkflowsForEvent` (Workflow Engine, v0.6)
+  scanne TOUS les workflows actifs d'une clé d'évènement donnée, tous
+  workspaces confondus — il n'est PAS scopé par organisation.** Toute
+  donnée créée manuellement (test exploratoire, vérification Playwright
+  ad hoc) contre une organisation réelle et persistante (ex. le compte
+  démo `admin@demo.provence360.fr`) qui active un workflow sur une clé
+  d'évènement déjà utilisée par un test automatisé (`tests/workflows/triggers.test.ts`,
+  clé `"prospect.created"`) casse ce test dès qu'il tourne, même en
+  isolation totale, car la ligne reste en base entre deux exécutions de
+  test. Le modèle "Découvrir Autorun" (`launchDemoDiscovery`) active
+  précisément un tel workflow (`template-prospection`, sur
+  `"prospect.created"`) — **toute vérification manuelle de ce bouton
+  contre une organisation persistante doit être nettoyée explicitement
+  après coup** (`prisma.workflowDefinition.delete`, cascade sur versions/
+  runs/logs) ; ne jamais compter sur un `afterAll` de fixture Vitest pour
+  des données créées hors d'un test automatisé.
+- **Le provisionnement idempotent de "Découvrir Autorun"
+  (`src/lib/onboarding/demo-discovery-service.ts`) réutilise à l'identique
+  le patron de clé de clone déterministe de l'onboarding**
+  (`chooseOnboardingTemplate`, `${templateKey}-onboarding-${orgId}`) sous
+  la forme `${templateKey}-decouverte-${orgId}` — vérifier l'existence
+  avant de créer, jamais de nouvelle stratégie d'idempotence ad hoc.
+- **`npm run quickstart` (`scripts/quickstart.ts`) est la seule commande
+  de démarrage dev à documenter dans les guides utilisateur** : applique
+  les migrations, charge le seed uniquement si la base est vide (compte
+  les `User`), puis démarre `next dev`. Ne jamais présenter aux nouveaux
+  guides une séquence manuelle de plusieurs commandes comme le chemin
+  principal — `db:migrate`/`db:seed`/`dev` restent documentés séparément
+  uniquement pour un usage avancé (rejouer une seule étape).
+
 ## 1. Avant de commencer une tâche du backlog
 
 1. Vérifier dans `BACKLOG.md` que les **prérequis** de la tâche (`AR-NNNN`)

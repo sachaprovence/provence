@@ -902,6 +902,44 @@ et de la facturation client (`v0.4`/`v0.5`).
 
 ---
 
+## v1.6 — Première version réellement testable sans écrire de code
+
+> **Statut : ✅ livrée.** Mission donnée directement par le fondateur de
+> Provence 360 : la priorité cesse d'être le nombre de fonctionnalités
+> développées pour devenir leur utilisabilité réelle depuis l'interface —
+> voir `docs/adr/0049`.
+
+- **Objectif du jalon** : pouvoir installer et utiliser Autorun sans
+  ouvrir un terminal après l'installation initiale — créer un compte, une
+  organisation, inviter un utilisateur, connecter Gmail/Google
+  Calendar/Slack/Discord, créer et exécuter un workflow, créer un agent IA
+  et discuter avec lui, consulter logs/coûts IA/statistiques, le tout
+  depuis l'interface.
+- **Tâches** : v1.6-1 à v1.6-13 (voir la liste de tâches de session).
+- **Critères de sortie** :
+  - [x] agents IA personnalisés créés/pilotés entièrement depuis
+    l'interface (`/agents`) : choix du fournisseur LLM, des outils, de la
+    mémoire, chat immédiat, historique complet ;
+  - [x] écran **Connecteurs** unique (`/connectors`) pour
+    Gmail/Google Calendar/Slack/Discord/Stripe ;
+  - [x] tableau de bord unifié agrégeant workflows, automatisations,
+    agents, mémoire, connecteurs, coûts IA, erreurs et notifications ;
+  - [x] observabilité temps réel (métriques actualisées automatiquement,
+    erreurs API récentes) sans quitter l'écran ;
+  - [x] `npm run quickstart` : une seule commande pour migrer, seeder (si
+    base vide) et démarrer le serveur de développement ;
+  - [x] bouton **Découvrir Autorun** : provisionnement démo complet en un
+    clic, vérifié idempotent et isolé par organisation ;
+  - [x] guides pas à pas (`docs/guides/INSTALLATION.md`,
+    `docs/guides/USER_GUIDE.md`, `docs/guides/FAQ.md`) permettant une
+    installation et une prise en main en moins de 10 minutes ;
+  - [x] suite de tests complète (962 tests) toujours verte, aucune
+    régression.
+- **État fonctionnel visé** : un utilisateur non technique peut installer,
+  découvrir et utiliser l'essentiel d'Autorun sans jamais écrire de code.
+
+---
+
 ## Tableau récapitulatif
 
 | Jalon | Nature | Visible utilisateur ? | Bloquant pour la suite ? |
