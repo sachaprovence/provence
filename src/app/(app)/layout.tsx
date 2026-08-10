@@ -1,5 +1,6 @@
 import { requireWorkspaceActor } from "@/lib/workspace-context";
 import { hasWorkspacePermission } from "@/lib/workspace-permissions";
+import { listNavigationOverrides } from "@/lib/navigation-preferences-service";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { LogoutButton } from "@/components/logout-button";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -18,6 +19,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const actor = await requireWorkspaceActor();
+  const navigationOverrides = await listNavigationOverrides(actor.user.id, actor.organization.id);
 
   const sidebar = (
     <>
@@ -36,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <CommandPaletteTrigger />
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        <SidebarNav role={actor.membership.role} />
+        <SidebarNav role={actor.membership.role} navigationOverrides={navigationOverrides} />
         {actor.isPlatformAdmin && (
           <a
             href="/admin"
@@ -67,7 +69,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <KeyboardShortcutsProvider role={actor.membership.role}>
       <AppShell sidebar={sidebar}>{children}</AppShell>
-      <CommandPalette role={actor.membership.role} />
+      <CommandPalette role={actor.membership.role} navigationOverrides={navigationOverrides} />
     </KeyboardShortcutsProvider>
   );
 }

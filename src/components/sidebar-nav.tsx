@@ -6,9 +6,9 @@ import clsx from "clsx";
 import { NAV_ITEMS } from "@/components/nav-config";
 import type { MembershipRole } from "@/generated/prisma/enums";
 
-export function SidebarNav({ role }: { role: MembershipRole }) {
+export function SidebarNav({ role, navigationOverrides = {} }: { role: MembershipRole; navigationOverrides?: Record<string, boolean> }) {
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  const items = NAV_ITEMS.filter((item) => (!item.roles || item.roles.includes(role)) && navigationOverrides[item.href] !== false);
 
   return (
     <nav className="flex flex-col gap-1">

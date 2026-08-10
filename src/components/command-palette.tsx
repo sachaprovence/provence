@@ -34,13 +34,16 @@ const RESULT_GROUP_LABELS: { key: keyof SearchResults; label: string }[] = [
  * déjà standard React — la réimplémentation maison serait significativement
  * plus coûteuse pour un composant accessible au clavier comme celui-ci.
  */
-export function CommandPalette({ role }: { role: MembershipRole }) {
+export function CommandPalette({ role, navigationOverrides = {} }: { role: MembershipRole; navigationOverrides?: Record<string, boolean> }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
 
-  const navItems = useMemo(() => NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role)), [role]);
+  const navItems = useMemo(
+    () => NAV_ITEMS.filter((item) => (!item.roles || item.roles.includes(role)) && navigationOverrides[item.href] !== false),
+    [role, navigationOverrides]
+  );
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

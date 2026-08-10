@@ -103,11 +103,18 @@ Tout ce qui suit est réellement implémenté et testé (pas un plan) — voir
   métriques globales) — voir [`docs/guides/`](docs/guides/).
 - **Compta Vellano** (`/compta`) : module de comptabilité simplifiée pour
   une pizzeria familiale — ventes (saisie multi-lignes, remise, TVA
-  auto-calculée), dépenses (TVA récupérable), catalogue produits,
-  fournisseurs, comptage de caisse (billets/pièces, écart), TVA collectée/
-  déductible par mois et par année, tableau de bord dédié. Module isolé
-  (modèles `Compta*`, sans lien avec le CRM) réutilisant l'infrastructure
-  existante — voir [`docs/adr/0048-compta-vellano-module-comptabilite-pizzeria.md`](docs/adr/0048-compta-vellano-module-comptabilite-pizzeria.md).
+  auto-calculée), **commandes clients en plusieurs étapes** (`/compta/commandes`
+  — ajout/ajustement/annulation avant encaissement, pensé pour le service au
+  comptoir), dépenses (TVA récupérable), catalogue produits (recettes
+  d'ingrédients supprimables), stock, achats fournisseurs, comptage de
+  caisse (billets/pièces, écart), **TVA configurable** par taux nommés
+  (`/compta/tva`), TVA collectée/déductible par mois et par année, tableau
+  de bord dédié, et une **navigation personnalisable par utilisateur**
+  (`/settings/navigation`, préréglage "Service pizzeria") pour n'afficher
+  que l'essentiel sur un compte comptoir. Module isolé (modèles `Compta*`,
+  sans lien avec le CRM) réutilisant l'infrastructure existante — voir
+  [`docs/adr/0048-compta-vellano-module-comptabilite-pizzeria.md`](docs/adr/0048-compta-vellano-module-comptabilite-pizzeria.md)
+  et [`docs/adr/0049-compta-vellano-service-flow-commandes-tva-navigation.md`](docs/adr/0049-compta-vellano-service-flow-commandes-tva-navigation.md).
   Scanner OCR/IA et assistant IA comptable : pas encore livrés (pages
   "bientôt disponible", flags `COMPTA_OCR_ENABLED`/
   `COMPTA_AI_ASSISTANT_ENABLED`).

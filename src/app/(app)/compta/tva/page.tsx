@@ -1,6 +1,8 @@
 import { requireActor } from "@/lib/auth";
 import { getVatSummaryByYear } from "@/lib/compta/vat-service";
+import { listVatRates } from "@/lib/compta/vat-rate-service";
 import { StatTile } from "@/components/stat-tile";
+import { ComptaVatRatesClient } from "@/components/compta-vat-rates-client";
 import { formatEuros } from "@/lib/compta/money";
 
 const MONTH_LABEL = [
@@ -12,7 +14,10 @@ export default async function ComptaVatPage({ searchParams }: { searchParams: Pr
   const actor = await requireActor();
   const { year: yearParam } = await searchParams;
   const year = yearParam ? Number(yearParam) : new Date().getFullYear();
-  const months = await getVatSummaryByYear(actor.organization.id, year);
+  const [months, vatRates] = await Promise.all([
+    getVatSummaryByYear(actor.organization.id, year),
+    listVatRates(actor.organization.id),
+  ]);
 
   const currentMonthIndex = new Date().getMonth();
   const currentMonth = year === new Date().getFullYear() ? months[currentMonthIndex] : null;
@@ -32,6 +37,8 @@ export default async function ComptaVatPage({ searchParams }: { searchParams: Pr
           <a href={`/compta/tva?year=${year + 1}`} className="btn-secondary">{year + 1}</a>
         </div>
       </div>
+
+      <ComptaVatRatesClient initialRates={vatRates.map((r) => ({ id: r.id, name: r.name, rate: r.rate, isActive: r.isActive }))} />
 
       {currentMonth && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

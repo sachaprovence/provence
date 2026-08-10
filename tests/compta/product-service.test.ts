@@ -28,7 +28,7 @@ runIfDatabase("Compta Vellano — product-service", () => {
     const { organization, user } = await createOrgAndUser("create");
     const product = await createProduct(
       organization.id,
-      { name: "Margherita", category: "Pizza", price: 950, vatRate: 10, aliases: [], isActive: true },
+      { name: "Margherita", category: "Pizza", price: 950, vatRate: 10, aliases: [], isActive: true, isFavorite: false },
       user.id
     );
 
@@ -43,7 +43,7 @@ runIfDatabase("Compta Vellano — product-service", () => {
     const { organization, user } = await createOrgAndUser("inactive-filter");
     const product = await createProduct(
       organization.id,
-      { name: "Ancienne pizza", category: "Pizza", price: 800, vatRate: 10, aliases: [], isActive: true },
+      { name: "Ancienne pizza", category: "Pizza", price: 800, vatRate: 10, aliases: [], isActive: true, isFavorite: false },
       user.id
     );
     await updateProduct(organization.id, product.id, { isActive: false }, user.id);
