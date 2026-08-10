@@ -207,6 +207,33 @@ export async function setRecipe(
 }
 
 /**
+ * Supprime intégralement la recette d'un produit — ne touche jamais au
+ * produit lui-même ni à l'historique des ventes déjà réalisées (les lignes
+ * de vente conservent leur propre copie figée du prix/de la TVA, sans lien
+ * de calcul vivant vers la recette). Réutilise `setRecipe([])` pour la
+ * transaction (une seule façon de vider une recette), avec une action
+ * d'audit dédiée pour rester lisible dans le journal.
+ */
+export async function deleteRecipe(organizationId: string, productId: string, actorUserId: string) {
+  const product = await prisma.comptaProduct.findFirst({ where: { id: productId, organizationId } });
+  if (!product) throw new NotFoundError("Produit introuvable.");
+
+  const existing = await getRecipe(organizationId, productId);
+  if (existing.length === 0) throw new NotFoundError("Aucune recette configurée pour ce produit.");
+
+  await prisma.comptaRecipeLine.deleteMany({ where: { organizationId, productId } });
+
+  await writeAuditLog({
+    organizationId,
+    userId: actorUserId,
+    action: "compta_recipe.deleted",
+    entityType: "ComptaProduct",
+    entityId: productId,
+    metadata: { lineCount: existing.length, productName: product.name },
+  });
+}
+
+/**
  * Décrémente le stock des ingrédients pour les lignes de vente qui ont un
  * produit avec une recette — appelée depuis `sale-service.ts#createSale`
  * après la création de la vente. Best-effort par ligne : une ligne sans

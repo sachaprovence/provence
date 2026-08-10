@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireActorApi, isActorResponse } from "@/lib/api-helpers";
 import { toApiErrorResponse } from "@/lib/errors";
 import { comptaRecipeSchema } from "@/lib/validations/compta";
-import { getRecipe, setRecipe } from "@/lib/compta/stock-service";
+import { getRecipe, setRecipe, deleteRecipe } from "@/lib/compta/stock-service";
 import { canManageComptaFinance, comptaForbiddenResponse } from "@/lib/compta/permissions";
 
 type Params = { params: Promise<{ id: string }> };
@@ -36,5 +36,19 @@ export async function PUT(request: Request, { params }: Params) {
     return NextResponse.json({ recipe });
   } catch (error) {
     return toApiErrorResponse(error, request, { route: "PUT /api/compta/products/[id]/recipe" });
+  }
+}
+
+export async function DELETE(request: Request, { params }: Params) {
+  const actor = await requireActorApi();
+  if (isActorResponse(actor)) return actor;
+  if (!canManageComptaFinance(actor.membership.role)) return comptaForbiddenResponse();
+  const { id } = await params;
+
+  try {
+    await deleteRecipe(actor.organization.id, id, actor.user.id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return toApiErrorResponse(error, request, { route: "DELETE /api/compta/products/[id]/recipe" });
   }
 }

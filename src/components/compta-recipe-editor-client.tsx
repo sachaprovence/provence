@@ -2,21 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPut, ApiError } from "@/lib/api-client";
+import { apiPut, apiDelete, ApiError } from "@/lib/api-client";
 
 type Ingredient = { id: string; name: string; unit: string };
 type RecipeLine = { ingredientId: string; quantity: number };
 
 export function ComptaRecipeEditorClient({
   productId,
+  productName,
   initialLines,
   ingredients,
 }: {
   productId: string;
+  productName: string;
   initialLines: RecipeLine[];
   ingredients: Ingredient[];
 }) {
   const router = useRouter();
+  const hasRecipe = initialLines.length > 0;
   const [lines, setLines] = useState<RecipeLine[]>(initialLines.length > 0 ? initialLines : [{ ingredientId: "", quantity: 1 }]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,6 +49,22 @@ export function ComptaRecipeEditorClient({
     }
   }
 
+  async function deleteRecipe() {
+    if (!confirm(`Supprimer la recette de ${productName} ?`)) return;
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await apiDelete(`/api/compta/products/${productId}/recipe`);
+      setLines([{ ingredientId: "", quantity: 1 }]);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Impossible de supprimer cette recette. Réessayez.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (ingredients.length === 0) {
     return (
       <div className="card p-4 text-sm text-p360-muted">
@@ -55,7 +74,14 @@ export function ComptaRecipeEditorClient({
   }
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="space-y-3">
+      {!hasRecipe && (
+        <div className="card p-4 text-sm text-p360-muted">
+          Aucune recette configurée pour ce produit — le stock des ingrédients ne sera pas décrémenté à la vente
+          tant qu&apos;aucune ligne n&apos;est enregistrée ci-dessous.
+        </div>
+      )}
+      <div className="card p-4 space-y-3">
       {lines.map((line, index) => (
         <div key={index} className="grid grid-cols-12 gap-2 items-end">
           <div className="col-span-7">
@@ -91,10 +117,16 @@ export function ComptaRecipeEditorClient({
 
       {error && <p className="text-sm text-p360-danger">{error}</p>}
       {saved && <p className="text-sm text-p360-success">Recette enregistrée.</p>}
-      <div>
+      <div className="flex flex-wrap gap-2">
         <button type="button" disabled={busy} className="btn-primary" onClick={save}>
           {busy ? "Enregistrement…" : "Enregistrer la recette"}
         </button>
+        {hasRecipe && (
+          <button type="button" disabled={busy} className="btn-danger" onClick={deleteRecipe}>
+            Supprimer la recette
+          </button>
+        )}
+      </div>
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ export default async function ComptaRecipePage({ params }: { params: Promise<{ i
           Chaque ingrédient listé ici est automatiquement décrémenté du stock à chaque vente de ce produit.
         </p>
       </div>
-      <ComptaRecipeEditorClient productId={product.id} initialLines={recipe} ingredients={ingredients} />
+      <ComptaRecipeEditorClient productId={product.id} productName={product.name} initialLines={recipe} ingredients={ingredients} />
     </div>
   );
 }

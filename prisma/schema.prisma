@@ -140,6 +140,9 @@ model Organization {
   comptaPurchasePayments      ComptaPurchasePayment[]
   comptaCashSessions          ComptaCashSession[]
   comptaCustomers             ComptaCustomer[]
+  comptaOrders                ComptaOrder[]
+  comptaVatRates              ComptaVatRate[]
+  userNavigationPreferences   UserNavigationPreference[]
   plan                        Plan?                        @relation(fields: [planId], references: [id])
   apiKeys                     ApiKey[]
   webhookSubscriptions        WebhookSubscription[]
@@ -212,6 +215,8 @@ model User {
   comptaPurchasePaymentsCreated  ComptaPurchasePayment[]
   comptaCashSessionsOpened       ComptaCashSession[]          @relation("ComptaCashSessionOpenedBy")
   comptaCashSessionsClosed       ComptaCashSession[]          @relation("ComptaCashSessionClosedBy")
+  comptaOrdersCreated            ComptaOrder[]
+  navigationPreferences          UserNavigationPreference[]
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +271,7 @@ model Workspace {
   comptaExpenses            ComptaExpense[]
   comptaCashCounts          ComptaCashCount[]
   comptaCashSessions        ComptaCashSession[]
+  comptaOrders              ComptaOrder[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -3475,15 +3481,20 @@ model ComptaProduct {
   isActive       Boolean  @default(true)
   /// Favori (v2, mode rapide) — affiché en priorité dans les tuiles de vente rapide. `false` par défaut : comportement inchangé pour tout produit existant.
   isFavorite     Boolean  @default(false)
+  /// Référence au taux TVA nommé actuellement sélectionné (Paramètres → TVA) — `null` pour tout produit créé avant cette fonctionnalité, qui garde alors son `vatRate` existant tel quel (aucune migration rétroactive). Voir `ComptaVatRate` pour la logique de synchronisation.
+  vatRateId      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vatRateRef   ComptaVatRate?     @relation(fields: [vatRateId], references: [id])
   saleLines    ComptaSaleLine[]
   recipeLines  ComptaRecipeLine[]
+  orderLines   ComptaOrderLine[]
 
   @@index([organizationId])
   @@index([organizationId, isFavorite])
+  @@index([vatRateId])
 }
 
 /// Vente enregistrée manuellement (v1) ou, plus tard, validée depuis le
@@ -3524,6 +3535,7 @@ model ComptaSale {
   refundOfSale ComptaSale?      @relation("ComptaSaleRefund", fields: [refundOfSaleId], references: [id])
   refunds      ComptaSale[]     @relation("ComptaSaleRefund")
   lines        ComptaSaleLine[]
+  order        ComptaOrder?
 
   @@unique([organizationId, reference])
   @@index([organizationId, soldAt])
@@ -3846,9 +3858,141 @@ model ComptaCustomer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sales        ComptaSale[]
+  orders       ComptaOrder[]
 
   @@index([organizationId])
   @@index([organizationId, name])
+}
+
+// ---------------------------------------------------------------------------
+// Compta Vellano — "Service Flow" (Commandes clients, TVA configurable,
+// navigation par utilisateur). Additif uniquement : aucun champ v1/v2
+// renommé ou supprimé. Voir docs/adr/0050-compta-vellano-service-flow.md.
+// ---------------------------------------------------------------------------
+
+/// `OPEN` : modifiable librement (ajout/retrait/quantité), c'est la seule table/comptoir en cours
+/// de prise de commande. `COMPLETED` : encaissée, liée à une `ComptaSale` réelle, immuable.
+/// `CANCELLED` : abandonnée avant encaissement, jamais transformée en vente, exclue du CA.
+enum ComptaOrderStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+/// Commande client ("Commandes", mode comptoir/table) — distincte de `ComptaSale` : une commande
+/// est une table ouverte pendant le service, modifiable ligne par ligne, qui ne devient une vente
+/// réelle (`ComptaSale`, via `sale-service.ts#createSale` — jamais une logique de vente dupliquée)
+/// qu'à l'encaissement (`order-service.ts#checkoutOrder`). Tant qu'elle est `OPEN`, ses montants ne
+/// sont PAS stockés : ils sont recalculés à la volée depuis les lignes (même principe que
+/// `ComptaCashSession`, jamais un total qui pourrait se désynchroniser des lignes réelles) ;
+/// `subtotalAmount`/`vatAmount`/`totalAmount` ne sont renseignés qu'au moment du passage à
+/// `COMPLETED`, copiés depuis la `ComptaSale` créée.
+model ComptaOrder {
+  id             String               @id @default(cuid())
+  organizationId String
+  workspaceId    String?
+  /// Numéro séquentiel par organisation (jamais réutilisé), pour l'affichage "Commande #12" quand aucun nom n'est saisi.
+  number         Int
+  /// Nom facultatif ("Table 3", "Monsieur Dupont"...) — si vide, l'affichage retombe sur "Commande #{number}" (calculé, jamais stocké en dur).
+  name           String?
+  status         ComptaOrderStatus    @default(OPEN)
+  paymentMethod  ComptaPaymentMethod?
+  /// Vente créée à l'encaissement — `null` tant que la commande n'est pas `COMPLETED`. Unique : une commande ne produit jamais deux ventes.
+  saleId         String?              @unique
+  customerId     String?
+  subtotalAmount Int?
+  vatAmount      Int?
+  totalAmount    Int?
+  createdById    String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?        @relation(fields: [workspaceId], references: [id])
+  sale         ComptaSale?       @relation(fields: [saleId], references: [id])
+  customer     ComptaCustomer?   @relation(fields: [customerId], references: [id])
+  createdBy    User?             @relation(fields: [createdById], references: [id])
+  lines        ComptaOrderLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([workspaceId])
+}
+
+/// Ligne de commande — `productNameSnapshot`/`unitPriceTtcSnapshot`/`vatRateSnapshot` sont figés au
+/// moment où le produit est AJOUTÉ à la commande (jamais recalculés depuis le catalogue en lecture),
+/// pour qu'une modification du prix/de la TVA d'un produit pendant le service ne change jamais une
+/// ligne déjà posée sur une commande en cours — même snapshot que `ComptaSaleLine`, appliqué plus tôt
+/// dans le cycle de vie. Un second clic sur le même produit incrémente `quantity` sur la ligne
+/// existante plutôt que de créer une ligne dupliquée (voir `order-service.ts#addOrderItem`).
+model ComptaOrderLine {
+  id                   String   @id @default(cuid())
+  orderId              String
+  productId            String?
+  productNameSnapshot  String
+  quantity             Int      @default(1)
+  unitPriceTtcSnapshot Int
+  vatRateSnapshot      Float
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  order   ComptaOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product ComptaProduct? @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+/// Taux de TVA nommé, configurable depuis l'interface (Paramètres → TVA) — source centrale de
+/// vérité pour "quels taux existent aujourd'hui", jamais une valeur codée en dur dans un composant.
+/// `ComptaProduct.vatRate` (Float, existant depuis v1) reste le champ réellement utilisé pour tous
+/// les calculs et copié tel quel dans chaque ligne de vente/commande au moment de la transaction —
+/// modifier `rate` ici met à jour `vatRate` des produits qui pointent vers ce taux (`vatRateId`),
+/// mais NE TOUCHE JAMAIS une ligne déjà transactée (`ComptaSaleLine.vatRate`/
+/// `ComptaOrderLine.vatRateSnapshot`/`ComptaExpense.vatRate` sont indépendants, jamais recalculés).
+model ComptaVatRate {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  rate           Float
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products     ComptaProduct[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+}
+
+// ---------------------------------------------------------------------------
+// Navigation personnalisée par utilisateur (Paramètres → Menu / Navigation).
+// Ne stocke que les ÉCARTS par rapport au menu par défaut du rôle
+// (`src/components/nav-config.ts`) : l'absence de ligne pour un `sectionKey`
+// = visible (comportement inchangé pour tout compte n'ayant jamais touché
+// ce réglage). Masquer une section du menu n'accorde ni ne retire jamais un
+// droit d'accès — ça reste entièrement porté par `MembershipRole`/les
+// vérifications serveur existantes (voir `src/lib/compta/permissions.ts` et
+// `src/lib/permissions.ts`) ; c'est un réglage d'affichage, jamais une
+// couche de permission supplémentaire.
+model UserNavigationPreference {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  /// `href` d'un élément de `NAV_ITEMS` (`src/components/nav-config.ts`), ex. `/compta/stock`.
+  sectionKey     String
+  visible        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId, sectionKey])
+  @@index([organizationId])
 }
