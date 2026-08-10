@@ -25,6 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/stats", label: "Statistiques", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/compta", label: "Compta Vellano", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/compta/rapide", label: "Vente rapide", roles: ["OWNER_ADMIN", "SALES"] },
+  { href: "/compta/commandes", label: "Commandes", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/compta/ventes", label: "Ventes", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/compta/clients", label: "Clients", roles: ["OWNER_ADMIN", "SALES"] },
   { href: "/compta/caisse", label: "Caisse", roles: ["OWNER_ADMIN", "SALES"] },
