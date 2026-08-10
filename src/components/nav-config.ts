@@ -40,6 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/compta/scanner", label: "Scanner (bientôt)", roles: ["OWNER_ADMIN"] },
   { href: "/compta/assistant", label: "Assistant IA (bientôt)", roles: ["OWNER_ADMIN"] },
   { href: "/settings", label: "Paramètres", roles: ["OWNER_ADMIN"] },
+  { href: "/settings/navigation", label: "Menu / Navigation", roles: ["OWNER_ADMIN"] },
   { href: "/settings/workspaces", label: "Workspaces", roles: ["OWNER_ADMIN"] },
   { href: "/settings/agents", label: "Agents IA", roles: ["OWNER_ADMIN"] },
   { href: "/settings/director", label: "Agent Director", roles: ["OWNER_ADMIN"] },

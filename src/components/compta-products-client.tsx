@@ -17,12 +17,16 @@ type Product = {
   isFavorite: boolean;
 };
 
-const EMPTY_FORM = { name: "", category: "", price: "", vatRate: "10", costPrice: "", isFavorite: false };
+type VatRateOption = { id: string; name: string; rate: number };
 
-export function ComptaProductsClient({ products }: { products: Product[] }) {
+function emptyForm(vatRates: VatRateOption[]) {
+  return { name: "", category: "", price: "", vatRateId: vatRates[0]?.id ?? "", costPrice: "", isFavorite: false };
+}
+
+export function ComptaProductsClient({ products, vatRates }: { products: Product[]; vatRates: VatRateOption[] }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() => emptyForm(vatRates));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -35,12 +39,12 @@ export function ComptaProductsClient({ products }: { products: Product[] }) {
         name: form.name,
         category: form.category,
         price: Math.round(Number(form.price) * 100),
-        vatRate: Number(form.vatRate),
+        vatRateId: form.vatRateId || undefined,
         costPrice: form.costPrice ? Math.round(Number(form.costPrice) * 100) : undefined,
         isFavorite: form.isFavorite,
         aliases: [],
       });
-      setForm(EMPTY_FORM);
+      setForm(emptyForm(vatRates));
       setShowForm(false);
       router.refresh();
     } catch (err) {
@@ -97,8 +101,19 @@ export function ComptaProductsClient({ products }: { products: Product[] }) {
             <input required type="number" step="0.01" min="0" className="input" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} />
           </div>
           <div>
-            <label className="label">TVA (%)</label>
-            <input required type="number" step="0.1" min="0" max="100" className="input" value={form.vatRate} onChange={(e) => setForm((f) => ({ ...f, vatRate: e.target.value }))} />
+            <label className="label">TVA</label>
+            {vatRates.length > 0 ? (
+              <select required className="input" value={form.vatRateId} onChange={(e) => setForm((f) => ({ ...f, vatRateId: e.target.value }))}>
+                <option value="">—</option>
+                {vatRates.map((rate) => (
+                  <option key={rate.id} value={rate.id}>{rate.name} — {rate.rate} %</option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-sm text-p360-muted pt-2">
+                Aucun taux configuré. <Link href="/compta/tva" className="text-p360-blue hover:underline">Créez-en un</Link>.
+              </p>
+            )}
           </div>
           <div>
             <label className="label">Coût matière (€, optionnel)</label>
