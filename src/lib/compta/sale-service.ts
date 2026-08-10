@@ -17,7 +17,7 @@ import type { z } from "zod";
  * d'une ligne à l'autre (ex. pizza 10% vs boisson 20%) — reste exacte après
  * remise, plutôt qu'une approximation sur un taux moyen.
  */
-function computeSaleTotals(lines: z.infer<typeof comptaSaleSchema>["lines"], discountPercent: number) {
+export function computeSaleTotals(lines: z.infer<typeof comptaSaleSchema>["lines"], discountPercent: number) {
   const discountFactor = 1 - discountPercent / 100;
   let subtotalAmount = 0;
   let totalAmount = 0;

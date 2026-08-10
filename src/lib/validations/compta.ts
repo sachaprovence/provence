@@ -9,6 +9,9 @@ export const comptaProductSchema = z.object({
   aliases: z.array(z.string().min(1).max(100)).default([]),
   isActive: z.coerce.boolean().default(true),
   isFavorite: z.coerce.boolean().default(false),
+  // Taux TVA nommé sélectionné (Paramètres → TVA) — optionnel : un produit peut toujours saisir
+  // `vatRate` directement sans passer par le catalogue de taux (comportement historique inchangé).
+  vatRateId: z.string().optional().nullable(),
 });
 
 export const comptaProductUpdateSchema = comptaProductSchema.partial();
@@ -154,3 +157,41 @@ export const comptaCustomerSchema = z.object({
 });
 
 export const comptaCustomerUpdateSchema = comptaCustomerSchema.partial();
+
+// --- Commandes clients ("Commandes", Service Flow) ---------------------------
+
+export const comptaOrderCreateSchema = z.object({
+  name: z.string().max(200).optional().nullable(),
+});
+
+export const comptaOrderRenameSchema = z.object({
+  name: z.string().max(200).optional().nullable(),
+});
+
+export const comptaOrderAddItemSchema = z.object({
+  productId: z.string(),
+});
+
+// `quantity: 0` est valide et signifie "supprimer la ligne" (voir order-service.ts#updateOrderItem).
+export const comptaOrderItemUpdateSchema = z.object({
+  quantity: z.coerce.number().int().min(0),
+});
+
+export const comptaOrderCheckoutSchema = z.object({
+  paymentMethod: z.enum(COMPTA_PAYMENT_METHODS),
+  customerId: z.string().optional().nullable(),
+});
+
+export const comptaOrderCancelSchema = z.object({
+  reason: z.string().max(500).optional().nullable(),
+});
+
+// --- TVA configurable (Service Flow) ------------------------------------------
+
+export const comptaVatRateSchema = z.object({
+  name: z.string().min(1).max(100),
+  rate: z.coerce.number().min(0).max(100),
+  isActive: z.coerce.boolean().default(true),
+});
+
+export const comptaVatRateUpdateSchema = comptaVatRateSchema.partial();
