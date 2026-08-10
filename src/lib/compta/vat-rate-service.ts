@@ -12,14 +12,31 @@ const DEFAULT_VAT_RATES: { name: string; rate: number }[] = [
   { name: "TVA normale", rate: 20 },
 ];
 
-/** Amorçage paresseux et idempotent : ne crée les taux par défaut QUE si l'organisation n'en a jamais eu aucun — jamais recréé après une suppression volontaire. */
+/**
+ * Amorçage paresseux et idempotent : ne crée les taux par défaut QUE si l'organisation n'en a
+ * jamais eu aucun. Un simple `count > 0` ne suffit pas — après une suppression volontaire de tous
+ * les taux, le compte retomberait à 0 et serait réamorcé à tort. On journalise donc l'amorçage
+ * lui-même dans l'audit log, qui persiste indéfiniment, pour ne jamais réamorcer une organisation
+ * qui a déjà été initialisée une fois.
+ */
 async function ensureDefaultVatRates(organizationId: string) {
   const count = await prisma.comptaVatRate.count({ where: { organizationId } });
   if (count > 0) return;
 
-  await prisma.comptaVatRate.createMany({
-    data: DEFAULT_VAT_RATES.map((rate) => ({ organizationId, name: rate.name, rate: rate.rate })),
+  const alreadySeeded = await prisma.auditLog.findFirst({
+    where: { organizationId, action: "compta_vat_rate.seeded" },
+    select: { id: true },
   });
+  if (alreadySeeded) return;
+
+  await prisma.$transaction([
+    prisma.comptaVatRate.createMany({
+      data: DEFAULT_VAT_RATES.map((rate) => ({ organizationId, name: rate.name, rate: rate.rate })),
+    }),
+    prisma.auditLog.create({
+      data: { organizationId, action: "compta_vat_rate.seeded", entityType: "ComptaVatRate", metadata: { count: DEFAULT_VAT_RATES.length } },
+    }),
+  ]);
 }
 
 export async function listVatRates(organizationId: string, filters: { activeOnly?: boolean } = {}) {

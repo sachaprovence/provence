@@ -12,6 +12,7 @@ import {
   listStockMovements,
   setRecipe,
   getRecipe,
+  deleteRecipe,
   receiveStockForPurchaseOrder,
 } from "@/lib/compta/stock-service";
 import { NotFoundError } from "@/lib/errors";
@@ -126,6 +127,43 @@ runIfDatabase("Compta Vellano — stock-service", () => {
     const cheeseAfter = await getIngredient(organization.id, cheese.id);
     expect(doughAfter.stockQuantity).toBe(17); // 20 - 3*1
     expect(cheeseAfter.stockQuantity).toBeCloseTo(4.4); // 5 - 3*0.2
+  });
+
+  it("supprime intégralement la recette d'un produit sans supprimer le produit ni l'historique des ventes", async () => {
+    const { organization, user } = await createOrgAndUser("recipe-delete");
+    const dough = await createIngredient(organization.id, { name: "Pâte", unit: "unité", stockQuantity: 10 }, user.id);
+    const product = await createProduct(
+      organization.id,
+      { name: "Reine", category: "Pizza", price: 1200, vatRate: 10, aliases: [], isActive: true, isFavorite: false },
+      user.id
+    );
+    await setRecipe(organization.id, product.id, [{ ingredientId: dough.id, quantity: 1 }], user.id);
+    expect(await getRecipe(organization.id, product.id)).toHaveLength(1);
+
+    // Une vente réalisée avant la suppression doit rester consultable et inchangée après coup.
+    const sale = await createSale(
+      organization.id,
+      { soldAt: new Date(), paymentMethod: "CASH", discountPercent: 0, lines: [{ productId: product.id, productName: product.name, quantity: 1, unitPrice: 1200, vatRate: 10 }] },
+      user.id
+    );
+
+    await deleteRecipe(organization.id, product.id, user.id);
+
+    expect(await getRecipe(organization.id, product.id)).toHaveLength(0);
+    const productAfter = await prisma.comptaProduct.findUniqueOrThrow({ where: { id: product.id } });
+    expect(productAfter.id).toBe(product.id); // le produit lui-même n'est jamais supprimé
+    const saleAfter = await prisma.comptaSale.findUniqueOrThrow({ where: { id: sale.id }, include: { lines: true } });
+    expect(saleAfter.lines[0].quantity).toBe(1); // l'historique de vente n'est jamais modifié rétroactivement
+  });
+
+  it("lève une erreur si on tente de supprimer une recette déjà vide", async () => {
+    const { organization, user } = await createOrgAndUser("recipe-delete-empty");
+    const product = await createProduct(
+      organization.id,
+      { name: "Sans recette", category: "Pizza", price: 1000, vatRate: 10, aliases: [], isActive: true, isFavorite: false },
+      user.id
+    );
+    await expect(deleteRecipe(organization.id, product.id, user.id)).rejects.toThrow(NotFoundError);
   });
 
   it("réception de commande fournisseur : incrémente le stock des ingrédients commandés", async () => {
