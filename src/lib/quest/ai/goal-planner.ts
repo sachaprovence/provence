@@ -1,6 +1,7 @@
 import "server-only";
 import { generateStructured, isDemoMode, QUEST_AI_SYSTEM_PROMPT } from "./client";
 import { GoalPlanSchema, type GoalAnalysis, type GoalPlan } from "./schemas";
+import { detectDomainHandler } from "./domains/registry";
 
 /**
  * Génère les grands jalons d'un objectif (§6 du brief) — vision globale
@@ -8,6 +9,12 @@ import { GoalPlanSchema, type GoalAnalysis, type GoalPlan } from "./schemas";
  * `quest-generator.ts`, régénérées au fil de l'eau). 3 à 8 jalons, poids
  * croissant vers la fin (les derniers jalons pèsent en général plus que les
  * premiers — "premier client" > "offre définie").
+ *
+ * Suite au retour terrain : en mode démo, les jalons doivent être
+ * spécifiques au domaine de l'objectif (paliers de durée pour la course à
+ * pied, étapes de prospection pour la vente...), jamais des gabarits
+ * interchangeables ("Première action concrète", "Consolider et
+ * accélérer"...) qui ne veulent rien dire pour un objectif précis.
  */
 
 export type PlanGoalInput = {
@@ -17,6 +24,16 @@ export type PlanGoalInput = {
 };
 
 function planGoalDemo(input: PlanGoalInput): GoalPlan {
+  const handler = detectDomainHandler(input.title, input.description);
+  if (handler) {
+    const milestones = handler.buildMilestones({
+      title: input.title,
+      description: input.description,
+      currentStateText: input.analysis.currentState,
+    });
+    return GoalPlanSchema.parse({ milestones });
+  }
+
   const goal = input.title;
   return GoalPlanSchema.parse({
     milestones: [
@@ -32,10 +49,13 @@ function planGoalDemo(input: PlanGoalInput): GoalPlan {
 export async function planGoal(input: PlanGoalInput): Promise<GoalPlan> {
   if (isDemoMode()) return planGoalDemo(input);
 
+  const domainHint = detectDomainHandler(input.title, input.description)?.domain ?? null;
+
   const prompt = `Objectif : "${input.title}"${input.description ? `\nDescription : ${input.description}` : ""}
 Analyse déjà réalisée : ${JSON.stringify(input.analysis, null, 2)}
+${domainHint ? `Domaine détecté (indicatif) : ${domainHint}.` : ""}
 
-Découpe cet objectif en 3 à 8 grands jalons (vision globale stable, PAS des tâches détaillées). Chaque jalon a un poids relatif (0.5 à 5) reflétant son importance réelle dans la progression vers l'objectif (un jalon "premier client" pèse plus qu'un jalon "offre définie").
+Découpe cet objectif en 3 à 8 grands jalons (vision globale stable, PAS des tâches détaillées). Chaque jalon doit être SPÉCIFIQUE à cet objectif précis (ex. pour "courir 1h à 10 km/h" : des paliers de durée courue sans s'arrêter ; pour "trouver 10 clients" : des étapes de prospection réelles) — jamais un gabarit générique interchangeable comme "première action concrète" ou "consolider et accélérer", qui pourrait s'appliquer à n'importe quel objectif. Chaque jalon a un poids relatif (0.5 à 5) reflétant son importance réelle dans la progression vers l'objectif.
 
 Réponds UNIQUEMENT avec un objet JSON : { "milestones": [{ "title": string, "description": string | null, "weight": number }] }`;
 

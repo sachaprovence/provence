@@ -136,7 +136,7 @@ export function NextQuestCard({ quest }: { quest: NextQuestCardData }) {
             <button
               className="quest-btn-secondary"
               disabled={pending !== null}
-              onClick={() => run("too-easy", `/api/quest/quests/${quest.id}/too-easy`, {}, "Noté, on montera le niveau")}
+              onClick={() => run("too-easy", `/api/quest/quests/${quest.id}/too-easy`, {}, "On monte le niveau")}
             >
               Trop facile
             </button>

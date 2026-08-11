@@ -15,8 +15,8 @@ import { analyzeBlocker } from "./ai/blocker-analyzer";
 import { applyMemoryObservations, getActiveMemoriesForPrompt } from "./memory-service";
 import { awardXp, recomputeUserStats } from "./stat-service";
 
-type GoalRef = { id: string; title: string; description: string | null };
-type MilestoneRef = { id: string; title: string; description: string | null } | null;
+type GoalRef = { id: string; title: string; description: string | null; currentState: string | null };
+type MilestoneRef = { id: string; title: string; description: string | null; order: number } | null;
 
 async function buildRecentFeedbackSummary(userId: string): Promise<string | null> {
   const since = new Date(Date.now() - 14 * 86_400_000);
@@ -41,7 +41,8 @@ export async function generateQuestsForMilestone(userId: string, goal: GoalRef, 
   const generation = await generateQuests({
     goalTitle: goal.title,
     goalDescription: goal.description,
-    milestone: milestone ? { title: milestone.title, description: milestone.description } : null,
+    goalCurrentState: goal.currentState,
+    milestone: milestone ? { title: milestone.title, description: milestone.description, order: milestone.order } : null,
     difficultyBand: band,
     activeMemories,
     recentFeedbackSummary,
@@ -303,12 +304,18 @@ export async function markTooHard(userId: string, questId: string) {
   return decomposeQuest(userId, questId, "Signalée trop difficile par l'utilisateur (§17 du brief).");
 }
 
+/**
+ * Trop facile (§16 du brief) : remplace immédiatement la quête par une
+ * version plus difficile dans la continuité (ex. course à pied : 5 min ->
+ * 8-10 min), symétrique de `markTooHard`/`decomposeQuest` côté "plus dur".
+ */
 export async function markTooEasy(userId: string, questId: string) {
-  const quest = await requireOwnedQuest(userId, questId);
+  await requireOwnedQuest(userId, questId);
   await prisma.questFeedback.create({ data: { questId, userId, action: "TOO_EASY" } });
   await adjustDifficultyFromRecentSignals(userId);
+  await recordMemoryObservationsFromRecentFeedback(userId);
   await writeQuestAuditLog({ userId, action: "quest.too_easy", entityType: "Quest", entityId: questId });
-  return quest;
+  return increaseQuestDifficulty(userId, questId, "Signalée trop facile par l'utilisateur (§16 du brief).");
 }
 
 export async function markBlocked(userId: string, questId: string, note?: string | null) {
@@ -344,19 +351,21 @@ export async function replaceQuest(userId: string, questId: string, reason?: str
 }
 
 /**
- * Décomposition intelligente (§17 du brief) : la quête d'origine passe en
- * `REPLACED` (jamais supprimée — conserve l'historique et `parentQuestId`
- * relie les sous-quêtes créées à leur origine).
+ * Remplace une quête par une version ajustée (§16-17 du brief) — la quête
+ * d'origine passe en `REPLACED` (jamais supprimée — conserve l'historique et
+ * `parentQuestId` relie la/les nouvelle(s) quête(s) à leur origine).
+ * `EASIER` : décomposition (§17, quête trop dure/bloquée/reportée). `HARDER` :
+ * adaptation à la hausse (§16, quête trop facile).
  */
-export async function decomposeQuest(userId: string, questId: string, reason: string | null) {
+async function regenerateQuestFromSource(userId: string, questId: string, direction: "EASIER" | "HARDER", reason: string | null) {
   const quest = await requireOwnedQuest(userId, questId);
   if (quest.status === "REPLACED") {
     return { quest, subQuests: [] as typeof quest[], decomposed: false as const };
   }
 
   const { profile } = await ensureUserBootstrap(userId);
-  // Une décomposition vise délibérément plus facile que le niveau courant de l'utilisateur.
-  const band = challengeScoreToDifficultyBand(Math.max(1, profile.challengeScore - 15));
+  const scoreShift = direction === "EASIER" ? -15 : 15;
+  const band = challengeScoreToDifficultyBand(Math.max(1, Math.min(100, profile.challengeScore + scoreShift)));
   const [activeMemories, recentFeedbackSummary, goal] = await Promise.all([
     getActiveMemoriesForPrompt(userId),
     buildRecentFeedbackSummary(userId),
@@ -366,13 +375,14 @@ export async function decomposeQuest(userId: string, questId: string, reason: st
   const generation = await generateQuests({
     goalTitle: goal.title,
     goalDescription: goal.description,
+    goalCurrentState: goal.currentState,
     milestone: null,
     difficultyBand: band,
     activeMemories,
     recentFeedbackSummary,
-    count: 3,
-    mode: "DECOMPOSE",
-    decomposeSource: { title: quest.title, description: quest.description },
+    count: direction === "EASIER" ? 3 : 1,
+    mode: direction === "EASIER" ? "DECOMPOSE" : "INCREASE",
+    sourceQuest: { title: quest.title, description: quest.description },
   });
 
   const [replacedQuest, ...subQuests] = await prisma.$transaction([
@@ -394,7 +404,7 @@ export async function decomposeQuest(userId: string, questId: string, reason: st
           impactWeight: draft.impactWeight,
           xpReward: computeXpReward({ type: draft.type, difficulty: draft.difficulty, impactWeight: draft.impactWeight }),
           aiGenerated: true,
-          generationReason: reason ?? "Décomposition automatique.",
+          generationReason: reason ?? (direction === "EASIER" ? "Décomposition automatique." : "Adaptation à la hausse automatique."),
         },
       })
     ),
@@ -402,13 +412,21 @@ export async function decomposeQuest(userId: string, questId: string, reason: st
 
   await writeQuestAuditLog({
     userId,
-    action: "quest.decomposed",
+    action: direction === "EASIER" ? "quest.decomposed" : "quest.increased",
     entityType: "Quest",
     entityId: questId,
     metadata: { subQuestCount: subQuests.length, reason },
   });
 
   return { quest: replacedQuest, subQuests, decomposed: true as const };
+}
+
+export async function decomposeQuest(userId: string, questId: string, reason: string | null) {
+  return regenerateQuestFromSource(userId, questId, "EASIER", reason);
+}
+
+export async function increaseQuestDifficulty(userId: string, questId: string, reason: string | null) {
+  return regenerateQuestFromSource(userId, questId, "HARDER", reason);
 }
 
 export type { GoalRef, MilestoneRef };

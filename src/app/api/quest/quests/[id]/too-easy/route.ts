@@ -11,8 +11,8 @@ export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
 
   try {
-    const quest = await markTooEasy(actor.user.id, id);
-    return NextResponse.json({ quest });
+    const result = await markTooEasy(actor.user.id, id);
+    return NextResponse.json(result);
   } catch (error) {
     return toApiErrorResponse(error, request, { route: "POST /api/quest/quests/[id]/too-easy" });
   }
