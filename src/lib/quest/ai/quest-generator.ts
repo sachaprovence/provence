@@ -4,6 +4,7 @@ import { QuestGenerationSchema, type QuestDraft, type QuestGeneration } from "./
 import type { DifficultyBand } from "@/lib/quest/difficulty-engine";
 import type { DomainQuestDraft } from "./goal-domain";
 import { detectDomainHandler } from "./domains/registry";
+import { formatUserContextForPrompt, type UserContext } from "@/lib/quest/context-builder";
 
 /**
  * Génère 1 à 5 quêtes immédiatement pertinentes (§2/§7 du brief) — jamais
@@ -28,13 +29,29 @@ export type GenerateQuestsInput = {
   goalCurrentState: string | null;
   milestone: { title: string; description: string | null; order: number } | null;
   difficultyBand: DifficultyBand;
-  activeMemories: { type: string; content: string }[];
-  recentFeedbackSummary: string | null;
+  /** Contexte utilisateur centralisé (Context Builder) — profil dynamique, mémoires, épisodes, stratégies. N'influence que le mode réel (les handlers de domaine du mode démo restent déterministes et autonomes). */
+  context: UserContext;
   count: number;
   mode: "NEXT" | "DECOMPOSE" | "INCREASE";
   /** Quête d'origine pour les modes `DECOMPOSE`/`INCREASE` — jamais utilisé en mode `NEXT`. */
   sourceQuest?: { title: string; description: string | null };
 };
+
+/**
+ * Phrases génériques interdites dès qu'un objectif est précis (retour
+ * terrain) — utilisée à la fois par les tests et, ici, comme garde-fou en
+ * mode réel : si Claude produit malgré tout une de ces formulations, une
+ * seule relance est tentée avant de basculer sur le handler de domaine
+ * (s'il existe) comme filet de sécurité — jamais un résultat générique
+ * accepté silencieusement (§56 du brief : logique déterministe en garde-fou,
+ * jamais la source principale quand un LLM est disponible).
+ */
+export const GENERIC_PHRASE_BLACKLIST =
+  /écris en une phrase concrète et mesurable ce que représente|liste 3 signes qui montreraient|fais une première action réelle \(pas une préparation\)|consacre un vrai créneau concentré|définis la toute première étape, la plus petite possible, pour|définis ton objectif|décris en une phrase ce que représente ton objectif/i;
+
+function containsGenericPhrase(generation: QuestGeneration): boolean {
+  return generation.quests.some((q) => GENERIC_PHRASE_BLACKLIST.test(q.title));
+}
 
 const TYPE_BY_DIFFICULTY: Record<number, { type: QuestDraft["type"]; minutes: number }> = {
   1: { type: "MICRO", minutes: 10 },
@@ -125,7 +142,7 @@ export async function generateQuests(input: GenerateQuestsInput): Promise<QuestG
 
   const domainHint = detectDomainHandler(input.goalTitle, input.goalDescription)?.domain ?? null;
 
-  const context =
+  const instruction =
     (input.mode === "DECOMPOSE" || input.mode === "INCREASE") && input.sourceQuest
       ? input.mode === "DECOMPOSE"
         ? `L'utilisateur bute sur cette quête, trop difficile ou trop grande : "${input.sourceQuest.title}"${
@@ -137,27 +154,42 @@ export async function generateQuests(input: GenerateQuestsInput): Promise<QuestG
       : `Génère ${input.count} quêtes immédiatement pertinentes pour faire avancer le jalon "${input.milestone?.title ?? "(aucun jalon, directement sur l'objectif)"}" de l'objectif "${input.goalTitle}".`;
 
   const prompt = `Objectif : "${input.goalTitle}"${input.goalDescription ? `\nDescription : ${input.goalDescription}` : ""}
-${input.goalCurrentState ? `Niveau actuel connu : ${input.goalCurrentState}` : ""}
-${domainHint ? `Domaine détecté (indicatif) : ${domainHint}.` : ""}
+${input.goalCurrentState ? `Niveau actuel connu sur CET objectif : ${input.goalCurrentState}` : ""}
+${domainHint ? `Domaine détecté (indicatif — un handler déterministe existe pour ce domaine et sert de filet de sécurité si ta réponse est trop générique, mais NE construis pas ta réponse à partir de lui, raisonne toi-même sur l'objectif) : ${domainHint}.` : "Aucun domaine prédéfini reconnu pour cet objectif — comprends-le toi-même sémantiquement, aucun filet de sécurité déterministe n'existe pour lui : ta compréhension est la seule source d'intelligence ici."}
 
-${context}
+${instruction}
+
+${formatUserContextForPrompt(input.context)}
 
 Difficulté cible (1-5) : entre ${input.difficultyBand.minDifficulty} et ${input.difficultyBand.maxDifficulty} (adaptée au niveau actuel de l'utilisateur, ne pas dépasser).
-${input.recentFeedbackSummary ? `\nComportement récent observé : ${input.recentFeedbackSummary}` : ""}
-${
-  input.activeMemories.length > 0
-    ? `\nCe qu'on sait déjà sur l'utilisateur : ${input.activeMemories.map((m) => `- (${m.type}) ${m.content}`).join("\n")}`
-    : ""
-}
 
-PRINCIPE CENTRAL : chaque quête doit être spécifique à CET objectif précis, concrète, exécutable dans la vraie vie MAINTENANT, mesurable, et adaptée au niveau actuel connu. Utilise les chiffres/unités propres au domaine (minutes courues, répétitions, nombre de prospects, montant en €, cigarettes/jour...), jamais une formulation qui s'appliquerait à n'importe quel objectif. Les phrases génériques ("définis ton objectif", "décris en une phrase ce que représente ton objectif", "liste 3 signes de progression", "fais une première action réelle") sont INTERDITES dès que l'objectif est déjà précis.
+PRINCIPE CENTRAL : chaque quête doit être spécifique à CET objectif précis, concrète, exécutable dans la vraie vie MAINTENANT, mesurable, et adaptée au niveau actuel connu ET au profil/contexte ci-dessus (deux utilisateurs avec le même objectif mais un contexte différent doivent recevoir des quêtes différentes quand c'est rationnel). Utilise les chiffres/unités propres au domaine (minutes courues, répétitions, nombre de prospects, montant en €, cigarettes/jour...), jamais une formulation qui s'appliquerait à n'importe quel objectif. Les phrases génériques ("définis ton objectif", "décris en une phrase ce que représente ton objectif", "liste 3 signes de progression", "fais une première action réelle") sont INTERDITES dès que l'objectif est déjà précis.
 
 Réponds UNIQUEMENT avec un objet JSON : { "quests": [{ "title": string, "description": string | null, "why": string | null, "type": "MICRO"|"SHORT"|"NORMAL"|"DEEP"|"HABIT"|"CHALLENGE"|"BOSS", "estimatedMinutes": number, "difficulty": number, "impactWeight": number, "milestoneTitle": string | null }] }`;
 
-  return generateStructured({
+  const first = await generateStructured({
     schema: QuestGenerationSchema,
     system: QUEST_AI_SYSTEM_PROMPT,
     prompt,
     context: "quest-generator",
   });
+  if (!containsGenericPhrase(first)) return first;
+
+  // Garde-fou (1/2) : une seule relance avec un rappel renforcé, avant de recourir au filet de sécurité déterministe.
+  const retryPrompt = `${prompt}\n\nATTENTION : ta réponse précédente contenait une formulation générique interdite. Reformule en étant strictement spécifique à "${input.goalTitle}" (chiffres, unités, actions concrètes de CE domaine).`;
+  const retry = await generateStructured({
+    schema: QuestGenerationSchema,
+    system: QUEST_AI_SYSTEM_PROMPT,
+    prompt: retryPrompt,
+    context: "quest-generator-retry",
+  });
+  if (!containsGenericPhrase(retry)) return retry;
+
+  // Garde-fou (2/2) : le handler de domaine, s'il existe, sert de filet de sécurité — jamais la source principale.
+  const handler = detectDomainHandler(input.goalTitle, input.goalDescription);
+  if (handler) return demoGenerateQuests(input);
+
+  throw new Error(
+    `Réponse IA toujours générique pour "quest-generator" après relance, et aucun domaine reconnu pour servir de filet de sécurité — objectif : "${input.goalTitle}".`
+  );
 }

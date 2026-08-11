@@ -30,12 +30,16 @@ export async function generateStructured<T>(params: {
   maxTokens?: number;
 }): Promise<T> {
   const apiKey = requireEnv("ANTHROPIC_API_KEY", "Anthropic (Personal Quest AI)");
+  // `ANTHROPIC_BASE_URL` : jamais utilisée en production (URL réelle d'Anthropic par défaut) —
+  // permet aux tests de cibler un serveur HTTP local, même convention que
+  // `tests/ai/anthropic-provider.test.ts` (CRM) et `AnthropicAIProvider({ baseUrl })`.
   const text = await callAnthropic({
     apiKey,
     model: MODEL,
     system: params.system,
     prompt: params.prompt,
     maxTokens: params.maxTokens ?? 1536,
+    baseUrl: process.env.ANTHROPIC_BASE_URL,
   });
   const json = parseJsonResponse<unknown>(text, params.context);
   const result = params.schema.safeParse(json);

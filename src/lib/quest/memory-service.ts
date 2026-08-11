@@ -9,10 +9,15 @@ import { writeQuestAuditLog } from "./audit";
  * confirme et renforce une mémoire existante (confiance progressive, jamais
  * un saut brutal), sans jamais ressusciter une mémoire explicitement
  * supprimée par l'utilisateur (§36, contrôle utilisateur).
+ *
+ * `goalId` : `null` = mémoire globale, sinon mémoire spécifique à cet
+ * objectif (Goal Memory) — le matching d'une observation existante inclut
+ * `goalId` pour qu'une mémoire globale et une mémoire scopée à un objectif,
+ * même type et même contenu, ne fusionnent jamais entre elles.
  */
-export async function applyMemoryObservations(userId: string, candidates: MemoryCandidate[]) {
+export async function applyMemoryObservations(userId: string, candidates: MemoryCandidate[], goalId: string | null) {
   for (const candidate of candidates) {
-    const existing = await prisma.questMemory.findFirst({ where: { userId, type: candidate.type, content: candidate.content } });
+    const existing = await prisma.questMemory.findFirst({ where: { userId, goalId, type: candidate.type, content: candidate.content } });
     if (existing) {
       if (!existing.active) continue;
       await prisma.questMemory.update({
@@ -27,6 +32,7 @@ export async function applyMemoryObservations(userId: string, candidates: Memory
       await prisma.questMemory.create({
         data: {
           userId,
+          goalId: goalId ?? undefined,
           type: candidate.type,
           content: candidate.content,
           confidence: candidate.confidenceHint,
@@ -40,15 +46,6 @@ export async function applyMemoryObservations(userId: string, candidates: Memory
 
 export async function listMemories(userId: string) {
   return prisma.questMemory.findMany({ where: { userId, active: true }, orderBy: { confidence: "desc" } });
-}
-
-export async function getActiveMemoriesForPrompt(userId: string) {
-  const memories = await prisma.questMemory.findMany({
-    where: { userId, active: true, confidence: { gte: 0.5 } },
-    orderBy: { confidence: "desc" },
-    take: 5,
-  });
-  return memories.map((m) => ({ type: m.type, content: m.content }));
 }
 
 export async function confirmMemory(userId: string, memoryId: string) {

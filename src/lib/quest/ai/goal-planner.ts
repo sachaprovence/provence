@@ -2,6 +2,7 @@ import "server-only";
 import { generateStructured, isDemoMode, QUEST_AI_SYSTEM_PROMPT } from "./client";
 import { GoalPlanSchema, type GoalAnalysis, type GoalPlan } from "./schemas";
 import { detectDomainHandler } from "./domains/registry";
+import { formatUserContextForPrompt, type UserContext } from "@/lib/quest/context-builder";
 
 /**
  * Génère les grands jalons d'un objectif (§6 du brief) — vision globale
@@ -21,6 +22,7 @@ export type PlanGoalInput = {
   title: string;
   description: string | null;
   analysis: GoalAnalysis;
+  context?: UserContext | null;
 };
 
 function planGoalDemo(input: PlanGoalInput): GoalPlan {
@@ -54,6 +56,7 @@ export async function planGoal(input: PlanGoalInput): Promise<GoalPlan> {
   const prompt = `Objectif : "${input.title}"${input.description ? `\nDescription : ${input.description}` : ""}
 Analyse déjà réalisée : ${JSON.stringify(input.analysis, null, 2)}
 ${domainHint ? `Domaine détecté (indicatif) : ${domainHint}.` : ""}
+${input.context ? `\n${formatUserContextForPrompt(input.context)}` : ""}
 
 Découpe cet objectif en 3 à 8 grands jalons (vision globale stable, PAS des tâches détaillées). Chaque jalon doit être SPÉCIFIQUE à cet objectif précis (ex. pour "courir 1h à 10 km/h" : des paliers de durée courue sans s'arrêter ; pour "trouver 10 clients" : des étapes de prospection réelles) — jamais un gabarit générique interchangeable comme "première action concrète" ou "consolider et accélérer", qui pourrait s'appliquer à n'importe quel objectif. Chaque jalon a un poids relatif (0.5 à 5) reflétant son importance réelle dans la progression vers l'objectif.
 

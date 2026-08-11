@@ -96,6 +96,32 @@ export function computeMomentum(params: {
   return Math.round(Math.max(0, Math.min(100, raw * decay)));
 }
 
+export type TimeOfDayBucket = "morning" | "afternoon" | "evening";
+
+/**
+ * Créneau horaire majoritaire d'une liste d'horodatages (complétions de
+ * quêtes typiquement) — partagé entre `ai/memory-engine.ts` (mémoire
+ * `TIMING_PREFERENCE`) et `profile.ts` (dimension `effectiveHours` du modèle
+ * utilisateur dynamique), pour ne calculer ce bucketing qu'à un seul endroit.
+ * `null` si aucun créneau ne se détache nettement (< 60% des occurrences).
+ */
+export function bucketTimeOfDayMajority(timestamps: Date[]): { bucket: TimeOfDayBucket; ratio: number } | null {
+  if (timestamps.length === 0) return null;
+  const buckets: Record<TimeOfDayBucket, number> = { morning: 0, afternoon: 0, evening: 0 };
+  for (const ts of timestamps) {
+    const hour = ts.getHours();
+    if (hour < 12) buckets.morning += 1;
+    else if (hour < 18) buckets.afternoon += 1;
+    else buckets.evening += 1;
+  }
+  const total = timestamps.length;
+  const [bestBucket, bestCount] = (Object.entries(buckets) as [TimeOfDayBucket, number][]).reduce((best, entry) =>
+    entry[1] > best[1] ? entry : best
+  );
+  const ratio = bestCount / total;
+  return ratio >= 0.6 ? { bucket: bestBucket, ratio } : null;
+}
+
 export type MomentumLabel = "aucune_activite" | "reprise" | "bon_rythme" | "tres_forte_dynamique";
 
 export function momentumLabel(momentum: number): MomentumLabel {

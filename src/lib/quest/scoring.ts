@@ -184,3 +184,20 @@ function isBetterTiebreak(a: ScorableQuest, b: ScorableQuest): boolean {
   if (!a.deadline && b.deadline) return false;
   return a.createdAt.getTime() < b.createdAt.getTime();
 }
+
+/**
+ * Top N candidates éligibles, triés du meilleur score au moins bon (même
+ * exclusion de dépendances et même tie-break que `getNextBestAction`) — sert
+ * de base à l'arbitrage borné (`next-action-explainer.ts` §adjustement 4) :
+ * le LLM ne voit et ne peut choisir QUE parmi cet ensemble déjà déterministe,
+ * jamais une quête en dehors.
+ */
+export function getTopCandidates(candidates: ScorableQuest[], context: SelectionContext, limit: number): NextBestAction[] {
+  const eligible = candidates.filter((q) => q.dependenciesMet);
+  const scored = eligible.map((quest) => ({ quest, breakdown: scoreQuest(quest, context) }));
+  scored.sort((a, b) => {
+    if (b.breakdown.score !== a.breakdown.score) return b.breakdown.score - a.breakdown.score;
+    return isBetterTiebreak(a.quest, b.quest) ? -1 : 1;
+  });
+  return scored.slice(0, limit);
+}

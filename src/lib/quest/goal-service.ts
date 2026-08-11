@@ -7,6 +7,7 @@ import { generateQuestsForMilestone } from "./quest-service";
 import { analyzeGoal } from "./ai/goal-analyzer";
 import { planGoal } from "./ai/goal-planner";
 import type { ClarifyingAnswer, GoalAnalysis } from "./ai/schemas";
+import { buildUserContext } from "./context-builder";
 
 async function finalizeGoalAnalysisAndPlan(userId: string, goalId: string, analysis: GoalAnalysis) {
   const updated = await prisma.questGoal.update({
@@ -20,7 +21,8 @@ async function finalizeGoalAnalysisAndPlan(userId: string, goalId: string, analy
     },
   });
 
-  const plan = await planGoal({ title: updated.title, description: updated.description, analysis });
+  const context = await buildUserContext(userId, { goalId });
+  const plan = await planGoal({ title: updated.title, description: updated.description, analysis, context });
   const milestones = await prisma.$transaction(
     plan.milestones.map((m, index) =>
       prisma.questMilestone.create({
@@ -57,7 +59,8 @@ export async function createGoal(userId: string, input: { title: string; descrip
   });
   await writeQuestAuditLog({ userId, action: "goal.created", entityType: "QuestGoal", entityId: goal.id });
 
-  const analysis = await analyzeGoal({ title: goal.title, description: goal.description });
+  const context = await buildUserContext(userId, { goalId: goal.id });
+  const analysis = await analyzeGoal({ title: goal.title, description: goal.description, context });
   if (analysis.clarifyingQuestions.length > 0) {
     return { status: "NEEDS_ANSWERS" as const, goal, clarifyingQuestions: analysis.clarifyingQuestions };
   }
@@ -68,7 +71,8 @@ export async function createGoal(userId: string, input: { title: string; descrip
 
 export async function submitClarifyingAnswers(userId: string, goalId: string, answers: ClarifyingAnswer[]) {
   const goal = await requireOwnedGoal(userId, goalId);
-  const analysis = await analyzeGoal({ title: goal.title, description: goal.description, answers });
+  const context = await buildUserContext(userId, { goalId });
+  const analysis = await analyzeGoal({ title: goal.title, description: goal.description, answers, context });
   const plan = await finalizeGoalAnalysisAndPlan(userId, goalId, analysis);
   return { status: "READY" as const, ...plan };
 }

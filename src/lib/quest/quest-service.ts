@@ -8,24 +8,18 @@ import { writeQuestAuditLog } from "./audit";
 import { computeXpReward } from "./xp";
 import { computeGoalProgress } from "./progress";
 import { adjustChallengeScore, challengeScoreToDifficultyBand, type DifficultySignal } from "./difficulty-engine";
-import { getNextBestAction, type Energy, type ScorableQuest, type SelectionContext } from "./scoring";
+import { getTopCandidates, type Energy, type ScorableQuest, type SelectionContext } from "./scoring";
 import { generateQuests } from "./ai/quest-generator";
-import { deriveMemoryObservations, type FeedbackSample } from "./ai/memory-engine";
+import { arbitrateNextAction } from "./ai/next-action-explainer";
+import { deriveMemoryObservations, deriveGoalScopedMemoryObservations, type FeedbackSample } from "./ai/memory-engine";
 import { analyzeBlocker } from "./ai/blocker-analyzer";
-import { applyMemoryObservations, getActiveMemoriesForPrompt } from "./memory-service";
+import { applyMemoryObservations } from "./memory-service";
 import { awardXp, recomputeUserStats } from "./stat-service";
+import { recomputeUserProfile } from "./profile-service";
+import { buildUserContext } from "./context-builder";
 
 type GoalRef = { id: string; title: string; description: string | null; currentState: string | null };
 type MilestoneRef = { id: string; title: string; description: string | null; order: number } | null;
-
-async function buildRecentFeedbackSummary(userId: string): Promise<string | null> {
-  const since = new Date(Date.now() - 14 * 86_400_000);
-  const postponedCount = await prisma.questFeedback.count({ where: { userId, action: "POSTPONED", createdAt: { gte: since } } });
-  if (postponedCount >= 2) {
-    return `A reporté ${postponedCount} quête(s) au cours des deux dernières semaines — privilégier des quêtes plus petites et plus simples.`;
-  }
-  return null;
-}
 
 /**
  * Génère et persiste 1 à N quêtes pour un jalon donné (§2/§7 du brief :
@@ -34,9 +28,8 @@ async function buildRecentFeedbackSummary(userId: string): Promise<string | null
  * `ensureUpcomingQuests` (régénération au fil de l'eau).
  */
 export async function generateQuestsForMilestone(userId: string, goal: GoalRef, milestone: MilestoneRef, opts: { count?: number } = {}) {
-  const { profile } = await ensureUserBootstrap(userId);
+  const [{ profile }, context] = await Promise.all([ensureUserBootstrap(userId), buildUserContext(userId, { goalId: goal.id })]);
   const band = challengeScoreToDifficultyBand(profile.challengeScore);
-  const [activeMemories, recentFeedbackSummary] = await Promise.all([getActiveMemoriesForPrompt(userId), buildRecentFeedbackSummary(userId)]);
 
   const generation = await generateQuests({
     goalTitle: goal.title,
@@ -44,8 +37,7 @@ export async function generateQuestsForMilestone(userId: string, goal: GoalRef, 
     goalCurrentState: goal.currentState,
     milestone: milestone ? { title: milestone.title, description: milestone.description, order: milestone.order } : null,
     difficultyBand: band,
-    activeMemories,
-    recentFeedbackSummary,
+    context,
     count: opts.count ?? 3,
     mode: "NEXT",
   });
@@ -150,15 +142,35 @@ async function adjustDifficultyFromRecentSignals(userId: string) {
   }
 }
 
-async function recordMemoryObservationsFromRecentFeedback(userId: string) {
+async function recordMemoryObservationsFromRecentFeedback(userId: string, goalId: string) {
   const since = new Date(Date.now() - 30 * 86_400_000);
   const feedback = await prisma.questFeedback.findMany({
     where: { userId, createdAt: { gte: since } },
-    include: { quest: { select: { type: true } } },
+    include: { quest: { select: { type: true, goalId: true } } },
   });
-  const samples: FeedbackSample[] = feedback.map((f) => ({ action: f.action, questType: f.quest.type, createdAt: f.createdAt }));
-  const candidates = deriveMemoryObservations(samples);
-  await applyMemoryObservations(userId, candidates);
+  const samples: FeedbackSample[] = feedback.map((f) => ({ action: f.action, questType: f.quest.type, createdAt: f.createdAt, goalId: f.quest.goalId }));
+
+  const globalCandidates = deriveMemoryObservations(samples);
+  await applyMemoryObservations(userId, globalCandidates, null);
+
+  const goalCandidates = deriveGoalScopedMemoryObservations(samples, goalId);
+  await applyMemoryObservations(userId, goalCandidates, goalId);
+}
+
+/**
+ * Point d'entrée unique de l'apprentissage (§17 du brief, "Learning From
+ * Outcomes") — appelé après CHAQUE événement de feedback (terminée,
+ * reportée, trop dur/facile, bloquée), jamais seulement certains d'entre
+ * eux (avant ce regroupement, `markBlocked` par exemple n'ajustait pas la
+ * difficulté malgré un signal négatif clair — incohérence corrigée ici).
+ * Consolide l'ajustement de difficulté, la mémoire sémantique (globale ET
+ * scopée à l'objectif, §"Goal Memory") et le modèle utilisateur dynamique
+ * (§"Dynamic User Model") en un seul point nommé et testable.
+ */
+async function learnFromOutcome(userId: string, goalId: string) {
+  await adjustDifficultyFromRecentSignals(userId);
+  await recordMemoryObservationsFromRecentFeedback(userId, goalId);
+  await recomputeUserProfile(userId);
 }
 
 function energyFromCheckInScale(scale: number | null | undefined): Energy | null {
@@ -218,10 +230,16 @@ export type NextActionInput = {
   context?: QuestContextEnum | null;
 };
 
+const NEXT_ACTION_TOP_CANDIDATES = 3;
+
 /**
  * `getNextBestAction` (§11 du brief) — point d'entrée métier central.
  * S'assure d'abord que chaque objectif actif a des quêtes disponibles, puis
  * sélectionne déterministiquement la meilleure (`src/lib/quest/scoring.ts`).
+ * L'arbitrage IA (`next-action-explainer.ts`, ajustement §4) ne fait
+ * qu'expliquer ce choix, ou — dans des conditions strictement bornées —
+ * départager les 2-3 meilleurs candidats déjà déterminés ici : il ne peut
+ * jamais recevoir ni sélectionner une quête en dehors de cet ensemble.
  */
 export async function getNextBestActionForUser(userId: string, input: NextActionInput) {
   await ensureUserBootstrap(userId);
@@ -244,11 +262,18 @@ export async function getNextBestActionForUser(userId: string, input: NextAction
     now: new Date(),
   };
 
-  const result = getNextBestAction(scorable, selectionContext);
-  if (!result) return null;
+  const top = getTopCandidates(scorable, selectionContext, NEXT_ACTION_TOP_CANDIDATES);
+  if (top.length === 0) return null;
+
+  const userContext = await buildUserContext(userId);
+  const arbitration = await arbitrateNextAction({ top, context: userContext });
+  // Filet de sécurité final : même si `arbitrateNextAction` valide déjà
+  // l'appartenance à `top`, ne jamais faire confiance à un id venu d'un
+  // appel IA sans revérifier ici avant de choisir la quête retournée.
+  const result = top.find((c) => c.quest.id === arbitration.selectedQuestId) ?? top[0];
 
   const questRecord = byId.get(result.quest.id);
-  return { ...result, questRecord };
+  return { ...result, arbitration, questRecord };
 }
 
 export async function startQuest(userId: string, questId: string) {
@@ -271,8 +296,7 @@ export async function completeQuest(userId: string, questId: string, actualMinut
   await awardXp(userId, { questId, amount: quest.xpReward, reason: `Quête terminée : ${quest.title}` });
 
   await recomputeGoalProgress(quest.goalId);
-  await adjustDifficultyFromRecentSignals(userId);
-  await recordMemoryObservationsFromRecentFeedback(userId);
+  await learnFromOutcome(userId, quest.goalId);
   await recomputeUserStats(userId);
   await ensureUpcomingQuests(userId, quest.goalId);
 
@@ -281,25 +305,22 @@ export async function completeQuest(userId: string, questId: string, actualMinut
 }
 
 export async function postponeQuest(userId: string, questId: string, note?: string | null) {
-  await requireOwnedQuest(userId, questId);
+  const quest = await requireOwnedQuest(userId, questId);
   await prisma.questFeedback.create({ data: { questId, userId, action: "POSTPONED", note: note ?? undefined } });
-  await adjustDifficultyFromRecentSignals(userId);
-  await recordMemoryObservationsFromRecentFeedback(userId);
+  await learnFromOutcome(userId, quest.goalId);
 
   const postponeCount = await prisma.questFeedback.count({ where: { questId, action: "POSTPONED" } });
   const decision = analyzeBlocker({ postponeCount, blockedFeedbackCount: 0 });
   await writeQuestAuditLog({ userId, action: "quest.postponed", entityType: "Quest", entityId: questId, metadata: { postponeCount } });
 
   if (decision.shouldDecompose) return decomposeQuest(userId, questId, decision.reason);
-  const quest = await requireOwnedQuest(userId, questId);
   return { quest, subQuests: [] as typeof quest[], decomposed: false as const };
 }
 
 export async function markTooHard(userId: string, questId: string) {
-  await requireOwnedQuest(userId, questId);
+  const quest = await requireOwnedQuest(userId, questId);
   await prisma.questFeedback.create({ data: { questId, userId, action: "TOO_HARD" } });
-  await adjustDifficultyFromRecentSignals(userId);
-  await recordMemoryObservationsFromRecentFeedback(userId);
+  await learnFromOutcome(userId, quest.goalId);
   await writeQuestAuditLog({ userId, action: "quest.too_hard", entityType: "Quest", entityId: questId });
   return decomposeQuest(userId, questId, "Signalée trop difficile par l'utilisateur (§17 du brief).");
 }
@@ -310,18 +331,20 @@ export async function markTooHard(userId: string, questId: string) {
  * 8-10 min), symétrique de `markTooHard`/`decomposeQuest` côté "plus dur".
  */
 export async function markTooEasy(userId: string, questId: string) {
-  await requireOwnedQuest(userId, questId);
+  const quest = await requireOwnedQuest(userId, questId);
   await prisma.questFeedback.create({ data: { questId, userId, action: "TOO_EASY" } });
-  await adjustDifficultyFromRecentSignals(userId);
-  await recordMemoryObservationsFromRecentFeedback(userId);
+  await learnFromOutcome(userId, quest.goalId);
   await writeQuestAuditLog({ userId, action: "quest.too_easy", entityType: "Quest", entityId: questId });
   return increaseQuestDifficulty(userId, questId, "Signalée trop facile par l'utilisateur (§16 du brief).");
 }
 
 export async function markBlocked(userId: string, questId: string, note?: string | null) {
-  await requireOwnedQuest(userId, questId);
+  const quest = await requireOwnedQuest(userId, questId);
   await prisma.questFeedback.create({ data: { questId, userId, action: "BLOCKED", note: note ?? undefined } });
-  await recordMemoryObservationsFromRecentFeedback(userId);
+  // §17 du brief : avant ce regroupement, "bloquée" n'ajustait jamais la difficulté malgré un
+  // signal négatif clair — incohérence corrigée par `learnFromOutcome`, appelé uniformément
+  // pour tout événement de feedback plutôt que pour certains seulement.
+  await learnFromOutcome(userId, quest.goalId);
   await writeQuestAuditLog({ userId, action: "quest.blocked", entityType: "Quest", entityId: questId });
   return decomposeQuest(userId, questId, "Signalée bloquée par l'utilisateur.");
 }
@@ -366,9 +389,8 @@ async function regenerateQuestFromSource(userId: string, questId: string, direct
   const { profile } = await ensureUserBootstrap(userId);
   const scoreShift = direction === "EASIER" ? -15 : 15;
   const band = challengeScoreToDifficultyBand(Math.max(1, Math.min(100, profile.challengeScore + scoreShift)));
-  const [activeMemories, recentFeedbackSummary, goal] = await Promise.all([
-    getActiveMemoriesForPrompt(userId),
-    buildRecentFeedbackSummary(userId),
+  const [context, goal] = await Promise.all([
+    buildUserContext(userId, { goalId: quest.goalId }),
     prisma.questGoal.findUniqueOrThrow({ where: { id: quest.goalId } }),
   ]);
 
@@ -378,8 +400,7 @@ async function regenerateQuestFromSource(userId: string, questId: string, direct
     goalCurrentState: goal.currentState,
     milestone: null,
     difficultyBand: band,
-    activeMemories,
-    recentFeedbackSummary,
+    context,
     count: direction === "EASIER" ? 3 : 1,
     mode: direction === "EASIER" ? "DECOMPOSE" : "INCREASE",
     sourceQuest: { title: quest.title, description: quest.description },

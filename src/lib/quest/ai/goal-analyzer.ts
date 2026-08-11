@@ -2,6 +2,7 @@ import "server-only";
 import { generateStructured, isDemoMode, QUEST_AI_SYSTEM_PROMPT } from "./client";
 import { GoalAnalysisSchema, type ClarifyingAnswer, type GoalAnalysis } from "./schemas";
 import { detectDomainHandler } from "./domains/registry";
+import { formatUserContextForPrompt, type UserContext } from "@/lib/quest/context-builder";
 
 /**
  * Analyse d'objectif (§4 du brief, revu suite au retour terrain : le moteur
@@ -25,6 +26,8 @@ export type AnalyzeGoalInput = {
   title: string;
   description: string | null;
   answers?: ClarifyingAnswer[];
+  /** Contexte utilisateur centralisé — n'influence que le mode réel (les handlers de domaine du mode démo restent autonomes, voir `demos/registry.ts`). */
+  context?: UserContext | null;
 };
 
 const GENERIC_CLARIFYING_QUESTIONS = [
@@ -107,11 +110,12 @@ export async function analyzeGoal(input: AnalyzeGoalInput): Promise<GoalAnalysis
   const domainHint = detectDomainHandler(input.title, input.description)?.domain ?? null;
 
   const prompt = `Objectif de l'utilisateur : "${input.title}"${input.description ? `\nDescription : ${input.description}` : ""}
-${domainHint ? `\nDomaine détecté (indicatif, à confirmer par ton propre jugement) : ${domainHint}.` : ""}
+${domainHint ? `\nDomaine détecté (indicatif, à confirmer par ton propre jugement) : ${domainHint}.` : "\nAucun domaine prédéfini reconnu — comprends cet objectif toi-même, aucun filet de sécurité déterministe n'existe pour lui."}
+${input.context ? `\n${formatUserContextForPrompt(input.context)}` : ""}
 ${
   input.answers && input.answers.length > 0
     ? `\nRéponses de l'utilisateur aux questions de clarification :\n${input.answers.map((a) => `- ${a.question} -> ${a.answer}`).join("\n")}\n\nProduis l'analyse finale (clarifyingQuestions doit être vide, l'analyse est suffisante).`
-    : `\nPRINCIPE CENTRAL : ne pose une question QUE si l'information manquante change réellement la première action à proposer (typiquement : le niveau actuel de l'utilisateur — durée qu'il peut déjà courir, répétitions qu'il peut déjà faire, niveau de langue, cigarettes/jour, épargne mensuelle possible...). Si l'objectif est déjà assez précis pour agir immédiatement (ex. "créer une entreprise de sites internet", "trouver 10 clients" — la première action a du sens quel que soit le niveau), laisse "clarifyingQuestions" vide et produis l'analyse directement. Si une info de niveau manque réellement, pose UNE SEULE question ciblée (jamais plusieurs, jamais génériques comme "que veux-tu accomplir ?"). Seulement si l'objectif est réellement vague (aucune cible concrète identifiable), pose jusqu'à 5 questions plus larges.`
+    : `\nPRINCIPE CENTRAL : ne pose une question QUE si l'information manquante change réellement la première action à proposer (typiquement : le niveau actuel de l'utilisateur — durée qu'il peut déjà courir, répétitions qu'il peut déjà faire, niveau de langue, cigarettes/jour, épargne mensuelle possible...). Si l'objectif est déjà assez précis pour agir immédiatement (ex. "créer une entreprise de sites internet", "trouver 10 clients" — la première action a du sens quel que soit le niveau), laisse "clarifyingQuestions" vide et produis l'analyse directement. Si une info de niveau manque réellement, pose UNE SEULE question ciblée (jamais plusieurs, jamais génériques comme "que veux-tu accomplir ?"). Seulement si l'objectif est réellement vague (aucune cible concrète identifiable), pose jusqu'à 5 questions plus larges. Le profil/contexte ci-dessus (s'il est fourni) peut déjà répondre à la question de niveau pour un objectif similaire à un objectif passé — dans ce cas, ne repose pas la question.`
 }
 
 Réponds UNIQUEMENT avec un objet JSON au format exact :

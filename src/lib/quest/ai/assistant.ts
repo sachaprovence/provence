@@ -1,6 +1,7 @@
 import "server-only";
 import { generateStructured, isDemoMode, QUEST_AI_SYSTEM_PROMPT } from "./client";
 import { AssistantReplySchema, type AssistantAction, type AssistantReply } from "./schemas";
+import { formatUserContextForPrompt, type UserContext } from "@/lib/quest/context-builder";
 
 /**
  * Assistant contextuel (§19-21 du brief) — connaît objectifs/progression/
@@ -11,12 +12,19 @@ import { AssistantReplySchema, type AssistantAction, type AssistantReply } from 
  * TOUJOURS exécutées par le même code côté service
  * (`src/lib/quest/assistant-service.ts`), qui ne fait confiance qu'à leur
  * forme validée, jamais au texte du message.
+ *
+ * `userContext` (Context Builder) rend l'assistant réellement "même
+ * cerveau" que la génération de quêtes — mêmes profil/mémoires/stratégies,
+ * un seul format (`formatUserContextForPrompt`), pas une reconstruction
+ * séparée. `activeGoals`/`nextQuest`/`recentMemories` restent des champs
+ * dédiés (pas juste dérivés de `userContext`) car le mode démo (déterministe,
+ * sans LLM) en a besoin pour son appariement par mots-clés.
  */
-
 export type AssistantContext = {
   activeGoals: { id: string; title: string; progressPercent: number }[];
   nextQuest: { id: string; title: string; estimatedMinutes: number; difficulty: number } | null;
   recentMemories: { type: string; content: string; confidence: number }[];
+  userContext: UserContext;
 };
 
 export type AssistantTurnInput = {
@@ -105,10 +113,10 @@ function assistantDemo(input: AssistantTurnInput): AssistantReply {
 export async function runAssistantTurn(input: AssistantTurnInput): Promise<AssistantReply> {
   if (isDemoMode()) return assistantDemo(input);
 
-  const prompt = `Contexte de l'utilisateur :
-Objectifs actifs : ${JSON.stringify(input.context.activeGoals, null, 2)}
+  const prompt = `Objectifs actifs : ${JSON.stringify(input.context.activeGoals, null, 2)}
 Prochaine quête recommandée : ${input.context.nextQuest ? JSON.stringify(input.context.nextQuest, null, 2) : "aucune"}
-Mémoires connues sur l'utilisateur : ${JSON.stringify(input.context.recentMemories, null, 2)}
+
+${formatUserContextForPrompt(input.context.userContext)}
 
 Historique de la conversation :
 ${input.history.map((m) => `[${m.role}] ${m.content}`).join("\n")}

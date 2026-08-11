@@ -6,12 +6,14 @@ import type { AssistantAction } from "./ai/schemas";
 import { getNextBestActionForUser, replaceQuest, reduceQuestDifficulty, decomposeQuest } from "./quest-service";
 import { setGoalStatus } from "./goal-service";
 import { writeQuestAuditLog } from "./audit";
+import { buildUserContext } from "./context-builder";
 
 async function buildAssistantContext(userId: string): Promise<AssistantContext> {
-  const [activeGoals, nextAction, memories] = await Promise.all([
+  const [activeGoals, nextAction, memories, userContext] = await Promise.all([
     prisma.questGoal.findMany({ where: { userId, status: "ACTIVE" }, select: { id: true, title: true, progressPercent: true } }),
     getNextBestActionForUser(userId, {}),
     prisma.questMemory.findMany({ where: { userId, active: true, confidence: { gte: 0.6 } }, orderBy: { confidence: "desc" }, take: 5 }),
+    buildUserContext(userId),
   ]);
 
   return {
@@ -25,6 +27,7 @@ async function buildAssistantContext(userId: string): Promise<AssistantContext> 
         }
       : null,
     recentMemories: memories.map((m) => ({ type: m.type, content: m.content, confidence: m.confidence })),
+    userContext,
   };
 }
 

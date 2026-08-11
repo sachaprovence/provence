@@ -3734,6 +3734,7 @@ model QuestGoal {
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   milestones QuestMilestone[]
   quests     Quest[]
+  memories   QuestMemory[]
 
   @@index([userId, status])
 }
@@ -3846,9 +3847,20 @@ model QuestFeedback {
 /// Mémoire utilisateur à confiance progressive (§13-14 du brief) — une seule
 /// observation ne devient jamais une vérité permanente, `confidence` (0-1)
 /// augmente avec `observationCount`. Voir `src/lib/quest/ai/memory-engine.ts`.
+/// `goalId` (nullable) distingue mémoire globale (null — s'applique à tout ce que fait
+/// l'utilisateur) et mémoire spécifique à UN objectif (ex. "reporte souvent les quêtes
+/// profondes de CET objectif business", alors qu'il tient bien ses quêtes profondes de
+/// sport — une mémoire globale aurait mélangé les deux). `onDelete: Cascade` sur `goal` :
+/// une mémoire scopée à un objectif n'a plus de sens une fois cet objectif supprimé — son
+/// contenu textuel référence explicitement "cet objectif", la reclasser silencieusement en
+/// mémoire globale (`SetNull`) la rendrait trompeuse (généraliserait une observation qui
+/// n'était vraie que dans un contexte précis). Aucun objectif n'est aujourd'hui supprimable
+/// (seulement des changements de statut, voir `goal-service.ts#setGoalStatus`) — cascade
+/// posée par cohérence de schéma pour le jour où une suppression existera.
 model QuestMemory {
   id               String          @id @default(cuid())
   userId           String
+  goalId           String?
   type             QuestMemoryType
   content          String
   confidence       Float           @default(0.25)
@@ -3861,10 +3873,12 @@ model QuestMemory {
   lastObservedAt   DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal QuestGoal? @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
   @@index([userId, active])
   @@index([userId, type])
+  @@index([goalId])
 }
 
 model QuestXPTransaction {

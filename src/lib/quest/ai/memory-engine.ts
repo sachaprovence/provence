@@ -1,5 +1,6 @@
 import "server-only";
 import type { QuestFeedbackAction, QuestType } from "@/generated/prisma/enums";
+import { bucketTimeOfDayMajority } from "@/lib/quest/momentum";
 
 /**
  * Mémoire utilisateur à confiance progressive (§13-14 du brief) —
@@ -13,6 +14,8 @@ export type FeedbackSample = {
   action: QuestFeedbackAction;
   questType: QuestType;
   createdAt: Date;
+  /** Objectif dont dépend la quête ayant produit ce feedback — permet `deriveGoalScopedMemoryObservations`. */
+  goalId: string;
 };
 
 export type MemoryCandidate = {
@@ -61,29 +64,28 @@ export function deriveMemoryObservations(samples: FeedbackSample[]): MemoryCandi
   }
 
   if (completed.length >= 5) {
-    const buckets = { morning: 0, afternoon: 0, evening: 0 };
-    for (const sample of completed) {
-      const hour = sample.createdAt.getHours();
-      if (hour < 12) buckets.morning += 1;
-      else if (hour < 18) buckets.afternoon += 1;
-      else buckets.evening += 1;
-    }
-    const total = completed.length;
-    const [bestLabel, bestCount] = (Object.entries(buckets) as [keyof typeof buckets, number][]).reduce((best, entry) =>
-      entry[1] > best[1] ? entry : best
-    );
-    if (bestCount / total >= 0.6) {
-      const label = { morning: "le matin", afternoon: "l'après-midi", evening: "le soir" }[bestLabel];
+    const majority = bucketTimeOfDayMajority(completed.map((s) => s.createdAt));
+    if (majority) {
+      const label = { morning: "le matin", afternoon: "l'après-midi", evening: "le soir" }[majority.bucket];
       candidates.push({
         type: "TIMING_PREFERENCE",
         content: `Termine le plus souvent ses quêtes ${label}.`,
-        confidenceHint: Math.min(0.85, 0.25 + (bestCount / total) * 0.5),
-        sourceCount: total,
+        confidenceHint: Math.min(0.85, 0.25 + majority.ratio * 0.5),
+        sourceCount: completed.length,
       });
     }
   }
 
   return candidates;
+}
+
+/**
+ * Même algorithme que `deriveMemoryObservations`, appliqué uniquement aux
+ * échantillons d'UN objectif précis (Goal Memory) — permet de distinguer
+ * "reporte souvent les quêtes profondes de CET objectif" d'un pattern global.
+ */
+export function deriveGoalScopedMemoryObservations(samples: FeedbackSample[], goalId: string): MemoryCandidate[] {
+  return deriveMemoryObservations(samples.filter((s) => s.goalId === goalId));
 }
 
 /**

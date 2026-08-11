@@ -3,19 +3,19 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { createGoal, submitClarifyingAnswers } from "@/lib/quest/goal-service";
 import { markTooEasy, markTooHard } from "@/lib/quest/quest-service";
+import { GENERIC_PHRASE_BLACKLIST } from "@/lib/quest/ai/quest-generator";
 
 /**
  * Couvre le retour terrain : le moteur générait des quêtes de coaching
  * génériques ("Écris en une phrase ce que représente ton objectif", "Liste
  * 3 signes de progression"...) au lieu d'actions concrètes et spécifiques
  * au domaine. Vérifie les 7 objectifs de référence donnés explicitement.
+ * Réutilise `GENERIC_PHRASE_BLACKLIST` du code de production plutôt que sa
+ * propre copie — le garde-fou réel (mode Anthropic) et ce test vérifient
+ * exactement la même chose.
  */
 
 const runIfDatabase = process.env.DATABASE_URL ? describe : describe.skip;
-
-// Jamais générées quand l'objectif est déjà suffisamment précis (§ retour terrain).
-const GENERIC_PHRASE_BLACKLIST =
-  /écris en une phrase concrète et mesurable ce que représente|liste 3 signes qui montreraient|fais une première action réelle \(pas une préparation\)|consacre un vrai créneau concentré|définis la toute première étape, la plus petite possible, pour/i;
 
 type Case = {
   title: string;

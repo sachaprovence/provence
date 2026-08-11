@@ -85,3 +85,19 @@ export const AssistantReplySchema = z.object({
   actions: z.array(AssistantActionSchema).default([]),
 });
 export type AssistantReply = z.infer<typeof AssistantReplySchema>;
+
+/**
+ * Sortie de l'arbitrage borné de `getNextBestAction` (`next-action-explainer.ts`) —
+ * volontairement minimale : ni jalons, ni contenu généré, seulement un choix
+ * parmi un ensemble déjà déterminé côté serveur (`contextFactorsUsed` sert de
+ * trace explicative, jamais de nouvelle donnée à persister ou à ré-exploiter).
+ * Aucune chaîne de raisonnement stockée — `reason` est une phrase courte
+ * destinée à l'utilisateur, pas un journal de pensée du modèle.
+ */
+export const NextActionArbitrationSchema = z.object({
+  selectedQuestId: z.string(),
+  reason: z.string(),
+  confidence: z.number().min(0).max(1),
+  contextFactorsUsed: z.array(z.string()).default([]),
+});
+export type NextActionArbitration = z.infer<typeof NextActionArbitrationSchema>;
