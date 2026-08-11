@@ -18,8 +18,20 @@ import { awardXp, recomputeUserStats } from "./stat-service";
 import { recomputeUserProfile } from "./profile-service";
 import { buildUserContext } from "./context-builder";
 
-type GoalRef = { id: string; title: string; description: string | null; currentState: string | null };
+type GoalRef = { id: string; title: string; description: string | null; currentState: string | null; challengeScore: number | null };
 type MilestoneRef = { id: string; title: string; description: string | null; order: number } | null;
+
+/**
+ * Défi effectif d'UN objectif précis (P0 "Adaptive Difficulty V2") — le
+ * score propre à `goal` s'il a déjà été calibré (au moins un événement de
+ * feedback sur CET objectif), sinon le score général de l'utilisateur
+ * (`QuestUserProfile.challengeScore`) comme point de départ raisonnable pour
+ * un objectif tout neuf. Jamais l'inverse : une fois qu'un objectif a son
+ * propre score, il ne dérive plus au gré des autres objectifs de l'utilisateur.
+ */
+function resolveGoalChallengeScore(goal: { challengeScore: number | null }, globalChallengeScore: number): number {
+  return goal.challengeScore ?? globalChallengeScore;
+}
 
 /**
  * Génère et persiste 1 à N quêtes pour un jalon donné (§2/§7 du brief :
@@ -29,7 +41,8 @@ type MilestoneRef = { id: string; title: string; description: string | null; ord
  */
 export async function generateQuestsForMilestone(userId: string, goal: GoalRef, milestone: MilestoneRef, opts: { count?: number } = {}) {
   const [{ profile }, context] = await Promise.all([ensureUserBootstrap(userId), buildUserContext(userId, { goalId: goal.id })]);
-  const band = challengeScoreToDifficultyBand(profile.challengeScore);
+  const goalChallengeScore = resolveGoalChallengeScore(goal, profile.challengeScore);
+  const band = challengeScoreToDifficultyBand(goalChallengeScore);
 
   const generation = await generateQuests({
     goalTitle: goal.title,
@@ -55,7 +68,7 @@ export async function generateQuestsForMilestone(userId: string, goal: GoalRef, 
           type: draft.type,
           estimatedMinutes: draft.estimatedMinutes,
           difficulty: draft.difficulty,
-          challengeScore: profile.challengeScore,
+          challengeScore: goalChallengeScore,
           impactWeight: draft.impactWeight,
           xpReward: computeXpReward({ type: draft.type, difficulty: draft.difficulty, impactWeight: draft.impactWeight }),
           aiGenerated: true,
@@ -120,11 +133,10 @@ async function recomputeGoalProgress(goalId: string) {
   return progressPercent;
 }
 
-async function adjustDifficultyFromRecentSignals(userId: string) {
-  const since = new Date(Date.now() - 14 * 86_400_000);
-  const recent = await prisma.questFeedback.findMany({ where: { userId, createdAt: { gte: since } }, include: { quest: true } });
+type RecentFeedbackRow = { action: string; quest: { actualMinutes: number | null; estimatedMinutes: number } };
 
-  const signal: DifficultySignal = {
+function computeDifficultySignal(recent: RecentFeedbackRow[]): DifficultySignal {
+  return {
     completedSmoothlyCount: recent.filter(
       (f) => f.action === "COMPLETED" && (f.quest.actualMinutes == null || f.quest.actualMinutes <= f.quest.estimatedMinutes * 1.2)
     ).length,
@@ -133,12 +145,53 @@ async function adjustDifficultyFromRecentSignals(userId: string) {
     abandonedOrBlockedCount: recent.filter((f) => f.action === "BLOCKED").length,
     postponedCount: recent.filter((f) => f.action === "POSTPONED").length,
   };
+}
+
+/**
+ * Score général (§16 du brief) — reste volontairement global, sur TOUS les
+ * objectifs récents de l'utilisateur. Ne calibre plus directement aucune
+ * génération de quêtes dès qu'un objectif a son propre score (voir
+ * `adjustGoalChallengeScore`) : il ne sert plus que de point de départ
+ * raisonnable pour un objectif tout neuf et de signal pour la tolérance au
+ * défi du Modèle Utilisateur Dynamique (`profile.ts#computeUserProfile`).
+ */
+async function adjustGlobalChallengeScore(userId: string) {
+  const since = new Date(Date.now() - 14 * 86_400_000);
+  const recent = await prisma.questFeedback.findMany({ where: { userId, createdAt: { gte: since } }, include: { quest: true } });
+  const signal = computeDifficultySignal(recent);
 
   const profile = await prisma.questUserProfile.findUnique({ where: { userId } });
   if (!profile) return;
   const nextScore = adjustChallengeScore(profile.challengeScore, signal);
   if (nextScore !== profile.challengeScore) {
     await prisma.questUserProfile.update({ where: { userId }, data: { challengeScore: nextScore } });
+  }
+}
+
+/**
+ * P0 "Adaptive Difficulty V2" — calibration RÉELLEMENT utilisée pour générer
+ * les prochaines quêtes de CET objectif précis (voir `resolveGoalChallengeScore`,
+ * consommé par `generateQuestsForMilestone`/`regenerateQuestFromSource`).
+ * Ne considère que le feedback des quêtes de `goalId` : un échec sur un autre
+ * objectif de l'utilisateur n'y change jamais rien, et réciproquement.
+ */
+async function adjustGoalChallengeScore(userId: string, goalId: string) {
+  const since = new Date(Date.now() - 14 * 86_400_000);
+  const recent = await prisma.questFeedback.findMany({
+    where: { userId, createdAt: { gte: since }, quest: { goalId } },
+    include: { quest: true },
+  });
+  const signal = computeDifficultySignal(recent);
+
+  const [goal, profile] = await Promise.all([
+    prisma.questGoal.findUnique({ where: { id: goalId }, select: { challengeScore: true } }),
+    prisma.questUserProfile.findUnique({ where: { userId } }),
+  ]);
+  if (!goal || !profile) return;
+  const currentScore = resolveGoalChallengeScore(goal, profile.challengeScore);
+  const nextScore = adjustChallengeScore(currentScore, signal);
+  if (nextScore !== currentScore) {
+    await prisma.questGoal.update({ where: { id: goalId }, data: { challengeScore: nextScore } });
   }
 }
 
@@ -163,12 +216,15 @@ async function recordMemoryObservationsFromRecentFeedback(userId: string, goalId
  * reportée, trop dur/facile, bloquée), jamais seulement certains d'entre
  * eux (avant ce regroupement, `markBlocked` par exemple n'ajustait pas la
  * difficulté malgré un signal négatif clair — incohérence corrigée ici).
- * Consolide l'ajustement de difficulté, la mémoire sémantique (globale ET
- * scopée à l'objectif, §"Goal Memory") et le modèle utilisateur dynamique
- * (§"Dynamic User Model") en un seul point nommé et testable.
+ * Consolide l'ajustement de difficulté (P0 "Adaptive Difficulty V2" : à la
+ * fois le score général de l'utilisateur ET le score scopé à CET objectif
+ * précis — les deux évoluent indépendamment), la mémoire sémantique
+ * (globale ET scopée à l'objectif, §"Goal Memory") et le modèle utilisateur
+ * dynamique (§"Dynamic User Model") en un seul point nommé et testable.
  */
 async function learnFromOutcome(userId: string, goalId: string) {
-  await adjustDifficultyFromRecentSignals(userId);
+  await adjustGlobalChallengeScore(userId);
+  await adjustGoalChallengeScore(userId, goalId);
   await recordMemoryObservationsFromRecentFeedback(userId, goalId);
   await recomputeUserProfile(userId);
 }
@@ -386,13 +442,14 @@ async function regenerateQuestFromSource(userId: string, questId: string, direct
     return { quest, subQuests: [] as typeof quest[], decomposed: false as const };
   }
 
-  const { profile } = await ensureUserBootstrap(userId);
-  const scoreShift = direction === "EASIER" ? -15 : 15;
-  const band = challengeScoreToDifficultyBand(Math.max(1, Math.min(100, profile.challengeScore + scoreShift)));
-  const [context, goal] = await Promise.all([
+  const [{ profile }, context, goal] = await Promise.all([
+    ensureUserBootstrap(userId),
     buildUserContext(userId, { goalId: quest.goalId }),
     prisma.questGoal.findUniqueOrThrow({ where: { id: quest.goalId } }),
   ]);
+  const goalChallengeScore = resolveGoalChallengeScore(goal, profile.challengeScore);
+  const scoreShift = direction === "EASIER" ? -15 : 15;
+  const band = challengeScoreToDifficultyBand(Math.max(1, Math.min(100, goalChallengeScore + scoreShift)));
 
   const generation = await generateQuests({
     goalTitle: goal.title,
@@ -421,7 +478,7 @@ async function regenerateQuestFromSource(userId: string, questId: string, direct
           type: draft.type,
           estimatedMinutes: draft.estimatedMinutes,
           difficulty: draft.difficulty,
-          challengeScore: profile.challengeScore,
+          challengeScore: goalChallengeScore,
           impactWeight: draft.impactWeight,
           xpReward: computeXpReward({ type: draft.type, difficulty: draft.difficulty, impactWeight: draft.impactWeight }),
           aiGenerated: true,

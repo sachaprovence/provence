@@ -3726,6 +3726,16 @@ model QuestGoal {
   /// Progression pondérée (0-100), dérivée des jalons/quêtes terminés — jamais recalculée naïvement en "1 quête = 1%" (§22 du brief). Voir `src/lib/quest/progress.ts`.
   progressPercent    Float             @default(0)
   difficultyEstimate Int?
+  /// Défi adaptatif SCOPÉ À CET OBJECTIF (P0 "Adaptive Difficulty V2") — corrige l'incohérence
+  /// où un seul `QuestUserProfile.challengeScore` global était partagé entre TOUS les objectifs
+  /// actifs d'un utilisateur (un échec en guitare faisait baisser la difficulté en course à
+  /// pied). `null` = pas encore calibré pour CET objectif précis (objectif neuf, ou créé avant
+  /// cette migration) — retombe alors sur `QuestUserProfile.challengeScore` (voir
+  /// `quest-service.ts`) jusqu'au premier `learnFromOutcome` sur ce `goalId`, qui l'initialise.
+  /// Le score global n'est jamais supprimé : il reste la référence générale de tolérance au
+  /// défi (`profile.ts#computeUserProfile`) et le point de départ raisonnable d'un objectif tout
+  /// neuf sans historique propre — additive et rétrocompatible, aucune donnée existante perdue.
+  challengeScore     Int?
   successMetrics     String[]          @default([])
   obstacles          String[]          @default([])
   createdAt          DateTime          @default(now())
@@ -3778,7 +3788,7 @@ model Quest {
   /// Priorité relative (1 = haute, 5 = basse) au sein de l'objectif — un des facteurs de `questScore`, pas le seul.
   priority         Int           @default(3)
   difficulty       Int           @default(3)
-  /// Snapshot du challengeScore utilisateur au moment de la génération (§16) — permet de mesurer l'écart réussite/difficulté a posteriori sans dépendre de la valeur courante (qui évolue).
+  /// Snapshot du challengeScore EFFECTIF (scopé à l'objectif s'il en a déjà un, sinon le score général — voir `QuestGoal.challengeScore`) au moment de la génération (§16) — permet de mesurer l'écart réussite/difficulté a posteriori sans dépendre de la valeur courante (qui évolue).
   challengeScore   Int           @default(40)
   estimatedMinutes Int
   actualMinutes    Int?
