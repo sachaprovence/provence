@@ -23,6 +23,23 @@
      variables (jamais une couleur en dur). */
   --color-p360-surface: #ffffff;
   --color-p360-border: #d8d2e8;
+
+  /* Personal Quest AI (ADR 0049) — palette distincte du CRM (§47 du brief : premium, sobre,
+     motivant, pas enfantin), déclarée ici comme tout autre token de thème plutôt que codée en dur
+     dans les composants. */
+  --color-quest-bg: #f7f6f2;
+  --color-quest-surface: #ffffff;
+  --color-quest-border: #e7e2d8;
+  --color-quest-ink: #1c1b1a;
+  --color-quest-muted: #6b6862;
+  --color-quest-accent: #6d5efc;
+  --color-quest-accent-dark: #5647d9;
+  --color-quest-accent-light: #ece9ff;
+  --color-quest-success: #2f9e6e;
+  --color-quest-warning: #c98a1f;
+  --color-quest-danger: #c14545;
+  --color-quest-danger-light: #fbeceb;
+  --color-quest-gold: #b8860b;
 }
 
 /* Mode sombre (v1.1, AR-0184) — appliqué par défaut si l'utilisateur préfère le sombre au niveau
@@ -50,6 +67,20 @@
 
     --color-p360-surface: #1c1f2b;
     --color-p360-border: #343849;
+
+    --color-quest-bg: #121218;
+    --color-quest-surface: #1b1b24;
+    --color-quest-border: #2c2c38;
+    --color-quest-ink: #ece9f5;
+    --color-quest-muted: #9f9cae;
+    --color-quest-accent: #9186ff;
+    --color-quest-accent-dark: #7a6ef0;
+    --color-quest-accent-light: #292544;
+    --color-quest-success: #4bbf8e;
+    --color-quest-warning: #e0a63f;
+    --color-quest-danger: #e17575;
+    --color-quest-danger-light: #3a2323;
+    --color-quest-gold: #d9a441;
   }
 }
 
@@ -73,6 +104,20 @@
 
   --color-p360-surface: #1c1f2b;
   --color-p360-border: #343849;
+
+  --color-quest-bg: #121218;
+  --color-quest-surface: #1b1b24;
+  --color-quest-border: #2c2c38;
+  --color-quest-ink: #ece9f5;
+  --color-quest-muted: #9f9cae;
+  --color-quest-accent: #9186ff;
+  --color-quest-accent-dark: #7a6ef0;
+  --color-quest-accent-light: #292544;
+  --color-quest-success: #4bbf8e;
+  --color-quest-warning: #e0a63f;
+  --color-quest-danger: #e17575;
+  --color-quest-danger-light: #3a2323;
+  --color-quest-gold: #d9a441;
 }
 
 @theme inline {
@@ -96,6 +141,20 @@
   --color-p360-danger-light: var(--color-p360-danger-light);
   --color-p360-surface: var(--color-p360-surface);
   --color-p360-border: var(--color-p360-border);
+
+  --color-quest-bg: var(--color-quest-bg);
+  --color-quest-surface: var(--color-quest-surface);
+  --color-quest-border: var(--color-quest-border);
+  --color-quest-ink: var(--color-quest-ink);
+  --color-quest-muted: var(--color-quest-muted);
+  --color-quest-accent: var(--color-quest-accent);
+  --color-quest-accent-dark: var(--color-quest-accent-dark);
+  --color-quest-accent-light: var(--color-quest-accent-light);
+  --color-quest-success: var(--color-quest-success);
+  --color-quest-warning: var(--color-quest-warning);
+  --color-quest-danger: var(--color-quest-danger);
+  --color-quest-danger-light: var(--color-quest-danger-light);
+  --color-quest-gold: var(--color-quest-gold);
 }
 
 body {
@@ -196,4 +255,145 @@ body {
   padding: 0.125rem 0.625rem;
   font-size: 0.75rem;
   font-weight: 500;
+}
+
+/* Personal Quest AI (ADR 0049) — coquille dédiée, distincte du kit CRM ci-dessus (§46-47 du brief). */
+
+.quest-shell {
+  background: var(--color-quest-bg);
+  color: var(--color-quest-ink);
+  min-height: 100dvh;
+}
+
+.quest-card {
+  background: var(--color-quest-surface);
+  border: 1px solid var(--color-quest-border);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.quest-btn-primary {
+  background: var(--color-quest-accent);
+  color: white;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+.quest-btn-primary:hover {
+  background: var(--color-quest-accent-dark);
+}
+.quest-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quest-btn-secondary {
+  background: transparent;
+  color: var(--color-quest-ink);
+  border: 1px solid var(--color-quest-border);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+.quest-btn-secondary:hover {
+  background: var(--color-quest-accent-light);
+}
+.quest-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quest-btn-danger {
+  background: transparent;
+  color: var(--color-quest-danger);
+  border: 1px solid var(--color-quest-danger);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+.quest-btn-danger:hover {
+  background: var(--color-quest-danger-light);
+}
+.quest-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quest-btn-ghost {
+  background: transparent;
+  color: var(--color-quest-muted);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+.quest-btn-ghost:hover {
+  background: var(--color-quest-accent-light);
+  color: var(--color-quest-ink);
+}
+
+.quest-input {
+  border: 1px solid var(--color-quest-border);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  width: 100%;
+  background: var(--color-quest-surface);
+  color: var(--color-quest-ink);
+}
+.quest-input:focus {
+  outline: 2px solid var(--color-quest-accent);
+  outline-offset: 1px;
+}
+
+.quest-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--color-quest-accent-light);
+  color: var(--color-quest-accent-dark);
+}
+
+.quest-progress-track {
+  background: var(--color-quest-border);
+  border-radius: 999px;
+  height: 0.5rem;
+  overflow: hidden;
+}
+.quest-progress-fill {
+  background: var(--color-quest-accent);
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.quest-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-quest-surface);
+  border-top: 1px solid var(--color-quest-border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 30;
+}
+
+.quest-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.5rem 0;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-quest-muted);
+  flex: 1;
+}
+.quest-bottom-nav-item[data-active="true"] {
+  color: var(--color-quest-accent);
 }
